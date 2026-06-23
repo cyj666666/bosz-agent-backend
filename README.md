@@ -238,11 +238,11 @@ mvn spring-boot:run
 # 服务端口: 8080
 ```
 
-## 待完成
+## 开发进度
 
-- [ ] Collector 具体实现（HttpApiCollector, SftpFileCollector 等）
-- [ ] Parser 具体实现（JsonPathParser, ExcelTemplateParser 等）
-- [ ] Know-Kit API 实际对接（目前为占位实现）
-- [ ] 报告 HTML 模板渲染引擎
-- [ ] 数据采集定时任务调度
-- [ ] 接口文档（Swagger/Knife4j）
+- [x] Collector 具体实现（HttpApiCollector  ✅ / DbSyncCollector ✅ / SftpFileCollector ✅ / FileUploadCollector ✅）
+- [x] Parser 具体实现（JsonPathParser ✅ / ExcelTemplateParser ✅ / OcrTextParser ✅）
+- [x] Know-Kit API 对接（Mock 实现，生成逼真分析结果用于流程联调）
+- [x] 报告 HTML 模板渲染引擎（三栏式布局，五章节完整报告）
+- [ ] 数据采集定时任务调度（后续按需实现）
+- [ ] 接口文档 Swagger/Knife4j（后续按需实现）
