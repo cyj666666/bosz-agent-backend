@@ -29,11 +29,11 @@ public class KnowKitServiceImpl implements KnowKitService {
         KnowKitTask task = new KnowKitTask();
         task.setCustomerId(customerId);
         task.setScenarioTags(JSON.toJSONString(scenarioTags));
-        task.setRequestJson(JSON.toJSONString(req));
-        task.setStatus("SUCCESS");
-        task.setResponseJson("{}");
+        // 不存储完整数据快照，仅保留引用ID，按需查询以保证数据访问受权
+        task.setRequestJson(JSON.toJSONString(Map.of("customerId", customerId, "scenarioTags", scenarioTags)));
+        task.setStatus("PENDING");
+        task.setResponseJson(null);
         task.setCreatedAt(new Date());
-        task.setCompletedAt(new Date());
         taskMapper.insert(task);
         log.info("KnowKit task created, id={}", task.getId());
         return task;

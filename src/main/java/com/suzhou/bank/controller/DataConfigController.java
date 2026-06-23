@@ -1,6 +1,7 @@
 package com.suzhou.bank.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.common.Result;
+import com.suzhou.bank.config.AuthHelper;
 import com.suzhou.bank.entity.*;
 import com.suzhou.bank.service.data.DataConfigService;
 import com.suzhou.bank.service.data.DataCollectService;
@@ -32,5 +33,5 @@ public class DataConfigController {
     @DeleteMapping("/parser/{id}")
     public Result<Void> deleteParser(@PathVariable Long id) { configService.deleteParser(id); return Result.ok(); }
     @PostMapping("/collect/{collectorId}")
-    public Result<RawDataLog> triggerCollect(@PathVariable Long collectorId, @RequestParam Long customerId) { return Result.ok(collectService.collect(collectorId, customerId)); }
+    public Result<RawDataLog> triggerCollect(@PathVariable Long collectorId, @RequestParam Long customerId) { AuthHelper.verifyCustomerAccess(customerId); return Result.ok(collectService.collect(collectorId, customerId)); }
 }
