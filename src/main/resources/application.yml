@@ -23,3 +23,7 @@ know-kit:
   base-url: http://localhost:9000
   analyze-path: /api/v1/analyze
   timeout: 300000
+
+jwt:
+  secret: bSzAgent2026SuzhouBankLoanManagementSecretKey
+  expiration: 86400000

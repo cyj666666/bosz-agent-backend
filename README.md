@@ -77,14 +77,17 @@ bosz-agent-backend/
     │   ├── CorsConfig.java                 # 跨域配置
     │   ├── MyBatisPlusConfig.java          # MyBatis-Plus分页插件
     │   └── KnowKitConfig.java              # Know-Kit连接配置
-    ├── entity/                             # 13个实体类（@TableName映射）
-    ├── mapper/                             # 13个Mapper接口
+    ├── entity/                             # 16个实体类（@TableName映射）
+    ├── mapper/                             # 16个Mapper接口
     ├── controller/
+    │   ├── AuthController.java             # 登录认证API
     │   ├── CustomerController.java         # 客户管理API
     │   ├── DataConfigController.java       # 数据源配置API + 采集触发
     │   ├── KnowledgeController.java        # 知识库规则API
     │   ├── KnowKitController.java          # Know-Kit适配API
-    │   └── ReportController.java           # 报告生成/查询API
+    │   ├── ReportController.java           # 报告生成/查询API
+    │   ├── RoleController.java             # 角色管理API（需admin）
+    │   └── UserController.java             # 用户管理API（需admin）
     ├── service/
     │   ├── CustomerService.java            # 客户服务
     │   ├── data/
@@ -104,6 +107,14 @@ bosz-agent-backend/
 ## API 概览
 
 所有 API 返回统一格式 `Result<T>`：`{"code":200, "message":"success", "data":...}`
+
+### 认证 `/api/auth`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/login` | 登录，返回 JWT Token |
+
+> 所有业务 API 需在 Header 中携带 `Authorization: Bearer <token>`，默认管理员账号 `admin` / `admin123`
 
 ### 客户管理 `/api/customer`
 
@@ -182,9 +193,11 @@ knowledge_rule (规则) --< rule_tag (规则标签) -- 按 rule_id + tag_type + 
 rule_scenario (场景定义) -- 独立表，场景编码唯一
 
 raw_data_log (原始数据日志) -- 每次采集的记录，按 customer_id + collect_time 索引
+
+sys_user (用户) --< sys_user_role >-- sys_role (角色) -- 用户多对多角色
 ```
 
-### 13张表清单
+### 16张表清单
 
 | 表名 | 说明 | 核心用途 |
 |------|------|---------|
@@ -201,6 +214,9 @@ raw_data_log (原始数据日志) -- 每次采集的记录，按 customer_id + c
 | rule_scenario | 场景定义 | 场景编码和名称 |
 | know_kit_task | Know-Kit任务记录 | 智能体调用记录 |
 | report | 报告主表 | 报告存储（含HTML和数据快照） |
+| sys_user | 系统用户表 | 登录账号，BCrypt 密码加密 |
+| sys_role | 角色表 | 角色编码+名称 |
+| sys_user_role | 用户角色关联表 | 多对多关联 |
 
 ### 关键设计决策
 
@@ -251,5 +267,6 @@ mvn spring-boot:run
 - [ ] 数据采集定时任务调度（后续按需实现）
 - [ ] SFTP文件采集 + 文件上传采集从采集器中剥离为独立功能模块（当前是人工触发场景，不应混入自动采集器）
 - [ ] OCR 识别链路补全：当前 OcrTextParser 假设输入已是识别后的纯文本，缺少"扫描件/图片 → 调用外部 OCR API（阿里云/腾讯云）→ 得到文字"这一前置环节
-- [ ] 用户体系：当前无用户、角色、登录认证功能，所有接口无权限控制
+- [x] 用户认证：JWT Token 登录、BCrypt 密码加密、AuthInterceptor 接口拦截、角色权限控制
+- [x] 系统管理：用户管理（CRUD+重置密码+手动改密）、角色管理（CRUD+菜单权限配置）、管理员互删保护、顶栏改密
 - [ ] 接口文档 Swagger/Knife4j（后续按需实现）
