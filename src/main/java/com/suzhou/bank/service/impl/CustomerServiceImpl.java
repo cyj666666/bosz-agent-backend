@@ -6,9 +6,11 @@ import com.suzhou.bank.entity.Customer;
 import com.suzhou.bank.mapper.CustomerMapper;
 import com.suzhou.bank.service.CustomerService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
@@ -25,7 +27,22 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override public Customer getById(Long id) { return mapper.selectById(id); }
-    @Override public void save(Customer c) { mapper.insert(c); }
-    @Override public void update(Customer c) { mapper.updateById(c); }
-    @Override public void delete(Long id) { mapper.deleteById(id); }
+
+    @Override
+    public void save(Customer c) {
+        mapper.insert(c);
+        log.info("客户已新增, id={}, companyName={}", c.getId(), c.getCompanyName());
+    }
+
+    @Override
+    public void update(Customer c) {
+        mapper.updateById(c);
+        log.info("客户已更新, id={}, companyName={}", c.getId(), c.getCompanyName());
+    }
+
+    @Override
+    public void delete(Long id) {
+        mapper.deleteById(id);
+        log.info("客户已删除, id={}", id);
+    }
 }
