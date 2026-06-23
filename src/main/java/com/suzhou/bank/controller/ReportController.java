@@ -14,7 +14,7 @@ public class ReportController {
     @PostMapping("/generate")
     public Result<Report> generate(@RequestParam Long customerId, @RequestParam Long knowKitTaskId) { AuthHelper.verifyCustomerAccess(customerId); return Result.ok(service.generate(customerId, knowKitTaskId)); }
     @GetMapping("/page")
-    public Result<Page<Report>> page(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) Long customerId) { if (customerId != null) AuthHelper.verifyCustomerAccess(customerId); return Result.ok(service.page(page, size, customerId)); }
+    public Result<Page<Report>> page(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "10") int size, @RequestParam Long customerId) { AuthHelper.verifyCustomerAccess(customerId); return Result.ok(service.page(page, size, customerId)); }
     @GetMapping("/{id}")
     public Result<Report> getById(@PathVariable Long id) { Report r = service.getById(id); if (r != null) AuthHelper.verifyCustomerAccess(r.getCustomerId()); return Result.ok(r); }
     @GetMapping("/{id}/html")

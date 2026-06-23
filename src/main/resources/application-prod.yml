@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://PROD_HOST:3306/suzhou_bank_report?useUnicode=true&characterEncoding=utf8mb4&useSSL=true&serverTimezone=Asia/Shanghai
+    username: PROD_USER
+    password: PROD_PASSWORD
+    druid:
+      initial-size: 10
+      min-idle: 10
+      max-active: 50
+
+logging:
+  level:
+    com.suzhou.bank: WARN
