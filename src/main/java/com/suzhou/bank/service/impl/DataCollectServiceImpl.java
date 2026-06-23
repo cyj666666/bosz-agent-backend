@@ -54,8 +54,11 @@ public class DataCollectServiceImpl implements DataCollectService {
 
         DataCollector collector = findCollector(config.getCollectorType());
 
+        // 将 configJson 中的 ${customerId} 占位符替换为实际客户ID
+        replacePlaceholders(config, customerId);
+
         try {
-            String rawContent = collector.collect(config);
+            String rawContent = collector.collect(config, customerId);
             rawLog.setRawContent(rawContent);
             rawLog.setContentType("application/json");
             rawLog.setSuccess(1);
@@ -171,5 +174,13 @@ public class DataCollectServiceImpl implements DataCollectService {
         if (obj instanceof Number) return ((Number) obj).longValue();
         try { return Long.valueOf(String.valueOf(obj)); }
         catch (NumberFormatException e) { return null; }
+    }
+
+    /** 替换 configJson 中的 ${customerId} 占位符，实现采集时动态按客户过滤 */
+    private void replacePlaceholders(CollectorConfig config, Long customerId) {
+        String configJson = config.getConfigJson();
+        if (configJson != null && customerId != null) {
+            config.setConfigJson(configJson.replace("${customerId}", String.valueOf(customerId)));
+        }
     }
 }

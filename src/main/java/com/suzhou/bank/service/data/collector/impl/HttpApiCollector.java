@@ -32,7 +32,7 @@ public class HttpApiCollector implements DataCollector {
     }
 
     @Override
-    public String collect(CollectorConfig config) {
+    public String collect(CollectorConfig config, Long customerId) {
         JSONObject cfg = JSON.parseObject(config.getConfigJson());
         String url = cfg.getString("url");
         String method = cfg.getString("method");

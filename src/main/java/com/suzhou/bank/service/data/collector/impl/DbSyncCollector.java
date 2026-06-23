@@ -31,7 +31,7 @@ public class DbSyncCollector implements DataCollector {
     }
 
     @Override
-    public String collect(CollectorConfig config) {
+    public String collect(CollectorConfig config, Long customerId) {
         JSONObject cfg = JSON.parseObject(config.getConfigJson());
         String driverClass = getDriverClass(cfg.getString("dbType"));
         String url = buildJdbcUrl(cfg);

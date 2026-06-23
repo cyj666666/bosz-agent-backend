@@ -28,4 +28,8 @@ public class Report {
     private String dataSnapshot;
     private java.util.Date createdAt;
     private java.util.Date updatedAt;
+
+    /** 关联查询用，非数据库字段 */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String companyName;
 }

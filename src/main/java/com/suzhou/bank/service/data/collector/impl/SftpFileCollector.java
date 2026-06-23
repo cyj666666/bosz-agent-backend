@@ -36,7 +36,7 @@ public class SftpFileCollector implements DataCollector {
     }
 
     @Override
-    public String collect(CollectorConfig config) {
+    public String collect(CollectorConfig config, Long customerId) {
         JSONObject cfg = JSON.parseObject(config.getConfigJson());
         String host = cfg.getString("host");
         int port = cfg.getIntValue("port", 22);

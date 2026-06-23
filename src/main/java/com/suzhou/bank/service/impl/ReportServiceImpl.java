@@ -8,11 +8,14 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.*;
 import com.suzhou.bank.mapper.*;
 import com.suzhou.bank.service.report.ReportService;
+import com.suzhou.bank.service.data.DataCollectService;
+import com.suzhou.bank.service.knowkit.KnowKitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 报告服务实现
@@ -31,6 +34,41 @@ public class ReportServiceImpl implements ReportService {
     private final CustomerMapper customerMapper;
     private final IndicatorDataMapper indicatorMapper;
     private final KnowKitTaskMapper taskMapper;
+    private final CollectorConfigMapper collectorConfigMapper;
+    private final DataCollectService dataCollectService;
+    private final KnowKitService knowKitService;
+
+    /** 一键生成报告：采集 → 分析 → 生成 */
+    @Override
+    public Report create(Long customerId, List<String> scenarioTags) {
+        log.info("一键生成报告开始, customerId={}, scenarioTags={}", customerId, scenarioTags);
+
+        // 1. 遍历所有启用的采集器，按客户采集最新数据
+        List<CollectorConfig> enabledCollectors = collectorConfigMapper.selectList(
+                new LambdaQueryWrapper<CollectorConfig>().eq(CollectorConfig::getEnabled, 1));
+        log.info("启用的采集器数量: {}", enabledCollectors.size());
+
+        int successCount = 0;
+        int failCount = 0;
+        for (CollectorConfig collector : enabledCollectors) {
+            try {
+                dataCollectService.collect(collector.getId(), customerId);
+                successCount++;
+            } catch (Exception e) {
+                log.warn("采集器[{}]执行失败(跳过继续): {}", collector.getConfigName(), e.getMessage());
+                failCount++;
+            }
+        }
+        log.info("采集完成, customerId={}, 成功={}, 失败={}", customerId, successCount, failCount);
+
+        // 2. 提交 Know-Kit 分析
+        KnowKitTask task = knowKitService.submitAnalysis(customerId, scenarioTags);
+
+        // 3. 生成报告
+        Report report = generate(customerId, task.getId());
+        log.info("一键生成报告完成, reportId={}, customerId={}", report.getId(), customerId);
+        return report;
+    }
 
     /** 基于 Know-Kit 分析结果生成报告 */
     @Override
@@ -84,7 +122,19 @@ public class ReportServiceImpl implements ReportService {
         LambdaQueryWrapper<Report> w = new LambdaQueryWrapper<>();
         if (customerId != null) w.eq(Report::getCustomerId, customerId);
         w.orderByDesc(Report::getCreatedAt);
-        return reportMapper.selectPage(new Page<>(page, size), w);
+        Page<Report> result = reportMapper.selectPage(new Page<>(page, size), w);
+
+        // 填充 companyName，避免 N+1 查询：一次查出所有涉及的客户
+        List<Long> customerIds = result.getRecords().stream()
+                .map(Report::getCustomerId)
+                .distinct()
+                .collect(Collectors.toList());
+        if (!customerIds.isEmpty()) {
+            Map<Long, String> nameMap = customerMapper.selectBatchIds(customerIds).stream()
+                    .collect(Collectors.toMap(Customer::getId, Customer::getCompanyName));
+            result.getRecords().forEach(r -> r.setCompanyName(nameMap.getOrDefault(r.getCustomerId(), "")));
+        }
+        return result;
     }
 
     @Override

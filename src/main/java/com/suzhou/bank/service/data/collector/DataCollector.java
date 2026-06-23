@@ -22,10 +22,11 @@ public interface DataCollector {
     /**
      * 执行数据采集
      *
-     * @param config 采集器配置（含连接信息、凭证等）
+     * @param config     采集器配置（含连接信息、凭证等），configJson 中的 ${customerId} 占位符已预先替换
+     * @param customerId 目标客户ID，供采集器实现类按需使用
      * @return 原始数据字符串（JSON/文本等）
      */
-    String collect(CollectorConfig config);
+    String collect(CollectorConfig config, Long customerId);
 
     /**
      * 校验采集器配置是否合法

@@ -41,7 +41,7 @@ public class FileUploadCollector implements DataCollector {
      * 实际收集通过 {@link #collectFromUpload} 执行。
      */
     @Override
-    public String collect(CollectorConfig config) {
+    public String collect(CollectorConfig config, Long customerId) {
         MultipartFile file = uploadedFile.get();
         if (file == null) {
             throw new RuntimeException("FILE_UPLOAD 采集需要调用 collectFromUpload 方法传入文件");

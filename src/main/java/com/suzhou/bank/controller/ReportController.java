@@ -6,6 +6,8 @@ import com.suzhou.bank.service.report.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 贷后管理报告接口
  * <p>提供报告生成、查询和删除功能。
@@ -22,7 +24,21 @@ public class ReportController {
     private final ReportService service;
 
     /**
-     * 生成贷后管理报告
+     * 一键生成报告：采集最新数据 → Know-Kit 分析 → 生成 HTML 报告
+     * <p>将数据采集、智能分析和报告生成串联为单次请求，
+     * 前端只需传客户ID和场景标签即可获得完整报告。</p>
+     *
+     * @param customerId   客户ID
+     * @param scenarioTags 场景标签列表（请求体 JSON 数组）
+     * @return 生成的报告记录
+     */
+    @PostMapping("/create")
+    public Result<Report> create(@RequestParam Long customerId, @RequestBody List<String> scenarioTags) {
+        return Result.ok(service.create(customerId, scenarioTags));
+    }
+
+    /**
+     * 生成贷后管理报告（基于已有分析结果）
      * <p>根据客户信息和 Know-Kit 分析结果生成报告，
      * 报告内容包含数据快照和 H5 交互式 HTML。</p>
      *

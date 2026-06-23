@@ -30,16 +30,16 @@
 数据接入层采用策略模式，将"从哪拿数据"（Collector）和"怎么解析数据"（Parser）解耦：
 
 ```
-外部数据源 --> Collector（HTTP/SFTP/DB/Upload/Webhook）
+外部数据源 --> Collector（HTTP/DB/Webhook），按客户ID通过 ${customerId} 占位符动态过滤
                   |
                   v
               原始数据（JSON/Excel/PDF/文本）
                   |
                   v
-             Parser（JSONPath/Excel模板/OCR文本/Groovy脚本）
+             Parser（JSONPath/Excel模板/OCR文本）
                   |
                   v
-          indicator_data + text_data（统一结构化存储）
+          indicator_data + text_data（统一结构化存储，按 customerId 隔离）
 ```
 
 Collector 和 Parser 各自由数据库表 `collector_config` 和 `parser_config` 驱动，支持运行时动态配置，无需修改代码即可接入新数据源。
@@ -125,7 +125,7 @@ bosz-agent-backend/
 | DELETE | `/collector/{id}` | 删除采集器 |
 | GET | `/parser/list/{collectorId}` | 解析器列表 |
 | POST | `/parser` | 新增解析器 |
-| POST | `/collect/{collectorId}?customerId=1` | 触发采集 |
+| POST | `/collect/{collectorId}?customerId=1` | 手动触发单次采集（configJson 中的 `${customerId}` 自动替换为实际值） |
 
 ### 知识库管理 `/api/knowledge`
 
@@ -154,8 +154,9 @@ bosz-agent-backend/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/generate?customerId=1&knowKitTaskId=1` | 生成报告 |
-| GET | `/page` | 报告列表 |
+| POST | `/create?customerId=1` | **一键生成报告**（采集→分析→生成） |
+| POST | `/generate?customerId=1&knowKitTaskId=1` | 基于已有分析结果生成报告 |
+| GET | `/page` | 报告列表（含 companyName） |
 | GET | `/{id}` | 报告详情 |
 | GET | `/{id}/html` | 报告HTML内容 |
 | DELETE | `/{id}` | 删除报告 |
@@ -240,9 +241,15 @@ mvn spring-boot:run
 
 ## 开发进度
 
-- [x] Collector 具体实现（HttpApiCollector  ✅ / DbSyncCollector ✅ / SftpFileCollector ✅ / FileUploadCollector ✅）
+- [x] Collector 具体实现（HttpApiCollector ✅ / DbSyncCollector ✅ / SftpFileCollector ✅ / FileUploadCollector ✅）
+- [x] Collector 支持 configJson 中 `${customerId}` 占位符，运行时按客户动态过滤
 - [x] Parser 具体实现（JsonPathParser ✅ / ExcelTemplateParser ✅ / OcrTextParser ✅）
 - [x] Know-Kit API 对接（Mock 实现，生成逼真分析结果用于流程联调）
 - [x] 报告 HTML 模板渲染引擎（三栏式布局，五章节完整报告）
+- [x] 报告一键生成接口 `POST /api/report/create`（采集→分析→生成）
+- [x] 报告列表返回 companyName，批量查询避免 N+1
 - [ ] 数据采集定时任务调度（后续按需实现）
+- [ ] SFTP文件采集 + 文件上传采集从采集器中剥离为独立功能模块（当前是人工触发场景，不应混入自动采集器）
+- [ ] OCR 识别链路补全：当前 OcrTextParser 假设输入已是识别后的纯文本，缺少"扫描件/图片 → 调用外部 OCR API（阿里云/腾讯云）→ 得到文字"这一前置环节
+- [ ] 用户体系：当前无用户、角色、登录认证功能，所有接口无权限控制
 - [ ] 接口文档 Swagger/Knife4j（后续按需实现）
