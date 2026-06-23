@@ -28,10 +28,11 @@ public class ReportServiceImpl implements ReportService {
         r.setContentHtml("");
         r.setCreatedAt(new Date());
         reportMapper.insert(r);
+        log.info("报告已生成, reportId={}, customerId={}, title={}", r.getId(), customerId, r.getReportTitle());
         return r;
     }
     @Override public Report getById(Long id) { return reportMapper.selectById(id); }
     @Override public Page<Report> page(int page, int size, Long customerId) { LambdaQueryWrapper<Report> w = new LambdaQueryWrapper<>(); if (customerId != null) w.eq(Report::getCustomerId, customerId); w.orderByDesc(Report::getCreatedAt); return reportMapper.selectPage(new Page<>(page, size), w); }
     @Override public String getReportHtml(Long id) { Report r = reportMapper.selectById(id); return r != null ? r.getContentHtml() : ""; }
-    @Override public void delete(Long id) { reportMapper.deleteById(id); }
+    @Override public void delete(Long id) { reportMapper.deleteById(id); log.info("报告已删除, reportId={}", id); }
 }

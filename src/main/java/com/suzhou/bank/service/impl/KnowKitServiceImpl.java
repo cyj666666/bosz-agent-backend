@@ -18,18 +18,26 @@ public class KnowKitServiceImpl implements KnowKitService {
     private final TextDataMapper textMapper;
     private final KnowledgeService knowledgeService;
     @Override public KnowKitTask submitAnalysis(Long customerId, List<String> scenarioTags) {
-        List<IndicatorData> indicators = indicatorMapper.selectList(new LambdaQueryWrapper<IndicatorData>().eq(IndicatorData::getCustomerId, customerId));
-        List<TextData> texts = textMapper.selectList(new LambdaQueryWrapper<TextData>().eq(TextData::getCustomerId, customerId));
+        log.info("KnowKit分析开始, customerId={}, scenarioTags={}", customerId, scenarioTags);
+
+        List<IndicatorData> indicators = indicatorMapper.selectList(
+            new LambdaQueryWrapper<IndicatorData>().eq(IndicatorData::getCustomerId, customerId));
+        List<TextData> texts = textMapper.selectList(
+            new LambdaQueryWrapper<TextData>().eq(TextData::getCustomerId, customerId));
         List<KnowledgeRule> rules = knowledgeService.matchRules(scenarioTags);
+
+        log.info("KnowKit数据组装完毕, customerId={}, indicatorCount={}, textCount={}, ruleCount={}",
+            customerId, indicators.size(), texts.size(), rules.size());
+
         Map<String, Object> req = new LinkedHashMap<>();
         req.put("customerId", customerId);
         req.put("scenarioTags", scenarioTags);
         req.put("data", new HashMap<String, Object>() {{ put("indicators", indicators); put("texts", texts); }});
         req.put("rules", rules);
+
         KnowKitTask task = new KnowKitTask();
         task.setCustomerId(customerId);
         task.setScenarioTags(JSON.toJSONString(scenarioTags));
-        // 不存储完整数据快照，仅保留引用ID，按需查询以保证数据访问受权
         Map<String, Object> requestMeta = new HashMap<>();
         requestMeta.put("customerId", customerId);
         requestMeta.put("scenarioTags", scenarioTags);
@@ -38,9 +46,20 @@ public class KnowKitServiceImpl implements KnowKitService {
         task.setResponseJson(null);
         task.setCreatedAt(new Date());
         taskMapper.insert(task);
-        log.info("KnowKit task created, id={}", task.getId());
+
+        log.info("KnowKit任务已创建, taskId={}, customerId={}, status={}", task.getId(), customerId, task.getStatus());
         return task;
     }
     @Override public KnowKitTask getTaskResult(Long id) { return taskMapper.selectById(id); }
-    @Override public KnowKitTask retryTask(Long id) { KnowKitTask t = taskMapper.selectById(id); if (t != null) { t.setStatus("PENDING"); t.setErrorMsg(null); taskMapper.updateById(t); } return t; }
+    @Override public KnowKitTask retryTask(Long id) {
+        log.info("KnowKit任务重试, taskId={}", id);
+        KnowKitTask t = taskMapper.selectById(id);
+        if (t != null) {
+            t.setStatus("PENDING");
+            t.setErrorMsg(null);
+            taskMapper.updateById(t);
+            log.info("KnowKit任务已重置为PENDING, taskId={}", id);
+        }
+        return t;
+    }
 }

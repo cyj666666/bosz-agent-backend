@@ -8,9 +8,11 @@ import com.suzhou.bank.mapper.CollectorConfigMapper;
 import com.suzhou.bank.mapper.ParserConfigMapper;
 import com.suzhou.bank.service.data.DataConfigService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DataConfigServiceImpl implements DataConfigService {
@@ -26,9 +28,23 @@ public class DataConfigServiceImpl implements DataConfigService {
     }
 
     @Override public CollectorConfig getCollector(Long id) { return cm.selectById(id); }
-    @Override public void saveCollector(CollectorConfig c) { cm.insert(c); }
-    @Override public void updateCollector(CollectorConfig c) { cm.updateById(c); }
-    @Override public void deleteCollector(Long id) { cm.deleteById(id); }
+
+    @Override
+    public void saveCollector(CollectorConfig c) {
+        cm.insert(c);
+        log.info("采集器已新增, id={}, name={}, type={}", c.getId(), c.getConfigName(), c.getCollectorType());
+    }
+
+    @Override public void updateCollector(CollectorConfig c) {
+        cm.updateById(c);
+        log.info("采集器已更新, id={}, name={}", c.getId(), c.getConfigName());
+    }
+
+    @Override
+    public void deleteCollector(Long id) {
+        cm.deleteById(id);
+        log.info("采集器已删除, id={}", id);
+    }
 
     @Override
     public List<CollectorConfig> listEnabledCollectors() {
@@ -42,7 +58,21 @@ public class DataConfigServiceImpl implements DataConfigService {
     }
 
     @Override public ParserConfig getParser(Long id) { return pm.selectById(id); }
-    @Override public void saveParser(ParserConfig p) { pm.insert(p); }
-    @Override public void updateParser(ParserConfig p) { pm.updateById(p); }
-    @Override public void deleteParser(Long id) { pm.deleteById(id); }
+
+    @Override
+    public void saveParser(ParserConfig p) {
+        pm.insert(p);
+        log.info("解析器已新增, id={}, collectorId={}, type={}, domain={}", p.getId(), p.getCollectorId(), p.getParserType(), p.getDomain());
+    }
+
+    @Override public void updateParser(ParserConfig p) {
+        pm.updateById(p);
+        log.info("解析器已更新, id={}, type={}, domain={}", p.getId(), p.getParserType(), p.getDomain());
+    }
+
+    @Override
+    public void deleteParser(Long id) {
+        pm.deleteById(id);
+        log.info("解析器已删除, id={}", id);
+    }
 }
