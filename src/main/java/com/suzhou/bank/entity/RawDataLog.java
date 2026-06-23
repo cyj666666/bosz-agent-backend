@@ -5,6 +5,13 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+/**
+ * 原始数据日志表（raw_data_log）
+ * <p>记录每次数据采集的原始数据快照，用于审计追溯和故障排查。</p>
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Data
 @TableName("raw_data_log")
 public class RawDataLog {

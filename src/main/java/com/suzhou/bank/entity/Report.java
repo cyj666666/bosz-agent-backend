@@ -5,6 +5,14 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+/**
+ * 报告主表（report）
+ * <p>存储贷后管理报告，包含 H5 HTML 内容和生成时的数据快照（dataSnapshot）。
+ * 报告一旦生成即不可变，dataSnapshot 保证历史回溯和审计完整性。</p>
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Data
 @TableName("report")
 public class Report {

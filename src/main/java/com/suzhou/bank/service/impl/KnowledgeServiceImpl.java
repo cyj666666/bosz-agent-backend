@@ -13,6 +13,12 @@ import org.springframework.util.StringUtils;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 知识库服务实现
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

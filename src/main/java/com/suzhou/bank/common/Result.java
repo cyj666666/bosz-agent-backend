@@ -2,6 +2,15 @@ package com.suzhou.bank.common;
 
 import lombok.Data;
 
+/**
+ * 统一响应体
+ * <p>所有 API 返回此格式：{@code {"code": 200, "message": "success", "data": ...}}。
+ * 使用静态工厂方法创建成功或失败响应。</p>
+ *
+ * @param <T> 响应数据类型
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Data
 public class Result<T> {
     private int code;

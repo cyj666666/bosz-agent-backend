@@ -9,6 +9,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.util.*;
+/**
+ * 报告服务实现
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Slf4j @Service @RequiredArgsConstructor
 public class ReportServiceImpl implements ReportService {
     private final ReportMapper reportMapper;

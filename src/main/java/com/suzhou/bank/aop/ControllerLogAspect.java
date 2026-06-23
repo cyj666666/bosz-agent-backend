@@ -12,14 +12,28 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 
+/**
+ * Controller 请求日志切面
+ * <p>拦截所有 Controller 方法调用，记录请求方法、URL、参数、
+ * 执行耗时和结果状态，用于日常运维和问题排查。</p>
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Slf4j
 @Aspect
 @Component
 public class ControllerLogAspect {
 
+    /**
+     * 切点：匹配 controller 包下所有 public 方法
+     */
     @Pointcut("execution(* com.suzhou.bank.controller..*(..))")
     public void controllerPointcut() {}
 
+    /**
+     * 环绕通知：记录入参 → 执行方法 → 记录耗时和结果
+     */
     @Around("controllerPointcut()")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

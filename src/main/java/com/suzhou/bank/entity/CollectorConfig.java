@@ -5,6 +5,14 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+/**
+ * 采集器配置表（collector_config）
+ * <p>定义"数据从哪来"，支持运行时动态配置。
+ * 不同采集器类型（HTTP_API、SFTP_FILE等）通过策略模式实现。</p>
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Data
 @TableName("collector_config")
 public class CollectorConfig {

@@ -5,6 +5,14 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+/**
+ * 客户主表（customer）
+ * <p>贷后管理核心实体，存储企业基本信息。
+ * 所有数据采集、分析和报告均围绕客户展开。</p>
+ *
+ * @author cyj666666
+ * @since 1.0.0
+ */
 @Data
 @TableName("customer")
 public class Customer {
