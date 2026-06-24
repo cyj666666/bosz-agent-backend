@@ -107,7 +107,9 @@ public class UserService {
     /** 管理员重置用户密码为默认值 */
     @Transactional
     public String resetPassword(Long id) {
-        return setPassword(id, "Abc12345");
+        String defaultPwd = "Abc12345";
+        setPassword(id, defaultPwd);
+        return defaultPwd;
     }
 
     /** 管理员手动设置用户密码 */

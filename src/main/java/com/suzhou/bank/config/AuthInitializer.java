@@ -44,7 +44,7 @@ public class AuthInitializer implements CommandLineRunner {
                 ScriptRunner runner = new ScriptRunner(conn);
                 runner.setStopOnError(false);
                 runner.runScript(new InputStreamReader(
-                        new ClassPathResource("init_auth.sql").getInputStream(),
+                        new ClassPathResource("init_auth_gaussdb.sql").getInputStream(),
                         StandardCharsets.UTF_8));
                 log.info("认证相关表初始化完成");
             }

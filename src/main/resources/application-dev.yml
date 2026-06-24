@@ -1,15 +1,19 @@
 spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/suzhou_bank_report?useUnicode=true&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: amar@2025
+    driver-class-name: org.opengauss.Driver
+    url: jdbc:opengauss://127.0.0.1:5432/bosz?currentSchema=as_agent&characterEncoding=UTF-8
+    username: as_agent
+    password: AsAgent@2024
     druid:
       initial-size: 5
       min-idle: 5
       max-active: 20
       max-wait: 60000
+      # GaussDB PostgreSQL协议适配
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: true
 
 logging:
   level:
