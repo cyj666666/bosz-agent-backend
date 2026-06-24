@@ -72,20 +72,25 @@ public class AuthInitializer implements CommandLineRunner {
                 adminRole.setRoleCode("admin");
                 adminRole.setRoleName("系统管理员");
                 adminRole.setDescription("拥有所有权限");
-                adminRole.setMenuPermissions("[\"/reports\",\"/customers\",\"/data-config\",\"/rules\",\"/users\",\"/roles\"]");
+                adminRole.setMenuPermissions("[\"/reports\",\"/report-create\",\"/customers\",\"/data-config\",\"/rules\",\"/users\",\"/roles\"]");
                 adminRole.setCreatedAt(new Date());
                 sysRoleMapper.insert(adminRole);
                 log.info("默认角色已创建: admin");
             } catch (Exception e) {
                 log.warn("默认角色创建失败: {}", e.getMessage());
             }
-        } else if (adminRole.getMenuPermissions() == null
-                || adminRole.getMenuPermissions().isEmpty()
-                || "[]".equals(adminRole.getMenuPermissions())) {
-            // 已有角色但菜单权限为空或默认值（旧表升级或新表默认值场景），补齐
-            adminRole.setMenuPermissions("[\"/reports\",\"/customers\",\"/data-config\",\"/rules\",\"/users\",\"/roles\"]");
-            sysRoleMapper.updateById(adminRole);
-            log.info("admin 角色已补齐菜单权限");
+        } else {
+            // 已有角色，检查并补齐缺失的菜单项
+            String current = adminRole.getMenuPermissions();
+            if (current == null || current.isEmpty() || "[]".equals(current)) {
+                current = "[]";
+            }
+            String full = "[\"/reports\",\"/report-create\",\"/customers\",\"/data-config\",\"/rules\",\"/users\",\"/roles\"]";
+            if (!current.contains("\"/report-create\"")) {
+                adminRole.setMenuPermissions(full);
+                sysRoleMapper.updateById(adminRole);
+                log.info("admin 角色已补齐 /report-create 菜单权限");
+            }
         }
 
         // 创建默认管理员

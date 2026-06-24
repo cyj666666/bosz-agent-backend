@@ -34,7 +34,9 @@ public class KnowledgeServiceImpl implements KnowledgeService {
             new LambdaQueryWrapper<RuleScenario>().orderByDesc(RuleScenario::getCreatedAt));
     }
 
-    @Override public List<RuleScenario> listAllScenarios() { return sm.selectList(null); }
+    @Override public List<RuleScenario> listAllScenarios() {
+        return sm.selectList(new LambdaQueryWrapper<RuleScenario>().orderByDesc(RuleScenario::getCreatedAt));
+    }
 
     @Override
     public void saveScenario(RuleScenario s) {

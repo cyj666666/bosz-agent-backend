@@ -26,12 +26,12 @@ public class RoleService {
 
     public Page<SysRole> page(int page, int size) {
         return roleMapper.selectPage(new Page<>(page, size),
-                new LambdaQueryWrapper<SysRole>().orderByAsc(SysRole::getId));
+                new LambdaQueryWrapper<SysRole>().orderByDesc(SysRole::getCreatedAt));
     }
 
     public List<SysRole> listAll() {
         return roleMapper.selectList(
-                new LambdaQueryWrapper<SysRole>().orderByAsc(SysRole::getId));
+                new LambdaQueryWrapper<SysRole>().orderByDesc(SysRole::getCreatedAt));
     }
 
     public void save(SysRole role) {
