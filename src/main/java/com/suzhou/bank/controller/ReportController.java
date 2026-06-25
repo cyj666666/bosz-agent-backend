@@ -25,16 +25,14 @@ public class ReportController {
 
     /**
      * 一键生成报告：采集最新数据 → Know-Kit 分析 → 生成 HTML 报告
-     * <p>将数据采集、智能分析和报告生成串联为单次请求，
-     * 前端只需传客户ID和场景标签即可获得完整报告。</p>
+     * <p>将数据采集、智能分析和报告生成串联为单次请求。</p>
      *
-     * @param customerId   客户ID
-     * @param scenarioTags 场景标签列表（请求体 JSON 数组）
+     * @param customerId 客户ID
      * @return 生成的报告记录
      */
     @PostMapping("/create")
-    public Result<Report> create(@RequestParam Long customerId, @RequestBody List<String> scenarioTags) {
-        return Result.ok(service.create(customerId, scenarioTags));
+    public Result<Report> create(@RequestParam Long customerId) {
+        return Result.ok(service.create(customerId));
     }
 
     /**

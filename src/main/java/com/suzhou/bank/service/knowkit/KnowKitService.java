@@ -23,7 +23,7 @@ public interface KnowKitService {
      * @param scenarioTags 场景标签列表（用于匹配适用规则）
      * @return 分析任务记录
      */
-    KnowKitTask submitAnalysis(Long customerId, List<String> scenarioTags);
+    KnowKitTask submitAnalysis(Long customerId);
 
     /**
      * 查询任务结果

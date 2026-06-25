@@ -32,14 +32,15 @@ public class KnowKitServiceImpl implements KnowKitService {
 
     /** 提交分析任务给 Know-Kit */
     @Override
-    public KnowKitTask submitAnalysis(Long customerId, List<String> scenarioTags) {
-        log.info("KnowKit分析开始, customerId={}, scenarioTags={}", customerId, scenarioTags);
+    public KnowKitTask submitAnalysis(Long customerId) {
+        log.info("KnowKit分析开始, customerId={}", customerId);
 
         List<IndicatorData> indicators = indicatorMapper.selectList(
                 new LambdaQueryWrapper<IndicatorData>().eq(IndicatorData::getCustomerId, customerId));
         List<TextData> texts = textMapper.selectList(
                 new LambdaQueryWrapper<TextData>().eq(TextData::getCustomerId, customerId));
-        List<KnowledgeRule> rules = knowledgeService.matchRules(scenarioTags);
+        // 加载所有启用规则（标签仅作为分类属性，不参与报告生成的筛选）
+        List<KnowledgeRule> rules = knowledgeService.matchRules(Collections.emptyList());
 
         log.info("KnowKit数据组装完毕, customerId={}, indicatorCount={}, textCount={}, ruleCount={}",
                 customerId, indicators.size(), texts.size(), rules.size());
@@ -47,7 +48,6 @@ public class KnowKitServiceImpl implements KnowKitService {
         // 组装请求 JSON
         Map<String, Object> req = new LinkedHashMap<>();
         req.put("customerId", customerId);
-        req.put("scenarioTags", scenarioTags);
         req.put("data", new HashMap<String, Object>() {{
             put("indicators", indicators);
             put("texts", texts);
@@ -55,11 +55,11 @@ public class KnowKitServiceImpl implements KnowKitService {
         req.put("rules", rules);
 
         // 生成 Mock 分析结果
-        Map<String, Object> mockResponse = buildMockResponse(customerId, indicators, rules, scenarioTags);
+        Map<String, Object> mockResponse = buildMockResponse(customerId, indicators, rules);
 
         KnowKitTask task = new KnowKitTask();
         task.setCustomerId(customerId);
-        task.setScenarioTags(JSON.toJSONString(scenarioTags));
+        task.setScenarioTags("[]");
         task.setRequestJson(JSON.toJSONString(req));
         task.setStatus("SUCCESS");
         task.setResponseJson(JSON.toJSONString(mockResponse));
@@ -97,7 +97,7 @@ public class KnowKitServiceImpl implements KnowKitService {
      * <p>模拟 Know-Kit 大模型分析输出，后续替换为真实 API 调用。</p>
      */
     private Map<String, Object> buildMockResponse(Long customerId,
-            List<IndicatorData> indicators, List<KnowledgeRule> rules, List<String> tags) {
+            List<IndicatorData> indicators, List<KnowledgeRule> rules) {
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("taskId", "KK-" + customerId + "-" + System.currentTimeMillis());

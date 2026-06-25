@@ -4,7 +4,6 @@ import com.suzhou.bank.entity.KnowKitTask;
 import com.suzhou.bank.service.knowkit.KnowKitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
 
 /**
  * Know-Kit 智能体适配接口
@@ -22,15 +21,14 @@ public class KnowKitController {
 
     /**
      * 提交分析任务
-     * <p>组装客户指标数据、文本数据和匹配到的风险判定规则，
+     * <p>组装客户指标数据、文本数据和所有启用规则，
      * 提交给 Know-Kit 智能体进行分析。</p>
      *
-     * @param customerId   客户ID
-     * @param scenarioTags 场景标签列表（用于匹配适用的风险规则）
+     * @param customerId 客户ID
      * @return 分析任务记录
      */
     @PostMapping("/analyze")
-    public Result<KnowKitTask> submitAnalysis(@RequestParam Long customerId, @RequestBody List<String> scenarioTags) { return Result.ok(service.submitAnalysis(customerId, scenarioTags)); }
+    public Result<KnowKitTask> submitAnalysis(@RequestParam Long customerId) { return Result.ok(service.submitAnalysis(customerId)); }
 
     /**
      * 查询任务结果

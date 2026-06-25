@@ -20,11 +20,10 @@ public interface ReportService {
      * <p>遍历所有启用的采集器按客户采集最新数据，提交 Know-Kit 分析，
      * 最后生成完整的 H5 贷后管理报告。任一采集器失败不影响主流程。</p>
      *
-     * @param customerId   客户ID
-     * @param scenarioTags 场景标签列表
+     * @param customerId 客户ID
      * @return 生成的报告记录
      */
-    Report create(Long customerId, List<String> scenarioTags);
+    Report create(Long customerId);
 
     /**
      * 基于已有的 Know-Kit 分析结果生成报告

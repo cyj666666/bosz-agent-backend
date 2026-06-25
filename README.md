@@ -7,7 +7,7 @@
 系统采用"数据层 + 知识库层 + Know-Kit智能体适配层 + 报告层"四层架构，其中 Know-Kit 智能体由第三方提供，本系统负责：
 
 - **数据层**：多源数据接入（API/DB/SFTP/OCR等），结构化存储为客户维度的指标和文本
-- **知识库层**：风险判定规则管理，按场景/行业/产品标签分类，支持规则匹配
+- **知识库层**：风险判定规则管理，标签（场景/行业/产品/风险类型）作为规则分类属性，支持按标签匹配规则
 - **Know-Kit 适配层**：组装数据+规则，调用智能体分析，接收分析结论
 - **报告层**：基于智能体输出 + 原始数据生成 H5 交互式贷后管理报告
 
@@ -161,7 +161,7 @@ bosz-agent-backend/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/analyze?customerId=1` | 提交分析任务 |
+| POST | `/analyze?customerId=1` | 提交分析任务（加载所有启用规则） |
 | GET | `/task/{taskId}` | 查询任务结果 |
 | POST | `/task/{taskId}/retry` | 重试失败任务 |
 
@@ -169,7 +169,7 @@ bosz-agent-backend/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/create?customerId=1` | **一键生成报告**（采集→分析→生成） |
+| POST | `/create?customerId=1` | **一键生成报告**（采集→分析→生成，标签仅作规则分类不参与筛选） |
 | POST | `/generate?customerId=1&knowKitTaskId=1` | 基于已有分析结果生成报告 |
 | GET | `/page` | 报告列表（含 companyName） |
 | GET | `/{id}` | 报告详情 |
@@ -274,5 +274,6 @@ mvn spring-boot:run
 - [x] 用户认证：JWT Token 登录、BCrypt 密码加密、AuthInterceptor 接口拦截、角色权限控制
 - [x] 系统管理：用户管理（CRUD+重置密码+手动改密）、角色管理（CRUD+菜单权限配置）、管理员互删保护、顶栏改密
 - [x] 场景管理：完整 CRUD（分页/全量/新增/更新/删除），场景与规则标签联动
-- [x] 标签去重值接口：`GET /knowledge/tags/distinct-values` 按 tagType 分组去重，供报告生成页下拉选择
+- [x] 标签去重值接口：`GET /knowledge/tags/distinct-values` 按 tagType 分组去重
+- [x] 报告生成流程简化：标签仅作规则分类属性，不参与报告筛选，matchRules 传空时返回所有启用规则
 - [ ] 接口文档 Swagger/Knife4j（后续按需实现）

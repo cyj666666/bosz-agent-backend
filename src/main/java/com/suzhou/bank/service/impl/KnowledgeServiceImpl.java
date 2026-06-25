@@ -132,7 +132,13 @@ public class KnowledgeServiceImpl implements KnowledgeService {
 
     @Override
     public List<KnowledgeRule> matchRules(List<String> tags) {
-        if (tags == null || tags.isEmpty()) return Collections.emptyList();
+        if (tags == null || tags.isEmpty()) {
+            // 不传标签时返回所有启用规则（标签仅作为分类属性，不参与筛选）
+            List<KnowledgeRule> all = rm.selectList(
+                new LambdaQueryWrapper<KnowledgeRule>().eq(KnowledgeRule::getEnabled, 1));
+            log.info("规则匹配完成(全量), matchedRules={}", all.size());
+            return all;
+        }
         List<RuleTag> matched = tm.selectList(
             new LambdaQueryWrapper<RuleTag>().in(RuleTag::getTagValue, tags));
         List<Long> ids = matched.stream().map(RuleTag::getRuleId).distinct().collect(Collectors.toList());

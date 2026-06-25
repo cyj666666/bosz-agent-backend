@@ -40,8 +40,8 @@ public class ReportServiceImpl implements ReportService {
 
     /** 一键生成报告：采集 → 分析 → 生成 */
     @Override
-    public Report create(Long customerId, List<String> scenarioTags) {
-        log.info("一键生成报告开始, customerId={}, scenarioTags={}", customerId, scenarioTags);
+    public Report create(Long customerId) {
+        log.info("一键生成报告开始, customerId={}", customerId);
 
         // 1. 遍历所有启用的采集器，按客户采集最新数据
         List<CollectorConfig> enabledCollectors = collectorConfigMapper.selectList(
@@ -62,7 +62,7 @@ public class ReportServiceImpl implements ReportService {
         log.info("采集完成, customerId={}, 成功={}, 失败={}", customerId, successCount, failCount);
 
         // 2. 提交 Know-Kit 分析
-        KnowKitTask task = knowKitService.submitAnalysis(customerId, scenarioTags);
+        KnowKitTask task = knowKitService.submitAnalysis(customerId);
 
         // 3. 生成报告
         Report report = generate(customerId, task.getId());
