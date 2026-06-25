@@ -276,4 +276,5 @@ mvn spring-boot:run
 - [x] 场景管理：完整 CRUD（分页/全量/新增/更新/删除），场景与规则标签联动
 - [x] 标签去重值接口：`GET /knowledge/tags/distinct-values` 按 tagType 分组去重
 - [x] 报告生成流程简化：标签仅作规则分类属性，不参与报告筛选，matchRules 传空时返回所有启用规则
+- [x] 规则条件运算符按规则类型限定：THRESHOLD 数值比较、BOOLEAN 真值/存在性、COMPOSITE 全量运算符
 - [ ] 接口文档 Swagger/Knife4j（后续按需实现）
