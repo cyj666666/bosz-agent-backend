@@ -3,6 +3,7 @@ package com.suzhou.bank.service.knowledge;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.*;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库服务接口
@@ -30,6 +31,11 @@ public interface KnowledgeService {
      * 新增场景定义
      */
     void saveScenario(RuleScenario scenario);
+
+    /**
+     * 更新场景定义
+     */
+    void updateScenario(RuleScenario scenario);
 
     /**
      * 删除场景定义
@@ -90,6 +96,15 @@ public interface KnowledgeService {
      * 保存规则标签（先删后插，批量替换）
      */
     void saveTags(Long ruleId, List<RuleTag> tags);
+
+    // ==================== 标签去重值 ====================
+
+    /**
+     * 获取各类型标签的去重值（供报告生成页下拉选择行业/产品/风险类型）
+     *
+     * @return 按 tagType 分组的去重标签值，key = 标签类型, value = 去重后的标签值列表
+     */
+    Map<String, List<String>> distinctTagValues();
 
     // ==================== 规则匹配 ====================
 

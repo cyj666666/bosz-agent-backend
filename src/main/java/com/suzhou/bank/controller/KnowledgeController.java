@@ -6,6 +6,7 @@ import com.suzhou.bank.service.knowledge.KnowledgeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库管理接口
@@ -51,6 +52,15 @@ public class KnowledgeController {
     public Result<Void> saveScenario(@RequestBody RuleScenario s) { service.saveScenario(s); return Result.ok(); }
 
     /**
+     * 更新场景定义
+     *
+     * @param s 场景信息（需包含ID）
+     * @return 操作结果
+     */
+    @PutMapping("/scenario")
+    public Result<Void> updateScenario(@RequestBody RuleScenario s) { service.updateScenario(s); return Result.ok(); }
+
+    /**
      * 删除场景定义
      *
      * @param id 场景ID
@@ -58,6 +68,16 @@ public class KnowledgeController {
      */
     @DeleteMapping("/scenario/{id}")
     public Result<Void> deleteScenario(@PathVariable Long id) { service.deleteScenario(id); return Result.ok(); }
+
+    // ==================== 标签去重值 ====================
+
+    /**
+     * 获取各类型标签的去重值（供报告生成页下拉选择行业/产品/风险类型）
+     *
+     * @return 按 tagType 分组的去重标签值 Map
+     */
+    @GetMapping("/tags/distinct-values")
+    public Result<Map<String, List<String>>> distinctTagValues() { return Result.ok(service.distinctTagValues()); }
 
     // ==================== 规则管理 ====================
 

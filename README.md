@@ -142,8 +142,12 @@ bosz-agent-backend/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/scenario/all` | 场景列表 |
+| GET | `/scenario/page?page=1&size=10` | 场景分页 |
+| GET | `/scenario/all` | 场景全量列表（供下拉选择） |
 | POST | `/scenario` | 新增场景 |
+| PUT | `/scenario` | 更新场景 |
+| DELETE | `/scenario/{id}` | 删除场景 |
+| GET | `/tags/distinct-values` | 获取各标签类型的去重值（供报告生成页下拉选择） |
 | GET | `/rule/page?keyword=xxx` | 规则分页 |
 | POST | `/rule` | 新增规则 |
 | PUT | `/rule` | 更新规则 |
@@ -269,4 +273,6 @@ mvn spring-boot:run
 - [ ] OCR 识别链路补全：当前 OcrTextParser 假设输入已是识别后的纯文本，缺少"扫描件/图片 → 调用外部 OCR API（阿里云/腾讯云）→ 得到文字"这一前置环节
 - [x] 用户认证：JWT Token 登录、BCrypt 密码加密、AuthInterceptor 接口拦截、角色权限控制
 - [x] 系统管理：用户管理（CRUD+重置密码+手动改密）、角色管理（CRUD+菜单权限配置）、管理员互删保护、顶栏改密
+- [x] 场景管理：完整 CRUD（分页/全量/新增/更新/删除），场景与规则标签联动
+- [x] 标签去重值接口：`GET /knowledge/tags/distinct-values` 按 tagType 分组去重，供报告生成页下拉选择
 - [ ] 接口文档 Swagger/Knife4j（后续按需实现）

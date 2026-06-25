@@ -45,6 +45,12 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     }
 
     @Override
+    public void updateScenario(RuleScenario s) {
+        sm.updateById(s);
+        log.info("场景已更新, id={}, code={}, name={}", s.getId(), s.getScenarioCode(), s.getScenarioName());
+    }
+
+    @Override
     public void deleteScenario(Long id) {
         sm.deleteById(id);
         log.info("场景已删除, id={}", id);
@@ -109,6 +115,19 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         tm.delete(new LambdaQueryWrapper<RuleTag>().eq(RuleTag::getRuleId, ruleId));
         tags.forEach(t -> { t.setRuleId(ruleId); tm.insert(t); });
         log.info("规则标签已更新, ruleId={}, tagCount={}", ruleId, tags.size());
+    }
+
+    @Override
+    public Map<String, List<String>> distinctTagValues() {
+        List<RuleTag> all = tm.selectList(null);
+        return all.stream().collect(Collectors.groupingBy(
+            RuleTag::getTagType,
+            Collectors.mapping(RuleTag::getTagValue, Collectors.toCollection(LinkedHashSet::new))
+        )).entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            e -> new ArrayList<>(e.getValue()),
+            (a, b) -> a, LinkedHashMap::new
+        ));
     }
 
     @Override
