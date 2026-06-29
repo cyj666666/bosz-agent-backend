@@ -33,16 +33,22 @@ public class ReportServiceImpl implements ReportService {
     private final ReportMapper reportMapper;
     private final CustomerMapper customerMapper;
     private final IndicatorDataMapper indicatorMapper;
+    private final KnowledgeRuleMapper knowledgeRuleMapper;
+    private final RuleConditionMapper ruleConditionMapper;
     private final KnowKitTaskMapper taskMapper;
     private final CollectorConfigMapper collectorConfigMapper;
     private final DataCollectService dataCollectService;
     private final KnowKitService knowKitService;
 
-    /** 一键生成报告：采集 → 分析 → 生成 */
+    /**
+     * 一键生成报告：采集 → 分析 → 生成
+     * <p>TODO: 对接行内接口后，取消注释采集器和 KnowKit 调用，恢复完整链路。</p>
+     */
     @Override
     public Report create(Long customerId) {
-        log.info("一键生成报告开始, customerId={}", customerId);
+        log.info("一键生成报告开始（模拟模式）, customerId={}", customerId);
 
+        /* --- 采集器 + KnowKit 暂不可用，注释保留 ---
         // 1. 遍历所有启用的采集器，按客户采集最新数据
         List<CollectorConfig> enabledCollectors = collectorConfigMapper.selectList(
                 new LambdaQueryWrapper<CollectorConfig>().eq(CollectorConfig::getEnabled, 1));
@@ -64,9 +70,50 @@ public class ReportServiceImpl implements ReportService {
         // 2. 提交 Know-Kit 分析
         KnowKitTask task = knowKitService.submitAnalysis(customerId);
 
-        // 3. 生成报告
+        // 3. 生成报告（正式链路）
         Report report = generate(customerId, task.getId());
         log.info("一键生成报告完成, reportId={}, customerId={}", report.getId(), customerId);
+        return report;
+        --- 采集器 + KnowKit 暂不可用 END --- */
+
+        // 模拟模式：基于已有指标数据和规则条件生成报告
+        return createMock(customerId);
+    }
+
+    /**
+     * 模拟生成报告（暂代正式链路，对接行内接口后删除）
+     * <p>基于已有指标数据和规则条件判定生成简单 HTML 报告，用于验证报告展示效果。</p>
+     */
+    private Report createMock(Long customerId) {
+        Customer customer = customerMapper.selectById(customerId);
+        if (customer == null) {
+            throw new RuntimeException("客户不存在: " + customerId);
+        }
+
+        Map<String, Object> data = getReportData(customerId);
+
+        // 生成简单 HTML
+        String html = buildReportHtml(customer,
+                indicatorMapper.selectList(new LambdaQueryWrapper<IndicatorData>()
+                        .eq(IndicatorData::getCustomerId, customerId)
+                        .orderByAsc(IndicatorData::getSortOrder)),
+                null);
+
+        Report report = new Report();
+        report.setCustomerId(customerId);
+        report.setReportTitle(customer.getCompanyName() + " - 贷后管理报告");
+        report.setReportType("贷后管理报告");
+        report.setStatus("GENERATED");
+        report.setDataSnapshot(JSON.toJSONString(data));
+        report.setContentHtml(html);
+        report.setCreatedAt(new Date());
+        report.setUpdatedAt(new Date());
+        reportMapper.insert(report);
+
+        Map<?, ?> summary = (Map<?, ?>) data.get("summary");
+        log.info("模拟报告已生成, reportId={}, indicators={}, rules={}, hits={}",
+                report.getId(), summary.get("totalIndicators"),
+                summary.get("totalRules"), summary.get("hitRules"));
         return report;
     }
 
@@ -147,6 +194,158 @@ public class ReportServiceImpl implements ReportService {
     public void delete(Long id) {
         reportMapper.deleteById(id);
         log.info("报告已删除, reportId={}", id);
+    }
+
+    // ==================== 报告结构化数据 ====================
+
+    /**
+     * 构建报告结构化数据
+     * <p>客户基本信息 + 按数据域分组的指标列表 + 规则命中判定结果 + 汇总统计，
+     * 供前端渲染三栏式交互报告页。</p>
+     */
+    @Override
+    public Map<String, Object> getReportData(Long customerId) {
+        Customer c = customerMapper.selectById(customerId);
+        if (c == null) throw new RuntimeException("客户不存在: " + customerId);
+
+        List<IndicatorData> indicators = indicatorMapper.selectList(
+                new LambdaQueryWrapper<IndicatorData>()
+                        .eq(IndicatorData::getCustomerId, customerId)
+                        .orderByAsc(IndicatorData::getSortOrder));
+        List<KnowledgeRule> rules = knowledgeRuleMapper.selectList(
+                new LambdaQueryWrapper<KnowledgeRule>()
+                        .eq(KnowledgeRule::getEnabled, 1)
+                        .orderByAsc(KnowledgeRule::getSortOrder));
+        List<RuleCondition> allConds = ruleConditionMapper.selectList(null);
+        Map<Long, List<RuleCondition>> condMap = allConds.stream()
+                .collect(Collectors.groupingBy(RuleCondition::getRuleId));
+
+        Map<String, IndicatorData> indMap = indicators.stream()
+                .collect(Collectors.toMap(IndicatorData::getIndicatorKey, i -> i, (a, b) -> a));
+        Map<String, String> nameMap = indicators.stream()
+                .collect(Collectors.toMap(IndicatorData::getIndicatorKey, IndicatorData::getIndicatorName, (a, b) -> a));
+
+        // 逐规则判定
+        List<Map<String, Object>> ruleList = new ArrayList<>();
+        for (KnowledgeRule rule : rules) {
+            List<RuleCondition> conds = condMap.getOrDefault(rule.getId(), Collections.emptyList());
+            conds.sort(Comparator.comparingInt(x -> x.getLogicOrder() != null ? x.getLogicOrder() : 1));
+            boolean hit = evalRule(conds, indMap);
+            List<Map<String, Object>> condObjs = new ArrayList<>();
+            for (RuleCondition rc : conds) {
+                Map<String, Object> cm = new LinkedHashMap<>();
+                cm.put("indicatorKey", rc.getIndicatorKey());
+                cm.put("indicatorName", nameMap.getOrDefault(rc.getIndicatorKey(), ""));
+                cm.put("operator", rc.getOperator());
+                cm.put("threshold", rc.getThreshold());
+                cm.put("logicOrder", rc.getLogicOrder());
+                cm.put("logicConnector", rc.getLogicConnector());
+                condObjs.add(cm);
+            }
+            Map<String, Object> rm = new LinkedHashMap<>();
+            rm.put("ruleCode", rule.getRuleCode());
+            rm.put("ruleName", rule.getRuleName());
+            rm.put("ruleType", rule.getRuleType());
+            rm.put("description", rule.getDescription());
+            rm.put("hit", hit);
+            rm.put("conditions", condObjs);
+            ruleList.add(rm);
+        }
+
+        // 指标按域分组
+        Map<String, List<Map<String, Object>>> domainMap = new LinkedHashMap<>();
+        String[] domainOrder = {"FINANCE","CREDIT","TAX","JUDICIAL","SETTLEMENT",
+                "INDUSTRY_COMMERCE","SOCIAL_SECURITY","CUSTOMS","UTILITY","PROPERTY","GRAPH","MANAGEMENT"};
+        for (String d : domainOrder) domainMap.put(d, new ArrayList<>());
+        for (IndicatorData i : indicators) {
+            String d = i.getDomain() != null ? i.getDomain() : "OTHER";
+            domainMap.computeIfAbsent(d, k -> new ArrayList<>()).add(toIndicatorMap(i));
+        }
+        domainMap.entrySet().removeIf(e -> e.getValue().isEmpty());
+
+        long hitCount = ruleList.stream().filter(r -> Boolean.TRUE.equals(r.get("hit"))).count();
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalIndicators", indicators.size());
+        summary.put("totalRules", rules.size());
+        summary.put("hitRules", hitCount);
+        summary.put("domainCount", domainMap.size());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("customer", toCustomerMap(c));
+        result.put("domains", domainMap);
+        result.put("rules", ruleList);
+        result.put("summary", summary);
+        return result;
+    }
+
+    // ==================== 规则命中判定 ====================
+
+    private boolean evalRule(List<RuleCondition> conds, Map<String, IndicatorData> indMap) {
+        if (conds.isEmpty()) return false;
+        List<Boolean> res = new ArrayList<>();
+        List<String> link = new ArrayList<>();
+        for (RuleCondition c : conds) {
+            IndicatorData ind = indMap.get(c.getIndicatorKey());
+            res.add(evalCond(c, ind));
+            link.add(c.getLogicConnector() != null ? c.getLogicConnector() : "AND");
+        }
+        boolean v = res.get(0);
+        for (int i = 1; i < res.size(); i++)
+            v = "OR".equals(link.get(i - 1)) ? (v || res.get(i)) : (v && res.get(i));
+        return v;
+    }
+
+    private boolean evalCond(RuleCondition c, IndicatorData ind) {
+        if (ind == null) return "NOT_EXISTS".equals(c.getOperator());
+        String op = c.getOperator(), cv = ind.getCurrentValue(), th = c.getThreshold();
+        if (op == null) return false;
+        switch (op) {
+            case "EXISTS": return cv != null && !"否".equals(cv) && !"无".equals(cv);
+            case "NOT_EXISTS": return cv == null || "否".equals(cv) || "无".equals(cv);
+            case "CONTAINS": return cv != null && th != null && cv.contains(th);
+            case "EQ": return cv != null && cv.equals(th);
+            case "NEQ": return cv != null && !cv.equals(th);
+            case "GT": case "GTE": case "LT": case "LTE":
+                return numCmp(cv, th, op);
+            default: return false;
+        }
+    }
+
+    private boolean numCmp(String cv, String th, String op) {
+        if (cv == null || th == null) return false;
+        try {
+            double v = parseNum(cv), t = Double.parseDouble(th);
+            switch (op) { case "GT": return v > t; case "GTE": return v >= t; case "LT": return v < t; case "LTE": return v <= t; default: return false; }
+        } catch (NumberFormatException e) { return false; }
+    }
+
+    private double parseNum(String s) {
+        String c = s.replaceAll("[↑↓%ppt￥$，,]", "").trim();
+        if (c.startsWith("+")) c = c.substring(1);
+        return Double.parseDouble(c);
+    }
+
+    private Map<String, Object> toCustomerMap(Customer c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("companyName", c.getCompanyName()); m.put("creditCode", c.getCreditCode());
+        m.put("legalPerson", c.getLegalPerson()); m.put("actualController", c.getActualController());
+        m.put("registeredCapital", c.getRegisteredCapital()); m.put("paidCapital", c.getPaidCapital());
+        m.put("establishDate", c.getEstablishDate()); m.put("industry", c.getIndustry());
+        m.put("bizScope", c.getBizScope()); m.put("registerAddress", c.getRegisterAddress());
+        m.put("holdingType", c.getHoldingType()); m.put("shareholder", c.getShareholder());
+        m.put("groupName", c.getGroupName()); m.put("customerType", c.getCustomerType());
+        m.put("firstLoanDate", c.getFirstLoanDate()); m.put("lastApprovalDate", c.getLastApprovalDate());
+        m.put("mainBank", c.getMainBank()); m.put("settlementBank", c.getSettlementBank());
+        m.put("status", c.getStatus());
+        return m;
+    }
+
+    private Map<String, Object> toIndicatorMap(IndicatorData i) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("indicatorKey", i.getIndicatorKey()); m.put("indicatorName", i.getIndicatorName());
+        m.put("currentValue", i.getCurrentValue()); m.put("previousValue", i.getPreviousValue());
+        m.put("changeDesc", i.getChangeDesc()); m.put("dataUnit", i.getDataUnit()); m.put("period", i.getPeriod());
+        return m;
     }
 
     // ==================== HTML 渲染引擎 ====================

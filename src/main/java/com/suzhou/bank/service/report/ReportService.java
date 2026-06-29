@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 报告服务接口
@@ -59,4 +60,14 @@ public interface ReportService {
      * 删除报告
      */
     void delete(Long id);
+
+    /**
+     * 获取报告结构化数据
+     * <p>返回客户基本信息、按数据域分组的指标数据和规则命中判定结果，
+     * 供前端渲染三栏式交互报告页。</p>
+     *
+     * @param customerId 客户ID
+     * @return 报告结构化数据 Map
+     */
+    Map<String, Object> getReportData(Long customerId);
 }

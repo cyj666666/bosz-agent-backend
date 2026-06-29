@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 贷后管理报告接口
@@ -84,4 +85,16 @@ public class ReportController {
      */
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) { service.delete(id); return Result.ok(); }
+
+    /**
+     * 获取报告结构化数据（客户+分域指标+规则命中）
+     * <p>供前端渲染三栏式交互报告页使用。</p>
+     *
+     * @param customerId 客户ID
+     * @return 报告结构化数据
+     */
+    @GetMapping("/data/{customerId}")
+    public Result<Map<String, Object>> getReportData(@PathVariable Long customerId) {
+        return Result.ok(service.getReportData(customerId));
+    }
 }
