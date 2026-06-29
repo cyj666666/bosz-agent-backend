@@ -132,10 +132,13 @@ CREATE TABLE IF NOT EXISTS knowledge_rule (
     rule_type VARCHAR(30) NOT NULL,
     description TEXT,
     enabled SMALLINT DEFAULT 1,
+    sort_order INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_knowledge_rule_code ON knowledge_rule (rule_code);
+-- 旧表迁移：补齐 sort_order 列（stopOnError=false 时，列已存在也继续）
+ALTER TABLE knowledge_rule ADD sort_order INT DEFAULT 0;
 
 -- 规则条件表
 CREATE TABLE IF NOT EXISTS rule_condition (

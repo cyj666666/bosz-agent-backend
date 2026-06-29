@@ -25,6 +25,7 @@ public class KnowledgeRule {
     private String ruleType;
     private String description;
     private Integer enabled;
+    private Integer sortOrder;
     private java.util.Date createdAt;
     private java.util.Date updatedAt;
 }

@@ -15,7 +15,8 @@ import java.util.stream.Collectors;
 
 /**
  * 指标数据服务
- * <p>管理采集+解析后的结构化指标，支持按客户和数据域筛选。</p>
+ * <p>管理采集+解析后的结构化指标，支持按客户和数据域筛选。
+ * 排序严格按 sort_order 字段。</p>
  *
  * @author cyj666666
  * @since 1.0.0
@@ -29,7 +30,7 @@ public class IndicatorDataService {
     private final CustomerMapper customerMapper;
 
     /**
-     * 指标分页查询，支持按客户ID和数据域筛选，自动填充客户名称
+     * 指标分页查询，支持按客户ID、数据域、关键字筛选，按 sort_order 升序排列。
      */
     public Page<IndicatorData> page(int page, int size, Long customerId, String domain, String keyword) {
         LambdaQueryWrapper<IndicatorData> w = new LambdaQueryWrapper<>();
@@ -43,7 +44,7 @@ public class IndicatorDataService {
             w.and(wr -> wr.like(IndicatorData::getIndicatorKey, keyword)
                         .or().like(IndicatorData::getIndicatorName, keyword));
         }
-        w.orderByAsc(IndicatorData::getDomain).orderByAsc(IndicatorData::getSortOrder);
+        w.orderByAsc(IndicatorData::getSortOrder);
         Page<IndicatorData> result = mapper.selectPage(new Page<>(page, size), w);
 
         // 批量填充客户名称
@@ -52,9 +53,8 @@ public class IndicatorDataService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         if (!customerIds.isEmpty()) {
-            List<Customer> customers = customerMapper.selectBatchIds(customerIds);
-            Map<Long, String> nameMap = customers.stream()
-                    .collect(Collectors.toMap(Customer::getId, Customer::getCompanyName));
+            Map<Long, String> nameMap = customerMapper.selectBatchIds(customerIds).stream()
+                    .collect(Collectors.toMap(Customer::getId, Customer::getCompanyName, (a, b) -> a));
             result.getRecords().forEach(d -> d.setCompanyName(nameMap.get(d.getCustomerId())));
         }
         return result;

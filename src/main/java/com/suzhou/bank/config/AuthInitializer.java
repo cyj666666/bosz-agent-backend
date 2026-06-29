@@ -15,13 +15,12 @@ import javax.sql.DataSource;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.sql.Statement;
 import java.util.Date;
 
 /**
- * 认证初始化
- * <p>启动时自动建表、创建默认角色、创建默认管理员并分配 admin 角色。
- * 首次启动无需手动执行 SQL。</p>
+ * 应用初始化
+ * <p>启动时先 DROP 旧业务表 → 执行 DDL 建表 → 加载示例数据 → 创建默认管理员。
+ * DROP 后重建确保每次表结构都是最新的。</p>
  *
  * @author cyj666666
  * @since 1.0.0
@@ -38,80 +37,57 @@ public class AuthInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // 自动建表
+        // 1. 认证权限表 DDL
+        runSqlScript("sql/init_auth_gaussdb.sql", false, "认证相关表");
+
+        // 2. 业务表 DDL（含列迁移补齐）
+        runSqlScript("sql/init_db_gaussdb.sql", false, "业务表");
+
+        // 3. 示例数据 DML
+        initSampleData();
+
+        // 4. 创建默认角色和用户
+        initDefaultAdmin();
+    }
+
+    /** 执行 classpath 下的 SQL 脚本文件 */
+    private void runSqlScript(String fileName, boolean stopOnError, String logLabel) {
         try {
             try (Connection conn = dataSource.getConnection()) {
                 ScriptRunner runner = new ScriptRunner(conn);
-                runner.setStopOnError(false);
+                runner.setStopOnError(stopOnError);
+                if (!stopOnError) {
+                    runner.setErrorLogWriter(null); // 容错模式下静默（如 ALTER TABLE 列已存在）
+                }
                 runner.runScript(new InputStreamReader(
-                        new ClassPathResource("init_auth_gaussdb.sql").getInputStream(),
+                        new ClassPathResource(fileName).getInputStream(),
                         StandardCharsets.UTF_8));
-                log.info("认证相关表初始化完成");
+                log.info("{} 初始化完成", logLabel);
             }
         } catch (Exception e) {
-            log.warn("认证表初始化失败(可能已存在): {}", e.getMessage());
+            log.warn("{} 初始化失败: {}", logLabel, e.getMessage());
         }
+    }
 
-        // 兼容旧表：补齐缺失的列
+    /** 示例数据：每次重启重新初始化 */
+    private void initSampleData() {
         try {
-            try (Connection conn = dataSource.getConnection();
-                 Statement stmt = conn.createStatement()) {
-                stmt.execute("ALTER TABLE sys_role ADD COLUMN menu_permissions VARCHAR(512) DEFAULT '[]'");
-                log.info("sys_role 表已补齐 menu_permissions 列");
-            }
-        } catch (Exception ignored) {
-            // 列已存在则忽略
-        }
-
-        // 指标数据表
-        try {
-            try (Connection conn = dataSource.getConnection();
-                 Statement stmt = conn.createStatement()) {
-                stmt.execute("CREATE TABLE IF NOT EXISTS indicator_data ("
-                        + "id BIGINT NOT NULL AUTO_INCREMENT,"
-                        + "customer_id BIGINT NOT NULL,"
-                        + "indicator_key VARCHAR(128) NOT NULL,"
-                        + "indicator_name VARCHAR(128) NOT NULL,"
-                        + "current_value VARCHAR(128),"
-                        + "previous_value VARCHAR(128),"
-                        + "change_desc VARCHAR(128),"
-                        + "data_unit VARCHAR(32),"
-                        + "domain VARCHAR(64),"
-                        + "period VARCHAR(32),"
-                        + "sort_order INT DEFAULT 0,"
-                        + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
-                        + "PRIMARY KEY (id)"
-                        + ")");
-                log.info("indicator_data 表已就绪");
-            }
-        } catch (Exception e) {
-            log.warn("indicator_data 表初始化失败: {}", e.getMessage());
-        }
-
-        // 示例数据：每次重启清空后重新初始化，保证和 init_sample_data.sql 严格一致
-        try {
-            try (Connection conn = dataSource.getConnection();
-                 Statement stmt = conn.createStatement()) {
-                // 清空示例数据（SQL 中 ID 全部通过子查询动态引用，无需重置自增）
-                stmt.execute("DELETE FROM rule_condition");
-                stmt.execute("DELETE FROM rule_tag");
-                stmt.execute("DELETE FROM knowledge_rule");
-                stmt.execute("DELETE FROM indicator_data");
-                stmt.execute("DELETE FROM customer");
-                stmt.execute("DELETE FROM rule_scenario");
-                // 重新初始化
+            try (Connection conn = dataSource.getConnection()) {
                 ScriptRunner runner = new ScriptRunner(conn);
                 runner.setStopOnError(true);
                 runner.runScript(new InputStreamReader(
-                        new ClassPathResource("init_sample_data.sql").getInputStream(),
+                        new ClassPathResource("sql/init_sample_data.sql").getInputStream(),
                         StandardCharsets.UTF_8));
                 log.info("示例数据初始化完成");
             }
         } catch (Exception e) {
             log.warn("示例数据初始化失败: {}", e.getMessage());
         }
+    }
 
-        // 创建默认 admin 角色（admin 菜单权限由 AuthService.ALL_MENUS 统一管理，不依赖数据库字段）
+    /** 创建默认管理员角色和用户 */
+    private void initDefaultAdmin() {
+        // admin 菜单权限由 AuthService.ALL_MENUS 统一管理
         SysRole adminRole = sysRoleMapper.selectOne(
                 new LambdaQueryWrapper<SysRole>().eq(SysRole::getRoleCode, "admin"));
         if (adminRole == null) {
@@ -129,7 +105,6 @@ public class AuthInitializer implements CommandLineRunner {
             }
         }
 
-        // 创建默认管理员
         try {
             Long count = sysUserMapper.selectCount(
                     new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, "admin"));
@@ -147,7 +122,6 @@ public class AuthInitializer implements CommandLineRunner {
             log.warn("默认管理员创建失败: {}", e.getMessage());
         }
 
-        // 分配 admin 角色给 admin 用户
         try {
             SysUser adminUser = sysUserMapper.selectOne(
                     new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, "admin"));

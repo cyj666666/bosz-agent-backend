@@ -73,6 +73,7 @@ COMMENT ON COLUMN knowledge_rule.rule_name IS '规则名称';
 COMMENT ON COLUMN knowledge_rule.rule_type IS '规则类型';
 COMMENT ON COLUMN knowledge_rule.description IS '规则说明';
 COMMENT ON COLUMN knowledge_rule.enabled IS '是否启用';
+COMMENT ON COLUMN knowledge_rule.sort_order IS '排序序号（对应经验库规则框架顺序）';
 
 -- ====== know_kit_task (Know-Kit任务记录表) ======
 COMMENT ON TABLE know_kit_task IS 'Know-Kit任务记录表';

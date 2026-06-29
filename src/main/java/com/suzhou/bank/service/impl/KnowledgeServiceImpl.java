@@ -69,7 +69,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         if (enabled != null) {
             w.eq(KnowledgeRule::getEnabled, enabled);
         }
-        w.orderByDesc(KnowledgeRule::getCreatedAt);
+        w.orderByAsc(KnowledgeRule::getSortOrder);
         return rm.selectPage(new Page<>(page, size), w);
     }
 
