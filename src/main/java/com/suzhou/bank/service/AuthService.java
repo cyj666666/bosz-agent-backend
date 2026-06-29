@@ -88,9 +88,18 @@ public class AuthService {
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(
                 new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId));
         if (userRoles.isEmpty()) return Collections.emptySet();
+
         List<Long> roleIds = userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
+        List<SysRole> roles = sysRoleMapper.selectBatchIds(roleIds);
+
+        // admin 角色：返回 "*" 标记，前端解析为全权限，后端不维护菜单列表
+        boolean isAdmin = roles.stream().anyMatch(r -> "admin".equals(r.getRoleCode()));
+        if (isAdmin) {
+            return new LinkedHashSet<>(Collections.singletonList("*"));
+        }
+
         Set<String> menus = new LinkedHashSet<>();
-        for (SysRole role : sysRoleMapper.selectBatchIds(roleIds)) {
+        for (SysRole role : roles) {
             if (role.getMenuPermissions() != null && !role.getMenuPermissions().isEmpty()) {
                 List<String> perms = JSON.parseArray(role.getMenuPermissions(), String.class);
                 menus.addAll(perms);

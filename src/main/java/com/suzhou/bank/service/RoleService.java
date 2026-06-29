@@ -46,9 +46,6 @@ public class RoleService {
     public void update(SysRole role) {
         SysRole exist = roleMapper.selectById(role.getId());
         if (exist == null) throw new RuntimeException("角色不存在");
-        if ("admin".equals(exist.getRoleCode())) {
-            throw new RuntimeException("系统管理员角色不可修改");
-        }
         exist.setRoleName(role.getRoleName());
         exist.setDescription(role.getDescription());
         exist.setMenuPermissions(role.getMenuPermissions());

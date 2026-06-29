@@ -63,7 +63,32 @@ public class AuthInitializer implements CommandLineRunner {
             // 列已存在则忽略
         }
 
-        // 创建或修复默认角色
+        // 指标数据表
+        try {
+            try (Connection conn = dataSource.getConnection();
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE IF NOT EXISTS indicator_data ("
+                        + "id BIGINT NOT NULL AUTO_INCREMENT,"
+                        + "customer_id BIGINT NOT NULL,"
+                        + "indicator_key VARCHAR(128) NOT NULL,"
+                        + "indicator_name VARCHAR(128) NOT NULL,"
+                        + "current_value VARCHAR(128),"
+                        + "previous_value VARCHAR(128),"
+                        + "change_desc VARCHAR(128),"
+                        + "data_unit VARCHAR(32),"
+                        + "domain VARCHAR(64),"
+                        + "period VARCHAR(32),"
+                        + "sort_order INT DEFAULT 0,"
+                        + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                        + "PRIMARY KEY (id)"
+                        + ")");
+                log.info("indicator_data 表已就绪");
+            }
+        } catch (Exception e) {
+            log.warn("indicator_data 表初始化失败: {}", e.getMessage());
+        }
+
+        // 创建默认 admin 角色（admin 菜单权限由 AuthService.ALL_MENUS 统一管理，不依赖数据库字段）
         SysRole adminRole = sysRoleMapper.selectOne(
                 new LambdaQueryWrapper<SysRole>().eq(SysRole::getRoleCode, "admin"));
         if (adminRole == null) {
@@ -72,24 +97,12 @@ public class AuthInitializer implements CommandLineRunner {
                 adminRole.setRoleCode("admin");
                 adminRole.setRoleName("系统管理员");
                 adminRole.setDescription("拥有所有权限");
-                adminRole.setMenuPermissions("[\"/reports\",\"/report-create\",\"/customers\",\"/data-config\",\"/rules\",\"/users\",\"/roles\"]");
+                adminRole.setMenuPermissions("[]");
                 adminRole.setCreatedAt(new Date());
                 sysRoleMapper.insert(adminRole);
                 log.info("默认角色已创建: admin");
             } catch (Exception e) {
                 log.warn("默认角色创建失败: {}", e.getMessage());
-            }
-        } else {
-            // 已有角色，检查并补齐缺失的菜单项
-            String current = adminRole.getMenuPermissions();
-            if (current == null || current.isEmpty() || "[]".equals(current)) {
-                current = "[]";
-            }
-            String full = "[\"/reports\",\"/report-create\",\"/customers\",\"/data-config\",\"/rules\",\"/users\",\"/roles\"]";
-            if (!current.contains("\"/report-create\"")) {
-                adminRole.setMenuPermissions(full);
-                sysRoleMapper.updateById(adminRole);
-                log.info("admin 角色已补齐 /report-create 菜单权限");
             }
         }
 
