@@ -69,7 +69,7 @@ public class AuthInitializer implements CommandLineRunner {
         }
     }
 
-    /** 示例数据：每次重启重新初始化 */
+    /** 示例数据：每次重启重新初始化（DELETE+INSERT 均由 SQL 文件接管） */
     private void initSampleData() {
         try {
             try (Connection conn = dataSource.getConnection()) {

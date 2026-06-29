@@ -4,6 +4,14 @@
 -- 不硬编码任何ID，全部用子查询动态引用
 -- =============================================
 
+-- ==================== 0. 清空旧数据 ====================
+DELETE FROM rule_condition;
+DELETE FROM rule_tag;
+DELETE FROM knowledge_rule;
+DELETE FROM indicator_data;
+DELETE FROM customer;
+DELETE FROM rule_scenario;
+
 -- ==================== 1. 客户 ====================
 INSERT INTO customer (company_name, credit_code, legal_person, actual_controller, registered_capital, paid_capital, establish_date, industry, biz_scope, register_address, holding_type, shareholder, group_name, customer_type, first_loan_date, last_approval_date, main_bank, settlement_bank, status, created_at) VALUES
 ('苏州天翔精密制造有限公司', '91320500MA1N2C3D4E', '张建国', '张建国', '5000万人民币', '5000万人民币', '2010-03-15', '制造业', '精密机械零部件设计、制造、销售', '苏州市工业园区苏虹中路398号', '民营控股', '张建国(60%), 张建军(15%), 苏州天翔投资合伙企业(25%)', '天翔集团', '大中型企业', '2015-06-20', '2024-12-10', '苏州银行工业园区支行', '苏州银行工业园区支行', '正常', NOW()),

@@ -11,6 +11,8 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
 
 /**
  * Controller 请求日志切面
@@ -49,8 +51,11 @@ public class ControllerLogAspect {
         String methodName = joinPoint.getSignature().getName();
         Object[] args = joinPoint.getArgs();
 
-        // 入参日志（截断过长参数）
-        String params = args != null && args.length > 0 ? JSON.toJSONString(args) : "";
+        // 入参日志：过滤掉 HttpServletRequest/Response 等不可序列化的参数
+        Object[] logArgs = args != null ? Arrays.stream(args)
+                .filter(a -> !(a instanceof HttpServletRequest) && !(a instanceof HttpServletResponse))
+                .toArray() : null;
+        String params = logArgs != null && logArgs.length > 0 ? JSON.toJSONString(logArgs) : "";
         if (params.length() > 500) {
             params = params.substring(0, 500) + "...(truncated)";
         }
