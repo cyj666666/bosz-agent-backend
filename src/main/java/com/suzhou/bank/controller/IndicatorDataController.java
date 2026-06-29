@@ -35,8 +35,9 @@ public class IndicatorDataController {
     public Result<Page<IndicatorData>> page(@RequestParam(defaultValue = "1") int page,
                                             @RequestParam(defaultValue = "10") int size,
                                             @RequestParam(required = false) Long customerId,
-                                            @RequestParam(required = false) String domain) {
-        return Result.ok(service.page(page, size, customerId, domain));
+                                            @RequestParam(required = false) String domain,
+                                            @RequestParam(required = false) String keyword) {
+        return Result.ok(service.page(page, size, customerId, domain, keyword));
     }
 
     /**

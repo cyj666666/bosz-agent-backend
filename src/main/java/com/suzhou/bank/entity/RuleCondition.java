@@ -1,6 +1,7 @@
 package com.suzhou.bank.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -25,4 +26,8 @@ public class RuleCondition {
     private String threshold;
     private Integer logicOrder;
     private String logicConnector;
+
+    /** 指标名称（非数据库字段，查询时 JOIN 填充） */
+    @TableField(exist = false)
+    private String indicatorName;
 }

@@ -49,7 +49,7 @@ public interface KnowledgeService {
      *
      * @param keyword 模糊搜索关键词（规则名称或编码），可选
      */
-    Page<KnowledgeRule> pageRule(int page, int size, String keyword);
+    Page<KnowledgeRule> pageRule(int page, int size, String keyword, String ruleType, Integer enabled);
 
     /**
      * 根据ID查询规则

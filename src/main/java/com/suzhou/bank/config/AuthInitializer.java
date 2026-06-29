@@ -88,6 +88,29 @@ public class AuthInitializer implements CommandLineRunner {
             log.warn("indicator_data 表初始化失败: {}", e.getMessage());
         }
 
+        // 示例数据：每次重启清空后重新初始化，保证和 init_sample_data.sql 严格一致
+        try {
+            try (Connection conn = dataSource.getConnection();
+                 Statement stmt = conn.createStatement()) {
+                // 清空示例数据（SQL 中 ID 全部通过子查询动态引用，无需重置自增）
+                stmt.execute("DELETE FROM rule_condition");
+                stmt.execute("DELETE FROM rule_tag");
+                stmt.execute("DELETE FROM knowledge_rule");
+                stmt.execute("DELETE FROM indicator_data");
+                stmt.execute("DELETE FROM customer");
+                stmt.execute("DELETE FROM rule_scenario");
+                // 重新初始化
+                ScriptRunner runner = new ScriptRunner(conn);
+                runner.setStopOnError(true);
+                runner.runScript(new InputStreamReader(
+                        new ClassPathResource("init_sample_data.sql").getInputStream(),
+                        StandardCharsets.UTF_8));
+                log.info("示例数据初始化完成");
+            }
+        } catch (Exception e) {
+            log.warn("示例数据初始化失败: {}", e.getMessage());
+        }
+
         // 创建默认 admin 角色（admin 菜单权限由 AuthService.ALL_MENUS 统一管理，不依赖数据库字段）
         SysRole adminRole = sysRoleMapper.selectOne(
                 new LambdaQueryWrapper<SysRole>().eq(SysRole::getRoleCode, "admin"));

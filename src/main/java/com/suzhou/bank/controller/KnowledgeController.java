@@ -90,7 +90,7 @@ public class KnowledgeController {
      * @return 规则分页数据
      */
     @GetMapping("/rule/page")
-    public Result<Page<KnowledgeRule>> pageRule(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String keyword) { return Result.ok(service.pageRule(page, size, keyword)); }
+    public Result<Page<KnowledgeRule>> pageRule(@RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) String ruleType, @RequestParam(required = false) Integer enabled) { return Result.ok(service.pageRule(page, size, keyword, ruleType, enabled)); }
 
     /**
      * 查询规则详情

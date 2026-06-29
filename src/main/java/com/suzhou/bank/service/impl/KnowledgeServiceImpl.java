@@ -27,6 +27,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     private final KnowledgeRuleMapper rm;
     private final RuleConditionMapper cm;
     private final RuleTagMapper tm;
+    private final IndicatorDataMapper indicatorDataMapper;
 
     @Override
     public Page<RuleScenario> pageScenario(int page, int size) {
@@ -57,10 +58,16 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     }
 
     @Override
-    public Page<KnowledgeRule> pageRule(int page, int size, String kw) {
+    public Page<KnowledgeRule> pageRule(int page, int size, String kw, String ruleType, Integer enabled) {
         LambdaQueryWrapper<KnowledgeRule> w = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(kw)) {
             w.and(x -> x.like(KnowledgeRule::getRuleName, kw).or().like(KnowledgeRule::getRuleCode, kw));
+        }
+        if (StringUtils.hasText(ruleType)) {
+            w.eq(KnowledgeRule::getRuleType, ruleType);
+        }
+        if (enabled != null) {
+            w.eq(KnowledgeRule::getEnabled, enabled);
         }
         w.orderByDesc(KnowledgeRule::getCreatedAt);
         return rm.selectPage(new Page<>(page, size), w);
@@ -92,8 +99,34 @@ public class KnowledgeServiceImpl implements KnowledgeService {
 
     @Override
     public List<RuleCondition> listConditions(Long ruleId) {
-        return cm.selectList(new LambdaQueryWrapper<RuleCondition>()
+        List<RuleCondition> conds = cm.selectList(new LambdaQueryWrapper<RuleCondition>()
             .eq(RuleCondition::getRuleId, ruleId).orderByAsc(RuleCondition::getLogicOrder));
+        // 批量填充指标名称：收集所有可能的 key 变体
+        Set<String> lookups = new HashSet<>();
+        for (RuleCondition c : conds) {
+            if (c.getIndicatorKey() != null) {
+                lookups.add(c.getIndicatorKey());
+                // fallback: 去掉 _change 后缀
+                if (c.getIndicatorKey().endsWith("_change")) {
+                    lookups.add(c.getIndicatorKey().replace("_change", ""));
+                }
+            }
+        }
+        if (!lookups.isEmpty()) {
+            Map<String, String> nameMap = indicatorDataMapper.selectList(
+                    new LambdaQueryWrapper<IndicatorData>().in(IndicatorData::getIndicatorKey, lookups))
+                .stream().collect(Collectors.toMap(IndicatorData::getIndicatorKey, IndicatorData::getIndicatorName, (a, b) -> a));
+            conds.forEach(c -> {
+                String key = c.getIndicatorKey();
+                String name = nameMap.get(key);
+                // fallback: 去掉后缀再查
+                if (name == null && key != null && key.endsWith("_change")) {
+                    name = nameMap.get(key.replace("_change", ""));
+                }
+                c.setIndicatorName(name);
+            });
+        }
+        return conds;
     }
 
     @Override
