@@ -8,7 +8,7 @@
 --   3. 每张表公共字段：reportNo(报告编号)、serialNo(日检申请流水号)、
 --      customerId(信贷客户编号)、customerName(客户名称)、inputtime(入库时间)
 --   4. 嵌套层级通过 mainId 逻辑关联（不建物理外键）：
---      - 直接子表：mainId -> 主表 corp_check_info.id
+--      - 直接子表：mainId -> 主表 xd_corp_check_info.id
 --      - 二级子表：mainId -> 直接上级表 id（押品限制/他项权利 -> 押品表；预警审批意见 -> 预警任务表）
 --      追溯链路：二级子表 -> 一级子表 -> 主表，逐层 join 即可
 --   5. 类型映射：材料 String -> VARCHAR；材料 Number -> DECIMAL(18,2)；inputtime -> DATETIME
@@ -20,7 +20,7 @@
 -- 1. 对公检查信息主表（入参 + 贷后检查详情-基础字段）
 --    对应出参：贷后检查详情（bapSerialNo ~ checkDate）
 -- =====================================================================
-CREATE TABLE corp_check_info (
+CREATE TABLE xd_corp_check_info (
     id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
     reportNo        VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo        VARCHAR(64)     COMMENT '日检申请流水号',
@@ -43,11 +43,11 @@ CREATE TABLE corp_check_info (
 -- =====================================================================
 -- 2. 批复关联押品表（押品数组 + 最新不动产登记簿记录）
 --    对应出参：批复关联押品数组（ClrId ~ YGDJ）
---    mainId -> corp_check_info.id
+--    mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_collateral (
+CREATE TABLE xd_corp_check_collateral (
     id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId          BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId          BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo        VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo        VARCHAR(64)     COMMENT '日检申请流水号',
     customerId      VARCHAR(64)     COMMENT '信贷客户编号',
@@ -80,11 +80,11 @@ CREATE TABLE corp_check_collateral (
 -- =====================================================================
 -- 3. 押品限制权利表（押品下的限制权利数组）
 --    对应出参：限制权利数组（attachmentOrg ~ attachmentTypeName）
---    mainId -> corp_check_collateral.id（押品表）
+--    mainId -> xd_corp_check_collateral.id（押品表）
 -- =====================================================================
-CREATE TABLE corp_check_collateral_restrict (
+CREATE TABLE xd_corp_check_collateral_restrict (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联押品表主键id（corp_check_collateral.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联押品表主键id（xd_corp_check_collateral.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -103,11 +103,11 @@ CREATE TABLE corp_check_collateral_restrict (
 -- =====================================================================
 -- 4. 押品他项权利表（押品下的他项权利数组）
 --    对应出参：他项权利数组（pledgeSerialNo ~ registerTimestamp）
---    mainId -> corp_check_collateral.id（押品表）
+--    mainId -> xd_corp_check_collateral.id（押品表）
 -- =====================================================================
-CREATE TABLE corp_check_collateral_mortgage (
+CREATE TABLE xd_corp_check_collateral_mortgage (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联押品表主键id（corp_check_collateral.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联押品表主键id（xd_corp_check_collateral.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -131,13 +131,13 @@ CREATE TABLE corp_check_collateral_mortgage (
 -- =====================================================================
 -- 5. 批复后续管理要求表（检查详情-批复后续管理要求数组）
 --    对应出参：检查详情-批复后续管理要求数组（SERIALNO ~ 检查时间）
---    mainId -> corp_check_info.id
+--    mainId -> xd_corp_check_info.id
 --    说明：材料字段 SERIALNO（批复落实流水号）与公共字段 serialNo 同名冲突（库列名不区分大小写），
 --          落表改名 replySerialNo，其余全大写字段按材料原样保留
 -- =====================================================================
-CREATE TABLE corp_check_reply_requirement (
+CREATE TABLE xd_corp_check_reply_requirement (
     id                          BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId                      BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId                      BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo                    VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo                    VARCHAR(64)     COMMENT '日检申请流水号',
     customerId                  VARCHAR(64)     COMMENT '信贷客户编号',
@@ -163,11 +163,11 @@ CREATE TABLE corp_check_reply_requirement (
 -- =====================================================================
 -- 6. 授信批复后续管理要求表（授信批复后续管理要求数组）
 --    对应出参：授信批复后续管理要求数组（seqNo ~ 检查时间）
---    mainId -> corp_check_info.id
+--    mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_credit_requirement (
+CREATE TABLE xd_corp_check_credit_requirement (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -188,11 +188,11 @@ CREATE TABLE corp_check_credit_requirement (
 -- =====================================================================
 -- 7. 预警任务表（预警任务对象）
 --    对应出参：预警任务对象（confirmTime ~ identifyCustomWaringLevel）
---    mainId -> corp_check_info.id
+--    mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_warning_task (
+CREATE TABLE xd_corp_check_warning_task (
     id                          BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId                      BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId                      BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo                    VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo                    VARCHAR(64)     COMMENT '日检申请流水号',
     customerId                  VARCHAR(64)     COMMENT '信贷客户编号',
@@ -214,11 +214,11 @@ CREATE TABLE corp_check_warning_task (
 -- =====================================================================
 -- 8. 预警任务审批意见表（预警任务下的审批意见，取最后一岗、剔除同意）
 --    对应出参：预警任务对象内 seqNo ~ endTime
---    mainId -> corp_check_warning_task.id（预警任务表）
+--    mainId -> xd_corp_check_warning_task.id（预警任务表）
 -- =====================================================================
-CREATE TABLE corp_check_warning_opinion (
+CREATE TABLE xd_corp_check_warning_opinion (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联预警任务表主键id（corp_check_warning_task.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联预警任务表主键id（xd_corp_check_warning_task.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -242,11 +242,11 @@ CREATE TABLE corp_check_warning_opinion (
 -- =====================================================================
 -- 9. 上次贷后意见表（上次贷后意见对象，取最后一岗、剔除同意）
 --    对应出参：上次贷后意见对象（taskGenerationDate ~ endTime）
---    mainId -> corp_check_info.id
+--    mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_last_opinion (
+CREATE TABLE xd_corp_check_last_opinion (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -269,11 +269,11 @@ CREATE TABLE corp_check_last_opinion (
 -- =====================================================================
 -- 10. 本次贷后检查意见表（本次贷后检查意见数组，各级意见）
 --     对应出参：本次贷后检查意见数组（taskGenerationDate ~ endTime）
---     mainId -> corp_check_info.id
+--     mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_current_opinion (
+CREATE TABLE xd_corp_check_current_opinion (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -296,12 +296,12 @@ CREATE TABLE corp_check_current_opinion (
 -- =====================================================================
 -- 11. 现场打卡记录表（现场打开记录数组）
 --     对应出参：现场打开记录数组（checkInTime ~ checkInObj）
---     mainId -> corp_check_info.id
+--     mainId -> xd_corp_check_info.id
 --     注：材料标题为"现场打开记录"，应为"现场打卡"，字段按材料原样保留
 -- =====================================================================
-CREATE TABLE corp_check_checkin (
+CREATE TABLE xd_corp_check_checkin (
     id                  BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId              BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo            VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo            VARCHAR(64)     COMMENT '日检申请流水号',
     customerId          VARCHAR(64)     COMMENT '信贷客户编号',
@@ -322,11 +322,11 @@ CREATE TABLE corp_check_checkin (
 -- =====================================================================
 -- 12. 日常检查综合指标表（日常检查综合指标对象）
 --     对应出参：日常检查综合指标对象（chineseId ~ remark）
---     mainId -> corp_check_info.id
+--     mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_daily_index (
+CREATE TABLE xd_corp_check_daily_index (
     id              BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId          BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId          BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo        VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo        VARCHAR(64)     COMMENT '日检申请流水号',
     customerId      VARCHAR(64)     COMMENT '信贷客户编号',
@@ -347,11 +347,11 @@ CREATE TABLE corp_check_daily_index (
 -- =====================================================================
 -- 13. 特定贷款检查表（特定贷款检查数组，46 个字段）
 --     对应出参：特定贷款检查数组（objectName ~ vouchType）
---     mainId -> corp_check_info.id
+--     mainId -> xd_corp_check_info.id
 -- =====================================================================
-CREATE TABLE corp_check_special_loan (
+CREATE TABLE xd_corp_check_special_loan (
     id                          BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键',
-    mainId                      BIGINT          NOT NULL COMMENT '关联主表主键id（corp_check_info.id）',
+    mainId                      BIGINT          NOT NULL COMMENT '关联主表主键id（xd_corp_check_info.id）',
     reportNo                    VARCHAR(64)     NOT NULL COMMENT '报告编号',
     serialNo                    VARCHAR(64)     COMMENT '日检申请流水号',
     customerId                  VARCHAR(64)     COMMENT '信贷客户编号',
