@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS xd_corp_check_reply_requirement (
     customerId                  VARCHAR(64),
     customerName                VARCHAR(128),
     replySerialNo               VARCHAR(64),
-    `CONDITION`                 VARCHAR(1000),
+    CONDITION                   VARCHAR(1000),
     RELATIVESERIALNO            VARCHAR(128),
     ITEMCATEGORY                VARCHAR(64),
     EXPECTEDCOMPLETIONEXACTDATE VARCHAR(64),
@@ -230,7 +230,7 @@ COMMENT ON COLUMN xd_corp_check_reply_requirement.serialNo IS '日检申请流�
 COMMENT ON COLUMN xd_corp_check_reply_requirement.customerId IS '信贷客户编号';
 COMMENT ON COLUMN xd_corp_check_reply_requirement.customerName IS '客户名称';
 COMMENT ON COLUMN xd_corp_check_reply_requirement.replySerialNo IS '批复落实流水号';
-COMMENT ON COLUMN xd_corp_check_reply_requirement.`CONDITION` IS '批复后续管理要求';
+COMMENT ON COLUMN xd_corp_check_reply_requirement.CONDITION IS '批复后续管理要求';
 COMMENT ON COLUMN xd_corp_check_reply_requirement.RELATIVESERIALNO IS '对象';
 COMMENT ON COLUMN xd_corp_check_reply_requirement.ITEMCATEGORY IS '事项类别';
 COMMENT ON COLUMN xd_corp_check_reply_requirement.EXPECTEDCOMPLETIONEXACTDATE IS '要求完成日期';
@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS xd_corp_check_credit_requirement (
     customerId          VARCHAR(64),
     customerName        VARCHAR(128),
     seqNo               VARCHAR(64),
-    `CONDITION`         VARCHAR(1000),
+    CONDITION           VARCHAR(1000),
     RELATIVESERIALNO    VARCHAR(128),
     checkTime           VARCHAR(64),
     inputtime           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -273,7 +273,7 @@ COMMENT ON COLUMN xd_corp_check_credit_requirement.serialNo IS '日检申请流�
 COMMENT ON COLUMN xd_corp_check_credit_requirement.customerId IS '信贷客户编号';
 COMMENT ON COLUMN xd_corp_check_credit_requirement.customerName IS '客户名称';
 COMMENT ON COLUMN xd_corp_check_credit_requirement.seqNo IS '序号';
-COMMENT ON COLUMN xd_corp_check_credit_requirement.`CONDITION` IS '后续管理要求';
+COMMENT ON COLUMN xd_corp_check_credit_requirement.CONDITION IS '后续管理要求';
 COMMENT ON COLUMN xd_corp_check_credit_requirement.RELATIVESERIALNO IS '对象';
 COMMENT ON COLUMN xd_corp_check_credit_requirement.checkTime IS '检查时间';
 COMMENT ON COLUMN xd_corp_check_credit_requirement.inputtime IS '入库时间';
