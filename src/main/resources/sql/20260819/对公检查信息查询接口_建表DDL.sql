@@ -1,5 +1,5 @@
 -- =====================================================================
--- 对公检查信息查询接口 · 数据落表 DDL（v3.1）
+-- 对公检查信息查询接口 · 数据落表 DDL（v3.2）
 -- 数据库：GaussDB（openGauss 内核 · MySQL 兼容模式）
 --
 -- 语法适配（按实测验证）：
@@ -10,7 +10,7 @@
 --   4. 自增主键：id BIGINT not null AUTO_INCREMENT + 表级 primary key (id)（实测要求）
 --
 -- 设计约定：
---   - 1 张主表 + 12 张子表，英文字段名 100% 照抄接口材料（驼峰/全大写保持）
+--   - 1 张主表 + 11 张子表，英文字段名 100% 照抄接口材料（驼峰/全大写保持）
 --   - 每张表公共字段：reportNo / serialNo / customerId / customerName / inputtime
 --   - 子表 mainId 逐层指向直接上级表主键（不建物理外键）
 --   - 材料 String -> VARCHAR；Number -> DECIMAL(18,2)；inputtime -> TIMESTAMP（openGauss 无 DATETIME 类型）
@@ -300,6 +300,13 @@ CREATE TABLE IF NOT EXISTS xd_corp_check_warning_task (
     riskTaskType                VARCHAR(64),
     inputDate                   VARCHAR(64),
     identifyCustomWaringLevel   VARCHAR(64),
+    seqNo                       VARCHAR(64),
+    activeName                  VARCHAR(64),
+    approveUserName             VARCHAR(64),
+    approveOrgName              VARCHAR(128),
+    warningLevelName            VARCHAR(64),
+    phaseOpinion                VARCHAR(1000),
+    endTime                     VARCHAR(64),
     inputtime                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     primary key (id)
 );
@@ -316,6 +323,13 @@ COMMENT ON COLUMN xd_corp_check_warning_task.approveStatusName IS '审批状态'
 COMMENT ON COLUMN xd_corp_check_warning_task.riskTaskType IS '任务类型';
 COMMENT ON COLUMN xd_corp_check_warning_task.inputDate IS '预警本次发起时间';
 COMMENT ON COLUMN xd_corp_check_warning_task.identifyCustomWaringLevel IS '客户风险等级';
+COMMENT ON COLUMN xd_corp_check_warning_task.seqNo IS '序号';
+COMMENT ON COLUMN xd_corp_check_warning_task.activeName IS '审批阶段';
+COMMENT ON COLUMN xd_corp_check_warning_task.approveUserName IS '审批人';
+COMMENT ON COLUMN xd_corp_check_warning_task.approveOrgName IS '所属机构';
+COMMENT ON COLUMN xd_corp_check_warning_task.warningLevelName IS '认定等级';
+COMMENT ON COLUMN xd_corp_check_warning_task.phaseOpinion IS '审批意见';
+COMMENT ON COLUMN xd_corp_check_warning_task.endTime IS '审批日期';
 COMMENT ON COLUMN xd_corp_check_warning_task.inputtime IS '入库时间';
 
 CREATE INDEX IF NOT EXISTS idx_mainId ON xd_corp_check_warning_task (mainId);
@@ -324,52 +338,7 @@ CREATE INDEX IF NOT EXISTS idx_serialNo ON xd_corp_check_warning_task (serialNo)
 CREATE INDEX IF NOT EXISTS idx_customerId ON xd_corp_check_warning_task (customerId);
 CREATE INDEX IF NOT EXISTS idx_customerName ON xd_corp_check_warning_task (customerName);
 
--- #####################################################################
--- 8. 预警任务审批意见表（预警任务下的审批意见，取最后一岗、剔除同意）
---    mainId -> xd_corp_check_warning_task.id（预警任务表）
--- #####################################################################
-CREATE TABLE IF NOT EXISTS xd_corp_check_warning_opinion (
-    id                  BIGINT not null AUTO_INCREMENT,
-    mainId              BIGINT NOT NULL,
-    reportNo            VARCHAR(64) NOT NULL,
-    serialNo            VARCHAR(64),
-    customerId          VARCHAR(64),
-    customerName        VARCHAR(128),
-    seqNo               VARCHAR(64),
-    activeName          VARCHAR(64),
-    approveUserName     VARCHAR(64),
-    approveOrgName      VARCHAR(128),
-    warningLevelName    VARCHAR(64),
-    phaseOpinion        VARCHAR(1000),
-    endTime             VARCHAR(64),
-    inputtime           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    primary key (id)
-);
-
-COMMENT ON TABLE xd_corp_check_warning_opinion IS '对公检查-预警任务审批意见表（最后一岗，剔除同意）';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.id IS '主键';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.mainId IS '关联预警任务表主键id（xd_corp_check_warning_task.id）';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.reportNo IS '报告编号';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.serialNo IS '日检申请流水号';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.customerId IS '信贷客户编号';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.customerName IS '客户名称';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.seqNo IS '序号';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.activeName IS '审批阶段';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.approveUserName IS '审批人';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.approveOrgName IS '所属机构';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.warningLevelName IS '认定等级';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.phaseOpinion IS '审批意见';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.endTime IS '审批日期';
-COMMENT ON COLUMN xd_corp_check_warning_opinion.inputtime IS '入库时间';
-
-CREATE INDEX IF NOT EXISTS idx_mainId ON xd_corp_check_warning_opinion (mainId);
-CREATE INDEX IF NOT EXISTS idx_reportNo ON xd_corp_check_warning_opinion (reportNo);
-CREATE INDEX IF NOT EXISTS idx_serialNo ON xd_corp_check_warning_opinion (serialNo);
-CREATE INDEX IF NOT EXISTS idx_customerId ON xd_corp_check_warning_opinion (customerId);
-CREATE INDEX IF NOT EXISTS idx_customerName ON xd_corp_check_warning_opinion (customerName);
-
--- #####################################################################
--- 9. 上次贷后意见表（上次贷后意见对象，取最后一岗、剔除同意）
+-- 8. 上次贷后意见表（上次贷后意见对象，取最后一岗、剔除同意）
 --    mainId -> xd_corp_check_info.id
 -- #####################################################################
 CREATE TABLE IF NOT EXISTS xd_corp_check_last_opinion (
@@ -411,7 +380,7 @@ CREATE INDEX IF NOT EXISTS idx_customerId ON xd_corp_check_last_opinion (custome
 CREATE INDEX IF NOT EXISTS idx_customerName ON xd_corp_check_last_opinion (customerName);
 
 -- #####################################################################
--- 10. 本次贷后检查意见表（本次贷后检查意见数组，各级意见）
+-- 9. 本次贷后检查意见表（本次贷后检查意见数组，各级意见）
 --     mainId -> xd_corp_check_info.id
 -- #####################################################################
 CREATE TABLE IF NOT EXISTS xd_corp_check_current_opinion (
@@ -453,7 +422,7 @@ CREATE INDEX IF NOT EXISTS idx_customerId ON xd_corp_check_current_opinion (cust
 CREATE INDEX IF NOT EXISTS idx_customerName ON xd_corp_check_current_opinion (customerName);
 
 -- #####################################################################
--- 11. 现场打卡记录表（现场打开记录数组）
+-- 10. 现场打卡记录表（现场打开记录数组）
 --     mainId -> xd_corp_check_info.id
 -- #####################################################################
 CREATE TABLE IF NOT EXISTS xd_corp_check_checkin (
@@ -491,7 +460,7 @@ CREATE INDEX IF NOT EXISTS idx_customerId ON xd_corp_check_checkin (customerId);
 CREATE INDEX IF NOT EXISTS idx_customerName ON xd_corp_check_checkin (customerName);
 
 -- #####################################################################
--- 12. 日常检查综合指标表（日常检查综合指标对象）
+-- 11. 日常检查综合指标表（日常检查综合指标对象）
 --     mainId -> xd_corp_check_info.id
 -- #####################################################################
 CREATE TABLE IF NOT EXISTS xd_corp_check_daily_index (
@@ -529,7 +498,7 @@ CREATE INDEX IF NOT EXISTS idx_customerId ON xd_corp_check_daily_index (customer
 CREATE INDEX IF NOT EXISTS idx_customerName ON xd_corp_check_daily_index (customerName);
 
 -- #####################################################################
--- 13. 特定贷款检查表（特定贷款检查数组，46 个字段）
+-- 12. 特定贷款检查表（特定贷款检查数组，46 个字段）
 --     mainId -> xd_corp_check_info.id
 -- #####################################################################
 CREATE TABLE IF NOT EXISTS xd_corp_check_special_loan (
