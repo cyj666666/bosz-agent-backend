@@ -2,7 +2,7 @@
 -- 苏州银行 对公客户日常定期检查（贷后）报告 数据表结构 V1.0
 -- 数据库：高斯DB（GaussDB，兼容MySQL模式）
 -- 设计依据：《数据映射细化V2.xlsx》
--- 共31张表（报告主表1 + 公共基础表11 + 模块明细表19）
+-- 共34张表（报告主表1 + 公共基础表13 + 模块明细表20）
 -- 设计原则：公共+模块两层、一期一行、沿用J列字段名+驼峰；经验库规则所需源数据见正文模块表
 -- 公共列：id / reportNo / customerId / customerName / inputtime
 -- =====================================================================
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS app_ic_shareholder_info (
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId)
-) COMMENT '工商股东明细表';
+) COMMENT '工商股东变更表（股权变更历史：变更时间/变更前后比例，多时点快照）';
 
 -- 股东股权：工商情况及股权结构-股东 / 经验库股权变更规则
 CREATE TABLE IF NOT EXISTS app_shareholder_info (
@@ -119,7 +119,26 @@ CREATE TABLE IF NOT EXISTS app_shareholder_info (
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId)
-) COMMENT '股东股权信息表';
+) COMMENT '工商股东信息表（最新时点快照，字段详细；与信贷系统股东 app_xd_shareholder_info 口径对比）';
+-- 信贷系统股东（系统口径，最新时点）：行内信贷系统维护的股东信息，与工商股东（app_shareholder_info）口径对比
+CREATE TABLE IF NOT EXISTS app_xd_shareholder_info (
+    id              BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo        VARCHAR(64) NOT NULL COMMENT '报告编号',
+    customerId      VARCHAR(64) COMMENT '客户编号',
+    customerName    VARCHAR(128) COMMENT '客户名称',
+    name            VARCHAR(128) COMMENT '股东名称',
+    investmentProp  DECIMAL(12,4) COMMENT '持股比例（%）',
+    relationShip    VARCHAR(128) COMMENT '出资方式',
+    currencyType    VARCHAR(64) COMMENT '币种',
+    oughtSum        DECIMAL(18,2) COMMENT '应出资金额（万元）',
+    investmentSum   DECIMAL(18,2) COMMENT '实际投资金额（万元）',
+    investDate      VARCHAR(64) COMMENT '投资时间',
+    inputUserId     VARCHAR(64) COMMENT '登记人',
+    inputOrgId      VARCHAR(64) COMMENT '登记机构',
+    inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
+    PRIMARY KEY (id),
+    KEY idx_report (reportNo, customerId)
+) COMMENT '信贷系统股东表（最新时点）';
 
 -- 授信用信概况：三、业务基本情况-用信情况
 CREATE TABLE IF NOT EXISTS app_credit_use_info (
@@ -185,14 +204,30 @@ CREATE TABLE IF NOT EXISTS app_early_warning_info (
     phaseOpinion    TEXT COMMENT '审批意见',
     endTime         VARCHAR(32) COMMENT '审批日期',
     riskTaskType    VARCHAR(64) COMMENT '任务类型（码值：预警任务类型（码值待确认））',
+    taskType        VARCHAR(64) COMMENT '任务类型（审批通过预警任务、最近一条预警任务）',
     warnLevel       VARCHAR(64) COMMENT '客户风险等级（码值：高/中/低，码值待确认）',
     riskReason      TEXT COMMENT '风险原因',
-    riskReasonCount INT COMMENT '近一年每个风险原因数量',
-    riskReasonTodoCount INT COMMENT '近一年每个风险原因待填写数量',
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId)
 ) COMMENT '预警任务台账表';
+-- 预警信号明细：风险原因分类数量（近一年），承接原 app_early_warning_info.riskReasonCount/riskReasonTodoCount
+CREATE TABLE IF NOT EXISTS app_early_warning_signal_info (
+    id              BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo        VARCHAR(64) NOT NULL COMMENT '报告编号',
+    customerId      VARCHAR(64) COMMENT '客户编号',
+    customerName    VARCHAR(128) COMMENT '客户名称',
+    serialNo        VARCHAR(64) COMMENT '预警编号（近一年预警台账接口serialNo）',
+    riskMessage     VARCHAR(500) COMMENT '风险原因',
+    count           INT COMMENT '数量',
+    readyCount      INT COMMENT '待填写数量',
+    status          VARCHAR(64) COMMENT '信号状态（近一年预警台账接口status）',
+    warningLevel    VARCHAR(64) COMMENT '预警信号风险等级（接口warningLevel）',
+    inputDate       VARCHAR(64) COMMENT '信号建立时间（接口inputDate）',
+    inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
+    PRIMARY KEY (id),
+    KEY idx_report (reportNo, customerId)
+) COMMENT '预警信号明细表';
 
 -- 押品主档：十二、担保情况和潜在风险-押品风险解读
 CREATE TABLE IF NOT EXISTS app_collateral_info (
@@ -229,12 +264,22 @@ CREATE TABLE IF NOT EXISTS app_collateral_mortgage_info (
     maxCreditorAmt  DECIMAL(18,2) COMMENT '债权数额（万元）',
     startEnd        VARCHAR(64) COMMENT '债务履行期限',
     registerTimestamp VARCHAR(32) COMMENT '设定日期',
+    inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
+    PRIMARY KEY (id),
+    KEY idx_report (reportNo, customerId)
+) COMMENT '押品他项权利/限制权利表';
+-- 押品限制权利明细：查封/限制权人，承接原 app_collateral_mortgage_info.attachmentOrg/attachmentTypeName
+CREATE TABLE IF NOT EXISTS app_collateral_restricted_right (
+    id              BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo        VARCHAR(64) NOT NULL COMMENT '报告编号',
+    customerId      VARCHAR(64) COMMENT '客户编号',
+    customerName    VARCHAR(128) COMMENT '客户名称',
     attachmentOrg   VARCHAR(128) COMMENT '限制权人',
     attachmentTypeName VARCHAR(64) COMMENT '查封类型（码值：轮候查封/正式查封等，码值待确认）',
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId)
-) COMMENT '押品他项权利/限制权利表';
+) COMMENT '押品限制权利表';
 
 -- 结算账户与资产：九、结算情况和潜在风险-我行结算账户与资产情况
 CREATE TABLE IF NOT EXISTS app_settle_account_info (
@@ -248,6 +293,12 @@ CREATE TABLE IF NOT EXISTS app_settle_account_info (
     frozenAmount    DECIMAL(18,2) COMMENT '冻结金额（万元）',
     yearAvgDeposit  DECIMAL(18,2) COMMENT '年日均存款（万元）',
     superviseFlag   VARCHAR(64) COMMENT '监管标识（码值：是/否，码值待确认）',
+    propertyIncome  DECIMAL(18,2) COMMENT '当年物业收入（万元，接口待确认）',
+    propertyIncomeYoy DECIMAL(18,2) COMMENT '当年物业收入累计较上年同期（万元，接口待确认）',
+    propertyIncomeSupervised DECIMAL(18,2) COMMENT '当年监管账户物业收入（万元，接口待确认）',
+    electricFeeIncome DECIMAL(18,2) COMMENT '当年电费收入（万元，接口待确认）',
+    electricFeeYoy  DECIMAL(18,2) COMMENT '当年电费收入累计较上年同期（万元，接口待确认）',
+    electricFeeSupervised DECIMAL(18,2) COMMENT '当年监管账户当年电费收入（万元，接口待确认）',
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId)
@@ -294,8 +345,10 @@ CREATE TABLE IF NOT EXISTS app_finance_index_info (
     reportNo        VARCHAR(64) NOT NULL COMMENT '报告编号',
     customerId      VARCHAR(64) COMMENT '客户编号',
     customerName    VARCHAR(128) COMMENT '客户名称',
-    accountMonth    VARCHAR(32) COMMENT '报表期（会计月，如202603，一期一行）',
+    accountMonth    VARCHAR(32) COMMENT '会计月',
     reportScope     VARCHAR(64) COMMENT '报表口径（码值：合并/本部）',
+    sheetNo         VARCHAR(64) COMMENT '报表类型（码值：资产负债表/利润表/现金流量表等，码值待确认）',
+    reportPeriod    VARCHAR(64) COMMENT '报表周期（码值：年报/半年报/季报/月报，码值待确认）',
     indexType       VARCHAR(64) COMMENT '指标类型（金额科目：营收/净利润/实收资本/短期借款/长期借款/一年内到期长期借款/应收账款/其他应收款/应付票据/其他应付款/存货/总资产，单位万元；比率指标：资产负债率/销售利率/净利率，存百分数值，如65.43表示65.43%）',
     indexValue      DECIMAL(18,2) COMMENT '指标本期值（金额科目=万元；比率指标=百分数值，如65.43表示65.43%）',
     yoyValue        DECIMAL(12,4) COMMENT '同比（%）：该期值÷上年同期值−1；行级属性各期行自带，上游计算或加工层预填（默认已有）',
@@ -336,6 +389,7 @@ CREATE TABLE IF NOT EXISTS app_credit_report_info (
     customerId      VARCHAR(64) COMMENT '客户编号',
     customerName    VARCHAR(128) COMMENT '客户名称',
     queryTime       VARCHAR(32) COMMENT '征信查询时间',
+    zxReportNo      VARCHAR(128) COMMENT '征信报告记录号',
     expireDate      VARCHAR(32) COMMENT '征信报告有效期',
     overdueTotal    DECIMAL(18,2) COMMENT '未结清信贷的逾期总额（万元）',
     attentionCreditBal DECIMAL(18,2) COMMENT '未结清关注类信贷余额（万元）',
@@ -365,6 +419,7 @@ CREATE TABLE IF NOT EXISTS app_credit_debt_detail (
     customerId      VARCHAR(64) COMMENT '客户编号',
     customerName    VARCHAR(128) COMMENT '客户名称',
     queryTime       VARCHAR(32) COMMENT '征信查询时间',
+    zxReportNo      VARCHAR(128) COMMENT '征信报告记录号',
 debtType VARCHAR(64) COMMENT '债务类型（中长期借款/短期借款/循环透支/贴现/银行承兑汇票/信用证/银行保函/其他担保交易）',
     orgCount        INT COMMENT '未结清机构数合计',
     balance         DECIMAL(18,2) COMMENT '未结清余额合计（万元）',
@@ -382,6 +437,8 @@ CREATE TABLE IF NOT EXISTS app_guarantor_info (
     guarantorName   VARCHAR(128) COMMENT '担保人',
     guarantorType   VARCHAR(32) COMMENT '担保人类型（法人/自然人）',
     isStateOwned    VARCHAR(64) COMMENT '是否国资/国有担保',
+    isListedCompany VARCHAR(64) COMMENT '担保人是否上市（码值：是/否）',
+    education       VARCHAR(64) COMMENT '学历（征信基本信息，接口zxBiEDULVL）',
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId)
@@ -395,6 +452,7 @@ CREATE TABLE IF NOT EXISTS app_guarantor_credit_info (
     customerName    VARCHAR(128) COMMENT '客户名称',
     guarantorName   VARCHAR(128) COMMENT '担保人',
     queryTime       VARCHAR(32) COMMENT '征信查询时间',
+    zxReportNo      VARCHAR(128) COMMENT '征信报告记录号',
     totalLoanBal    DECIMAL(18,2) COMMENT '贷款余额合计（万元）',
     operateLoanBal  DECIMAL(18,2) COMMENT '经营性贷款余额合计（万元）',
     consumeLoanBal  DECIMAL(18,2) COMMENT '消费类贷款余额合计（万元）',
@@ -421,6 +479,7 @@ CREATE TABLE IF NOT EXISTS app_guarantor_credit_info (
     guaranteeHkAbnormalBal DECIMAL(18,2) COMMENT '对外担保（相关还款责任）还款状态非正常余额（万元）',
     creditUseRate   DECIMAL(12,4) COMMENT '信用卡使用率（%）',
     guaranteeNetAsset DECIMAL(12,4) COMMENT '对外担保/净资产（%）',
+    guaranteeBalanceExBank DECIMAL(18,2) COMMENT '对外担保（相关还款责任）余额（剔除我行）（新增接口字段qy_dwdb_bal_exc_wx）',
     inputtime       TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
     PRIMARY KEY (id),
     KEY idx_report (reportNo, customerId, guarantorName)
@@ -433,6 +492,7 @@ CREATE TABLE IF NOT EXISTS app_credit_query_info (
     customerId      VARCHAR(64) COMMENT '客户编号',
     customerName    VARCHAR(128) COMMENT '客户名称',
     queryTime       VARCHAR(32) COMMENT '征信查询时间',
+    zxReportNo      VARCHAR(128) COMMENT '征信报告记录号',
     loanQuery12m    INT COMMENT '近一年贷款审批征信查询次数',
     loanQuery6m     INT COMMENT '近6个月贷款审批征信查询次数',
     loanQuery3m     INT COMMENT '近3个月贷款审批征信查询次数',
@@ -452,6 +512,7 @@ CREATE TABLE IF NOT EXISTS app_capital_flow_info (
     customerId      VARCHAR(64) COMMENT '客户编号',
     customerName    VARCHAR(128) COMMENT '客户名称',
     loanSerialNo    VARCHAR(64) COMMENT '借据号',
+    serialNo        VARCHAR(128) COMMENT '流水号',
     capitalCheckTaskType VARCHAR(64) COMMENT '任务类型（码值：资金用途检查任务类型（码值待确认））',
     approveStatus   VARCHAR(64) COMMENT '审批状态（码值：审批通过/待审批/驳回（码值待确认））',
     isPurposeAbnormal VARCHAR(64) COMMENT '是否回流异常（码值：是/否）',
