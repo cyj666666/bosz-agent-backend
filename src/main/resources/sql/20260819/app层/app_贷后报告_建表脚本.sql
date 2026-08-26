@@ -558,6 +558,7 @@ CREATE TABLE IF NOT EXISTS app_finance_report_info (
     reportPeriod           VARCHAR(64),
     auditFlag              VARCHAR(32),
     currency               VARCHAR(32),
+    currencyUnit           VARCHAR(32),
     reportStatus           VARCHAR(32),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
@@ -573,6 +574,7 @@ COMMENT ON COLUMN app_finance_report_info.reportScope IS '报表口径（码值�
 COMMENT ON COLUMN app_finance_report_info.reportPeriod IS '报表周期（码值：年报/半年报/季报/月报，码值待确认）';
 COMMENT ON COLUMN app_finance_report_info.auditFlag IS '是否审计（码值：是/否）';
 COMMENT ON COLUMN app_finance_report_info.currency IS '报表币种';
+COMMENT ON COLUMN app_finance_report_info.currencyUnit IS '货币单位（码值：元/千/万，样例为万）';
 COMMENT ON COLUMN app_finance_report_info.reportStatus IS '报表状态（锁定/未锁定，是否锁定状态判断依据）';
 COMMENT ON COLUMN app_finance_report_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_finance_report_info_reportNo ON app_finance_report_info (reportNo);
@@ -593,6 +595,7 @@ CREATE TABLE IF NOT EXISTS app_finance_index_info (
     yoyValue               DECIMAL(12,4),
     changeValue            DECIMAL(18,2),
     changeRate             DECIMAL(12,4),
+    currencyUnit           VARCHAR(32),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -610,6 +613,7 @@ COMMENT ON COLUMN app_finance_index_info.indexValue IS '指标本期值（金额
 COMMENT ON COLUMN app_finance_index_info.yoyValue IS '同比（%）：该期值÷上年同期值−1；行级属性各期行自带，上游计算或加工层预填（默认已有）';
 COMMENT ON COLUMN app_finance_index_info.changeValue IS '较年初变动（万元）：该期值−上年末(12月)值；行级属性各期行自带（默认已有）';
 COMMENT ON COLUMN app_finance_index_info.changeRate IS '较年初增幅（%）：(该期值−上年末值)÷上年末值；行级属性各期行自带（默认已有）';
+COMMENT ON COLUMN app_finance_index_info.currencyUnit IS '货币单位（码值：元/千/万，样例为万）';
 COMMENT ON COLUMN app_finance_index_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_finance_index_info_reportNo ON app_finance_index_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_finance_index_info_customerId ON app_finance_index_info (customerId);
