@@ -19,3 +19,6 @@ INSERT INTO "sys_user_role" ("id", "user_id", "role_id") VALUES ('17989837678657
 
 INSERT INTO "sys_user_role" ("id", "user_id", "role_id") VALUES ('2031968436950966273', '1958830565162242050', 'f6817f48af4fb3af11b9e8bf182f618b'), ('2056347838417571841', 'app2022052402391206', 'f6817f48af4fb3af11b9e8bf182f618b');
 
+-- Auto-generated SQL script #202608272127
+INSERT INTO bosz_test.sys_dict_item (id,dict_id,item_text,item_value,sort_order,status,create_by)
+	VALUES ('2089983692360650755','2089983692201267202','openGauss','7',6,1,'admin');
