@@ -1,82 +1,18 @@
--- =====================================================================
--- agent_gauss_ddl.sql 修复版（v2，兼容高斯DB/OpenGauss）
---   1. schema bosz_test 已存在，不重建；
---   2. 补建 50 个自增序列（高斯DB 不支持 CREATE SEQUENCE IF NOT EXISTS，已去掉该子句；
---      若某序列已存在会报 already exists，可跳过该行或先 DROP）；
---   3. 开头 SET search_path = bosz_test, public，保证全部表（含原文件首个 SET 前的 agent_config）建到 bosz_test。
--- 执行：直接跑本文件（schema 已存在 + 序列 + 213 张表）。
--- =====================================================================
-
-SET search_path = bosz_test, public;
-
--- ---------- 自增序列（50） ----------
-CREATE SEQUENCE agent_config_id_seq;
-CREATE SEQUENCE agent_index_config_id_seq;
-CREATE SEQUENCE agent_rule_id_seq;
-CREATE SEQUENCE agent_search_memory_id_seq;
-CREATE SEQUENCE ai_component_config_id_seq;
-CREATE SEQUENCE amar_claw_memory_backups__id_seq;
-CREATE SEQUENCE app_space_config_space_id_seq;
-CREATE SEQUENCE app_space_inspiration_config_id_seq;
-CREATE SEQUENCE app_space_relate_account_id_seq;
-CREATE SEQUENCE app_space_relate_agent_id_seq;
-CREATE SEQUENCE app_space_relate_knowledge_id_seq;
-CREATE SEQUENCE bank_internal_indicators_config_id_seq;
-CREATE SEQUENCE bank_module_info__id_seq;
-CREATE SEQUENCE chat_session_msg_feedback_id_seq;
-CREATE SEQUENCE client_agent_index_config_id_seq;
-CREATE SEQUENCE coze_cache_industry_mapping_id_seq;
-CREATE SEQUENCE data_entname_indname_reference_records_id_seq;
-CREATE SEQUENCE data_relate_account_id_seq;
-CREATE SEQUENCE data_update_config_id_seq;
-CREATE SEQUENCE ent_rel_shortname_info_id_seq;
-CREATE SEQUENCE financial_transaction_records__id_seq;
-CREATE SEQUENCE finatial_records_task_id_seq;
-CREATE SEQUENCE finatial_upload_task_id_seq;
-CREATE SEQUENCE index_agent_rela_id_seq;
-CREATE SEQUENCE index_detail_code_library__id_seq;
-CREATE SEQUENCE index_detail_config_id_seq;
-CREATE SEQUENCE index_info_temp__id_seq;
-CREATE SEQUENCE index_params_temp__id_seq;
-CREATE SEQUENCE index_relate_info_id_seq;
-CREATE SEQUENCE jeecg_monthly_growth_analysis_id_seq;
-CREATE SEQUENCE jeecg_project_nature_income_id_seq;
-CREATE SEQUENCE knowledge_black_params_config_id_seq;
-CREATE SEQUENCE knowledge_black_params_config_version_id_seq;
-CREATE SEQUENCE knowledge_query_result_for_batch_id_seq;
-CREATE SEQUENCE knowledge_relate_index_id_seq;
-CREATE SEQUENCE knowledge_relate_index_version_id_seq;
-CREATE SEQUENCE large_model_config_id_seq;
-CREATE SEQUENCE message_push_config_id_seq;
-CREATE SEQUENCE message_relate_account_id_seq;
-CREATE SEQUENCE post_glm_records_id_seq;
-CREATE SEQUENCE qianxun_user_log_id_seq;
-CREATE SEQUENCE rasa_chat_detail_info_id_seq;
-CREATE SEQUENCE rela_index_config_id_seq;
-CREATE SEQUENCE scene_inflect_info__id_seq;
-CREATE SEQUENCE sence_relate_info__id_seq;
-CREATE SEQUENCE sync_knowledge_info_id_seq;
-CREATE SEQUENCE sys_announcement_send__id_seq;
-CREATE SEQUENCE sys_page_view_log_id_seq;
-CREATE SEQUENCE trace_query_result_id_seq;
-CREATE SEQUENCE workflow_return_records_id_seq;
-
--- ================= 原脚本内容 =================
 CREATE TABLE agent_config (
     id integer DEFAULT nextval('agent_config_id_seq'::regclass) NOT NULL,
-    agent_name character varying(100) NOT NULL,
-    agent_code character varying(32) NOT NULL,
-    entity_type character varying(40) DEFAULT NULL::character varying,
-    agent_topic character varying(100) DEFAULT NULL::character varying,
-    agent_addr character varying(500) DEFAULT ''::character varying NOT NULL,
+    agent_name character varying(100) COLLATE "C" NOT NULL,
+    agent_code character varying(32) COLLATE "C" NOT NULL,
+    entity_type character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    agent_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    agent_addr character varying(500) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     agent_detail text,
     agent_prompt text,
-    has_statistics character varying(1) DEFAULT NULL::character varying,
-    agent_status character varying(20) DEFAULT NULL::character varying,
-    input_time character varying(40) DEFAULT ''::character varying NOT NULL,
-    update_time character varying(40) DEFAULT ''::character varying NOT NULL,
+    has_statistics character varying(1) COLLATE "C" DEFAULT NULL::character varying,
+    agent_status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    update_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     agent_param_tpl text,
-    large_model_code character varying(100) DEFAULT NULL::character varying
+    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN agent_config.agent_name IS '智能体名称';
@@ -99,14 +35,14 @@ ALTER TABLE agent_config ADD CONSTRAINT agent_config_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE agent_conversation_history (
-    conversation_id character varying(50) NOT NULL,
-    session_no character varying(50) NOT NULL,
-    agent_id character varying(32) NOT NULL,
-    question character varying(1024) NOT NULL,
-    question_class character varying(128) DEFAULT NULL::character varying,
-    target_node character varying(128) DEFAULT NULL::character varying,
+    conversation_id character varying(50) COLLATE "C" NOT NULL,
+    session_no character varying(50) COLLATE "C" NOT NULL,
+    agent_id character varying(32) COLLATE "C" NOT NULL,
+    question character varying(1024) COLLATE "C" NOT NULL,
+    question_class character varying(128) COLLATE "C" DEFAULT NULL::character varying,
+    target_node character varying(128) COLLATE "C" DEFAULT NULL::character varying,
     target_detail json,
-    start_time character varying(40) DEFAULT NULL::character varying,
+    start_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     answer text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -128,37 +64,37 @@ ALTER TABLE agent_conversation_history ADD CONSTRAINT agent_conversation_history
 SET search_path = bosz_test;
 CREATE TABLE agent_index_config (
     id integer DEFAULT nextval('agent_index_config_id_seq'::regclass) NOT NULL,
-    index_name character varying(100) NOT NULL,
-    index_code character varying(32) NOT NULL,
-    index_topic character varying(100) DEFAULT NULL::character varying,
-    use_flag character varying(1) NOT NULL,
+    index_name character varying(100) COLLATE "C" NOT NULL,
+    index_code character varying(32) COLLATE "C" NOT NULL,
+    index_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    use_flag character varying(1) COLLATE "C" NOT NULL,
     synonym_word text,
     key_word text,
     center_key_word text,
-    entity_type character varying(500) DEFAULT NULL::character varying,
-    inner_priority character varying(50) DEFAULT NULL::character varying,
-    source_type character varying(200) DEFAULT NULL::character varying,
-    external_priority character varying(50) DEFAULT NULL::character varying,
-    rec_group character varying(400) DEFAULT NULL::character varying,
-    rec_question character varying(400) DEFAULT NULL::character varying,
-    has_index_rela character varying(1) DEFAULT NULL::character varying,
+    entity_type character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    inner_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    source_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    external_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    has_index_rela character varying(1) COLLATE "C" DEFAULT NULL::character varying,
     remark text,
-    input_time character varying(40) DEFAULT ''::character varying NOT NULL,
-    update_time character varying(40) DEFAULT ''::character varying NOT NULL,
+    input_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    update_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     index_desc text,
     sample_question text,
-    object_type character varying(256) DEFAULT NULL::character varying,
-    index_classification character varying(100) DEFAULT NULL::character varying,
+    object_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
+    index_classification character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     index_prompt text,
-    final_result_flag character varying(1) DEFAULT 'N'::character varying,
-    final_result_content character varying(2000) DEFAULT NULL::character varying,
-    rec_enterprise character varying(400) DEFAULT NULL::character varying,
-    none_test_flag character varying(100) DEFAULT '1'::character varying NOT NULL,
-    source_card_channel character varying(100) DEFAULT NULL::character varying,
-    large_model_code character varying(100) DEFAULT NULL::character varying,
-    large_model_content character varying(2000) DEFAULT NULL::character varying,
-    rela_knowledge_id character varying(100) DEFAULT NULL::character varying,
-    large_model_flag character varying(1) DEFAULT 'Y'::character varying
+    final_result_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
+    final_result_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    rec_enterprise character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    none_test_flag character varying(100) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
+    source_card_channel character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    rela_knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN agent_index_config.index_name IS '指标名称';
@@ -203,9 +139,9 @@ ALTER TABLE agent_index_config ADD CONSTRAINT agent_index_config_pkey PRIMARY KE
 
 SET search_path = bosz_test;
 CREATE TABLE agent_memory (
-    mem_key character varying(128) NOT NULL,
+    mem_key character varying(128) COLLATE "C" NOT NULL,
     mem_content text,
-    update_time character varying(40) NOT NULL
+    update_time character varying(40) COLLATE "C" NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE agent_memory IS '智能体记忆';
@@ -216,12 +152,12 @@ ALTER TABLE agent_memory ADD CONSTRAINT agent_memory_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE agent_reply_message (
-    agent_id character varying(128) NOT NULL,
-    session_no character varying(50) NOT NULL,
+    agent_id character varying(128) COLLATE "C" NOT NULL,
+    session_no character varying(50) COLLATE "C" NOT NULL,
     sort_no bigint NOT NULL,
     sse_message json,
-    generated_time character varying(40) NOT NULL,
-    session_msg_no character varying(128) DEFAULT ''::character varying NOT NULL
+    generated_time character varying(40) COLLATE "C" NOT NULL,
+    session_msg_no character varying(128) COLLATE "C" DEFAULT ''::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE agent_reply_message IS '智能体问答记录表';
@@ -238,26 +174,26 @@ ALTER TABLE agent_reply_message ADD CONSTRAINT agent_reply_message_pkey PRIMARY 
 SET search_path = bosz_test;
 CREATE TABLE agent_rule (
     id integer DEFAULT nextval('agent_rule_id_seq'::regclass) NOT NULL,
-    rule_name character varying(255) DEFAULT NULL::character varying,
-    rule_text character varying(1000) DEFAULT NULL::character varying,
-    parsed_expression character varying(1000) DEFAULT NULL::character varying,
-    rule_status character(1) DEFAULT NULL::bpchar,
-    input_time character varying(30) DEFAULT NULL::character varying,
-    input_user character varying(100) DEFAULT NULL::character varying,
-    update_time character varying(30) DEFAULT NULL::character varying,
-    update_user character varying(30) DEFAULT NULL::character varying,
-    prompt_key character varying(300) DEFAULT NULL::character varying,
-    topic1 character varying(200) DEFAULT NULL::character varying,
-    topic2 character varying(200) DEFAULT NULL::character varying,
+    rule_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    rule_text character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    parsed_expression character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    rule_status character(1) COLLATE "C" DEFAULT NULL::bpchar,
+    input_time character varying(30) COLLATE "C" DEFAULT NULL::character varying,
+    input_user character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(30) COLLATE "C" DEFAULT NULL::character varying,
+    update_user character varying(30) COLLATE "C" DEFAULT NULL::character varying,
+    prompt_key character varying(300) COLLATE "C" DEFAULT NULL::character varying,
+    topic1 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    topic2 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     threshold_config text,
     risk_remark text,
     disposal_advice text,
     additional_analysis text,
-    rule_code character varying(200) NOT NULL,
-    additional_analysis_name character varying(200) DEFAULT NULL::character varying,
-    rule_struct character varying(300) DEFAULT NULL::character varying,
+    rule_code character varying(200) COLLATE "C" NOT NULL,
+    additional_analysis_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    rule_struct character varying(300) COLLATE "C" DEFAULT NULL::character varying,
     fact_analysis text,
-    request_params character varying(2000) DEFAULT NULL::character varying
+    request_params character varying(2000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE agent_rule IS '规则配置';
@@ -287,7 +223,7 @@ ALTER TABLE agent_rule ADD CONSTRAINT agent_rule_pkey PRIMARY KEY USING ubtree  
 
 SET search_path = bosz_test;
 CREATE TABLE agent_rule_prompt (
-    key character varying(300) NOT NULL,
+    key character varying(300) COLLATE "C" NOT NULL,
     prompt text NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -298,17 +234,17 @@ ALTER TABLE agent_rule_prompt ADD CONSTRAINT agent_rule_prompt_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE agent_search_history (
-    agent_id character varying(128) NOT NULL,
-    session_no character varying(100) NOT NULL,
-    user_id character varying(128) NOT NULL,
-    question character varying(1024) DEFAULT NULL::character varying,
-    start_time character varying(40) DEFAULT NULL::character varying,
+    agent_id character varying(128) COLLATE "C" NOT NULL,
+    session_no character varying(100) COLLATE "C" NOT NULL,
+    user_id character varying(128) COLLATE "C" NOT NULL,
+    question character varying(1024) COLLATE "C" DEFAULT NULL::character varying,
+    start_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     final_answer text,
-    end_time character varying(40) DEFAULT NULL::character varying,
+    end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     edit_final_answer text,
     fav_final_answer smallint,
-    status character varying(20) DEFAULT 'running'::character varying NOT NULL,
-    session_msg_no character varying(128) DEFAULT ''::character varying NOT NULL,
+    status character varying(20) COLLATE "C" DEFAULT 'running'::character varying NOT NULL,
+    session_msg_no character varying(128) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     async smallint DEFAULT 0::smallint
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -330,11 +266,11 @@ ALTER TABLE agent_search_history ADD CONSTRAINT agent_search_history_pkey PRIMAR
 SET search_path = bosz_test;
 CREATE TABLE agent_search_memory (
     id bigint DEFAULT nextval('agent_search_memory_id_seq'::regclass) NOT NULL,
-    agent_id character varying(128) NOT NULL,
-    session_no character varying(50) NOT NULL,
-    mem_type character varying(128) NOT NULL,
+    agent_id character varying(128) COLLATE "C" NOT NULL,
+    session_no character varying(50) COLLATE "C" NOT NULL,
+    mem_type character varying(128) COLLATE "C" NOT NULL,
     mem_content text,
-    generated_time character varying(40) NOT NULL
+    generated_time character varying(40) COLLATE "C" NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE agent_search_memory IS '智能体问答记录表';
@@ -349,23 +285,23 @@ ALTER TABLE agent_search_memory ADD CONSTRAINT agent_search_memory_pkey PRIMARY 
 
 SET search_path = bosz_test;
 CREATE TABLE agent_tool_call_message (
-    session_no character varying(100) NOT NULL,
-    tool_name character varying(128) NOT NULL,
-    call_id character varying(200) NOT NULL,
-    agent_id character varying(32) NOT NULL,
-    parallel_key character varying(256) NOT NULL,
+    session_no character varying(100) COLLATE "C" NOT NULL,
+    tool_name character varying(128) COLLATE "C" NOT NULL,
+    call_id character varying(200) COLLATE "C" NOT NULL,
+    agent_id character varying(32) COLLATE "C" NOT NULL,
+    parallel_key character varying(256) COLLATE "C" NOT NULL,
     tool_args text,
-    agent_name character varying(128) NOT NULL,
-    start_time character varying(40) NOT NULL,
-    call_time character varying(40) NOT NULL,
-    finish_time character varying(40) DEFAULT NULL::character varying,
-    end_time character varying(40) DEFAULT NULL::character varying,
-    interrupt_time character varying(40) DEFAULT NULL::character varying,
+    agent_name character varying(128) COLLATE "C" NOT NULL,
+    start_time character varying(40) COLLATE "C" NOT NULL,
+    call_time character varying(40) COLLATE "C" NOT NULL,
+    finish_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    interrupt_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     tool_result text,
     interrupt_result text,
-    status character varying(20) DEFAULT NULL::character varying,
-    state_store_path character varying(512) DEFAULT ''::character varying,
-    session_msg_no character varying(128) DEFAULT ''::character varying NOT NULL
+    status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    state_store_path character varying(512) COLLATE "C" DEFAULT ''::character varying,
+    session_msg_no character varying(128) COLLATE "C" DEFAULT ''::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE agent_tool_call_message IS '智能体工具调用记录表';
@@ -387,13 +323,13 @@ ALTER TABLE agent_tool_call_message ADD CONSTRAINT agent_tool_call_message_pkey 
 
 SET search_path = bosz_test;
 CREATE TABLE ai_agent_info (
-    ai_agent_id character varying(64) NOT NULL,
-    ai_agent_name character varying(255) NOT NULL,
+    ai_agent_id character varying(64) COLLATE "C" NOT NULL,
+    ai_agent_name character varying(255) COLLATE "C" NOT NULL,
     input_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    data_metric_id character varying(64) DEFAULT NULL::character varying,
-    status character varying(10) NOT NULL,
-    agent_topic character varying(80) DEFAULT ''::character varying NOT NULL
+    data_metric_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(10) COLLATE "C" NOT NULL,
+    agent_topic character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE ai_agent_info IS '主题智能体信息表';
@@ -408,16 +344,16 @@ ALTER TABLE ai_agent_info ADD CONSTRAINT ai_agent_info_pkey PRIMARY KEY USING ub
 SET search_path = bosz_test;
 CREATE TABLE ai_component_config (
     id integer DEFAULT nextval('ai_component_config_id_seq'::regclass) NOT NULL,
-    catalog_code character varying(100) NOT NULL,
-    catalog_name character varying(200) NOT NULL,
-    catlaog_classification character varying(40) NOT NULL,
-    catalog_status character varying(2) DEFAULT NULL::character varying,
-    input_time character varying(40) DEFAULT NULL::character varying,
-    update_time character varying(40) DEFAULT NULL::character varying,
+    catalog_code character varying(100) COLLATE "C" NOT NULL,
+    catalog_name character varying(200) COLLATE "C" NOT NULL,
+    catlaog_classification character varying(40) COLLATE "C" NOT NULL,
+    catalog_status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     catalog_desc text,
-    icon character varying(500) DEFAULT NULL::character varying,
+    icon character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     order_no integer,
-    catalog_prompt character varying(1000) DEFAULT NULL::character varying
+    catalog_prompt character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN ai_component_config.id IS 'id';
@@ -435,16 +371,16 @@ ALTER TABLE ai_component_config ADD CONSTRAINT ai_component_config_pkey PRIMARY 
 
 SET search_path = bosz_test;
 CREATE TABLE ai_menu_config (
-    id character varying(32) NOT NULL,
-    menu_code character varying(200) NOT NULL,
-    menu_name character varying(200) DEFAULT NULL::character varying,
-    status character varying(2) DEFAULT 'Y'::character varying,
-    url character varying(500) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    menu_code character varying(200) COLLATE "C" NOT NULL,
+    menu_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
+    url character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     input_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp(),
     order_num integer DEFAULT 0,
-    icon character varying(500) DEFAULT NULL::character varying,
-    component_url character varying(200) DEFAULT NULL::character varying
+    icon character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    component_url character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE ai_menu_config IS '千寻菜单配置表';
@@ -464,11 +400,11 @@ ALTER TABLE ai_menu_config ADD CONSTRAINT ai_menu_config_pkey PRIMARY KEY USING 
 SET search_path = bosz_test;
 CREATE TABLE amar_claw_memory_backups (
     _id bigint DEFAULT nextval('amar_claw_memory_backups__id_seq'::regclass) NOT NULL,
-    id character varying(32) NOT NULL,
-    user_id character varying(32) NOT NULL,
-    container_id character varying(32) DEFAULT NULL::character varying,
-    backup_type character varying(20) DEFAULT 'auto'::character varying,
-    backup_path character varying(500) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" NOT NULL,
+    container_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    backup_type character varying(20) COLLATE "C" DEFAULT 'auto'::character varying,
+    backup_path character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     backup_size bigint,
     created_at timestamp without time zone DEFAULT pg_systimestamp()
 )
@@ -486,10 +422,10 @@ ALTER TABLE amar_claw_memory_backups ADD CONSTRAINT amar_claw_memory_backups_pke
 
 SET search_path = bosz_test;
 CREATE TABLE api_db_cache (
-    id character varying(32) NOT NULL,
-    cache_key character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    cache_key character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     cache_value text,
-    input_time character varying(20) DEFAULT NULL::character varying
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE api_db_cache IS '接口缓存表';
@@ -497,15 +433,15 @@ ALTER TABLE api_db_cache ADD CONSTRAINT api_db_cache_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE app_api_financial_analysis_dd_cashflow (
-    userid character varying(50) NOT NULL,
-    reportdate character varying(50) NOT NULL,
-    combinetype character varying(50) NOT NULL,
-    companyname character varying(200) NOT NULL,
-    sessionno character varying(50) NOT NULL,
-    excelid character varying(50) DEFAULT NULL::character varying,
-    excelurl character varying(500) DEFAULT NULL::character varying,
+    userid character varying(50) COLLATE "C" NOT NULL,
+    reportdate character varying(50) COLLATE "C" NOT NULL,
+    combinetype character varying(50) COLLATE "C" NOT NULL,
+    companyname character varying(200) COLLATE "C" NOT NULL,
+    sessionno character varying(50) COLLATE "C" NOT NULL,
+    excelid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    excelurl character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     uptime timestamp without time zone,
-    reportno character varying(50) DEFAULT NULL::character varying,
+    reportno character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     acceptinvrec numeric(38,18) DEFAULT NULL::numeric,
     addpledgetdeposit numeric(38,18) DEFAULT NULL::numeric,
     buyfilassetpay numeric(38,18) DEFAULT NULL::numeric,
@@ -684,15 +620,15 @@ ALTER TABLE app_api_financial_analysis_dd_cashflow ADD CONSTRAINT app_api_financ
 
 SET search_path = bosz_test;
 CREATE TABLE app_api_financial_analysis_dd_debt (
-    userid character varying(50) NOT NULL,
-    reportdate character varying(50) NOT NULL,
-    combinetype character varying(50) NOT NULL,
-    companyname character varying(200) NOT NULL,
-    sessionno character varying(50) NOT NULL,
-    excelid character varying(50) DEFAULT NULL::character varying,
-    excelurl character varying(500) DEFAULT NULL::character varying,
+    userid character varying(50) COLLATE "C" NOT NULL,
+    reportdate character varying(50) COLLATE "C" NOT NULL,
+    combinetype character varying(50) COLLATE "C" NOT NULL,
+    companyname character varying(200) COLLATE "C" NOT NULL,
+    sessionno character varying(50) COLLATE "C" NOT NULL,
+    excelid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    excelurl character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     uptime timestamp without time zone,
-    reportno character varying(50) DEFAULT NULL::character varying,
+    reportno character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     monetaryfund numeric(38,18) DEFAULT NULL::numeric,
     settlementprovision numeric(38,18) DEFAULT NULL::numeric,
     lendfund numeric(38,18) DEFAULT NULL::numeric,
@@ -1009,15 +945,15 @@ ALTER TABLE app_api_financial_analysis_dd_debt ADD CONSTRAINT app_api_financial_
 
 SET search_path = bosz_test;
 CREATE TABLE app_api_financial_analysis_dd_profit (
-    userid character varying(50) NOT NULL,
-    reportdate character varying(50) NOT NULL,
-    combinetype character varying(50) NOT NULL,
-    companyname character varying(200) NOT NULL,
-    sessionno character varying(50) NOT NULL,
-    excelid character varying(50) DEFAULT NULL::character varying,
-    excelurl character varying(500) DEFAULT NULL::character varying,
+    userid character varying(50) COLLATE "C" NOT NULL,
+    reportdate character varying(50) COLLATE "C" NOT NULL,
+    combinetype character varying(50) COLLATE "C" NOT NULL,
+    companyname character varying(200) COLLATE "C" NOT NULL,
+    sessionno character varying(50) COLLATE "C" NOT NULL,
+    excelid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    excelurl character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     uptime timestamp without time zone,
-    reportno character varying(50) DEFAULT NULL::character varying,
+    reportno character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     assetdevalueloss numeric(38,18) DEFAULT NULL::numeric,
     basiceps numeric(38,18) DEFAULT NULL::numeric,
     cincomebalance1 numeric(38,18) DEFAULT NULL::numeric,
@@ -1205,16 +1141,16 @@ ALTER TABLE app_api_financial_analysis_dd_profit ADD CONSTRAINT app_api_financia
 SET search_path = bosz_test;
 CREATE TABLE app_capital_flow_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    loanserialno character varying(64),
-    serialno character varying(128),
-    capitalchecktasktype character varying(64),
-    approvestatus character varying(64),
-    ispurposeabnormal character varying(64),
-    rectificationsituation character varying(128),
-    rectificationdeadline character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    loanserialno character varying(64) COLLATE "C",
+    serialno character varying(128) COLLATE "C",
+    capitalchecktasktype character varying(64) COLLATE "C",
+    approvestatus character varying(64) COLLATE "C",
+    ispurposeabnormal character varying(64) COLLATE "C",
+    rectificationsituation character varying(128) COLLATE "C",
+    rectificationdeadline character varying(32) COLLATE "C",
     rectificationexplanation text,
     identifyreason text,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
@@ -1241,12 +1177,12 @@ CREATE INDEX idx_capital_flow_info_reportno ON app_capital_flow_info USING ubtre
 SET search_path = bosz_test;
 CREATE TABLE app_check_index_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    chineseid character varying(64),
-    chinesename character varying(128),
-    yesno character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    chineseid character varying(64) COLLATE "C",
+    chinesename character varying(128) COLLATE "C",
+    yesno character varying(32) COLLATE "C",
     remark text,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_check_index_info_pkey PRIMARY KEY (id)
@@ -1267,14 +1203,14 @@ CREATE INDEX idx_check_index_info_reportno ON app_check_index_info USING ubtree 
 SET search_path = bosz_test;
 CREATE TABLE app_check_opinion_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
     conditiondesc text,
-    completestatus character varying(64),
+    completestatus character varying(64) COLLATE "C",
     conditioninstruction text,
-    realcompletetime character varying(32),
-    itemcategory character varying(64),
+    realcompletetime character varying(32) COLLATE "C",
+    itemcategory character varying(64) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_check_opinion_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1295,13 +1231,13 @@ CREATE INDEX idx_check_opinion_info_reportno ON app_check_opinion_info USING ubt
 SET search_path = bosz_test;
 CREATE TABLE app_check_record_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    checkintime character varying(32),
-    checkinaddress character varying(256),
-    visitobj character varying(128),
-    checkinobj character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    checkintime character varying(32) COLLATE "C",
+    checkinaddress character varying(256) COLLATE "C",
+    visitobj character varying(128) COLLATE "C",
+    checkinobj character varying(128) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_check_record_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1321,19 +1257,19 @@ CREATE INDEX idx_check_record_info_reportno ON app_check_record_info USING ubtre
 SET search_path = bosz_test;
 CREATE TABLE app_collateral_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    owner character varying(128),
-    clrtype character varying(64),
-    clrname character varying(128),
-    clrstatus character varying(64),
-    valuationdate character varying(32),
-    choicetypename character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    owner character varying(128) COLLATE "C",
+    clrtype character varying(64) COLLATE "C",
+    clrname character varying(128) COLLATE "C",
+    clrstatus character varying(64) COLLATE "C",
+    valuationdate character varying(32) COLLATE "C",
+    choicetypename character varying(64) COLLATE "C",
     evaluatevalue numeric(18,2),
-    rightorder character varying(64),
+    rightorder character varying(64) COLLATE "C",
     rightsum numeric(18,2),
-    confirmdate character varying(32),
+    confirmdate character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_collateral_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1359,17 +1295,17 @@ CREATE INDEX idx_collateral_info_reportno ON app_collateral_info USING ubtree (r
 SET search_path = bosz_test;
 CREATE TABLE app_collateral_mortgage_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    clrname character varying(128),
-    pledgeserialno character varying(64),
-    pledgeename character varying(128),
-    guaranteescope character varying(256),
-    pledgetypename character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    clrname character varying(128) COLLATE "C",
+    pledgeserialno character varying(64) COLLATE "C",
+    pledgeename character varying(128) COLLATE "C",
+    guaranteescope character varying(256) COLLATE "C",
+    pledgetypename character varying(64) COLLATE "C",
     maxcreditoramt numeric(18,2),
-    startend character varying(64),
-    registertimestamp character varying(32),
+    startend character varying(64) COLLATE "C",
+    registertimestamp character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_collateral_mortgage_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1393,11 +1329,11 @@ CREATE INDEX idx_collateral_mortgage_info_reportno ON app_collateral_mortgage_in
 SET search_path = bosz_test;
 CREATE TABLE app_collateral_restricted_right (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    attachmentorg character varying(128),
-    attachmenttypename character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    attachmentorg character varying(128) COLLATE "C",
+    attachmenttypename character varying(64) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_collateral_restricted_right_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1415,18 +1351,18 @@ CREATE INDEX idx_collateral_restricted_right_reportno ON app_collateral_restrict
 SET search_path = bosz_test;
 CREATE TABLE app_credit_debt_detail (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    querytime character varying(32),
-    zxreportno character varying(128),
-    debttype character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    querytime character varying(32) COLLATE "C",
+    zxreportno character varying(128) COLLATE "C",
+    debttype character varying(64) COLLATE "C",
     orgcount integer,
     balance numeric(18,2),
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    subjecttype character varying(64),
-    guarantorid character varying(64),
-    guarantorname character varying(128),
+    subjecttype character varying(64) COLLATE "C",
+    guarantorid character varying(64) COLLATE "C",
+    guarantorname character varying(128) COLLATE "C",
     CONSTRAINT app_credit_debt_detail_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 49
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -1450,11 +1386,11 @@ CREATE INDEX idx_credit_debt_detail_reportno ON app_credit_debt_detail USING ubt
 SET search_path = bosz_test;
 CREATE TABLE app_credit_query_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    querytime character varying(32),
-    zxreportno character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    querytime character varying(32) COLLATE "C",
+    zxreportno character varying(128) COLLATE "C",
     loanquery12m integer,
     loanquery6m integer,
     loanquery3m integer,
@@ -1463,8 +1399,8 @@ CREATE TABLE app_credit_query_info (
     cardquery3m integer,
     selfquery1m integer,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    guarantorid character varying(64),
-    guarantorname character varying(128),
+    guarantorid character varying(64) COLLATE "C",
+    guarantorname character varying(128) COLLATE "C",
     CONSTRAINT app_credit_query_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 4
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -1490,12 +1426,12 @@ CREATE INDEX idx_credit_query_info_reportno ON app_credit_query_info USING ubtre
 SET search_path = bosz_test;
 CREATE TABLE app_credit_report_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    querytime character varying(32),
-    zxreportno character varying(128),
-    expiredate character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    querytime character varying(32) COLLATE "C",
+    zxreportno character varying(128) COLLATE "C",
+    expiredate character varying(32) COLLATE "C",
     overduetotal numeric(18,2),
     attentioncreditbal numeric(18,2),
     badcreditbal numeric(18,2),
@@ -1512,9 +1448,9 @@ CREATE TABLE app_credit_report_info (
     nonbankliabtotal numeric(18,2),
     nonbankhighrateloan numeric(12,4),
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    subjecttype character varying(64),
-    guarantorid character varying(64),
-    guarantorname character varying(128),
+    subjecttype character varying(64) COLLATE "C",
+    guarantorid character varying(64) COLLATE "C",
+    guarantorname character varying(128) COLLATE "C",
     nonbankguaranteebal numeric(18,2),
     workingcapitalloanbal numeric(18,2),
     workingcapitalloan1ybal numeric(18,2),
@@ -1570,19 +1506,19 @@ CREATE INDEX idx_credit_report_info_reportno ON app_credit_report_info USING ubt
 SET search_path = bosz_test;
 CREATE TABLE app_credit_use_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
     creditsum numeric(18,2),
     balance numeric(18,2),
     exposureamount numeric(18,2),
     limitbalance numeric(18,2),
     groupamount numeric(18,2),
     groupbalance numeric(18,2),
-    isgroup character varying(32),
-    groupname character varying(128),
-    creditdate character varying(32),
-    latestoverduedate character varying(32),
+    isgroup character varying(32) COLLATE "C",
+    groupname character varying(128) COLLATE "C",
+    creditdate character varying(32) COLLATE "C",
+    latestoverduedate character varying(32) COLLATE "C",
     gdoverduecounts integer,
     ajoverduecounts integer,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
@@ -1612,24 +1548,24 @@ CREATE INDEX idx_credit_use_info_reportno ON app_credit_use_info USING ubtree (r
 SET search_path = bosz_test;
 CREATE TABLE app_customer_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    legalperson character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    legalperson character varying(128) COLLATE "C",
     registercapital numeric(18,2),
     paidincapital numeric(18,2),
-    industrytype character varying(64),
-    holdtype character varying(64),
-    actualcontroller character varying(128),
-    officeaddress character varying(256),
+    industrytype character varying(64) COLLATE "C",
+    holdtype character varying(64) COLLATE "C",
+    actualcontroller character varying(128) COLLATE "C",
+    officeaddress character varying(256) COLLATE "C",
     businessscope text,
-    dangerlevel character varying(64),
-    warninglevel character varying(64),
-    isstateowned character varying(64),
-    isfakestateowned character varying(64),
-    islistedcompany character varying(32),
-    groupname character varying(128),
-    istechcompany character varying(64),
+    dangerlevel character varying(64) COLLATE "C",
+    warninglevel character varying(64) COLLATE "C",
+    isstateowned character varying(64) COLLATE "C",
+    isfakestateowned character varying(64) COLLATE "C",
+    islistedcompany character varying(32) COLLATE "C",
+    groupname character varying(128) COLLATE "C",
+    istechcompany character varying(64) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_customer_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1660,17 +1596,17 @@ CREATE INDEX idx_customer_info_reportno ON app_customer_info USING ubtree (repor
 SET search_path = bosz_test;
 CREATE TABLE app_early_warning_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    confirmtime character varying(32),
-    inputdate character varying(32),
-    approvestatusname character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    confirmtime character varying(32) COLLATE "C",
+    inputdate character varying(32) COLLATE "C",
+    approvestatusname character varying(64) COLLATE "C",
     phaseopinion text,
-    endtime character varying(32),
-    risktasktype character varying(64),
-    tasktype character varying(64),
-    warnlevel character varying(64),
+    endtime character varying(32) COLLATE "C",
+    risktasktype character varying(64) COLLATE "C",
+    tasktype character varying(64) COLLATE "C",
+    warnlevel character varying(64) COLLATE "C",
     riskreason text,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_early_warning_info_pkey PRIMARY KEY (id)
@@ -1696,16 +1632,16 @@ CREATE INDEX idx_early_warning_info_reportno ON app_early_warning_info USING ubt
 SET search_path = bosz_test;
 CREATE TABLE app_early_warning_signal_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    serialno character varying(64),
-    riskmessage character varying(500),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    serialno character varying(64) COLLATE "C",
+    riskmessage character varying(500) COLLATE "C",
     count integer,
     readycount integer,
-    status character varying(64),
-    warninglevel character varying(64),
-    inputdate character varying(64),
+    status character varying(64) COLLATE "C",
+    warninglevel character varying(64) COLLATE "C",
+    inputdate character varying(64) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_early_warning_signal_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1728,12 +1664,12 @@ CREATE INDEX idx_early_warning_signal_info_reportno ON app_early_warning_signal_
 SET search_path = bosz_test;
 CREATE TABLE app_entrust_pay_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    paymentmode character varying(64),
-    paydate character varying(32),
-    accountname character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    paymentmode character varying(64) COLLATE "C",
+    paydate character varying(32) COLLATE "C",
+    accountname character varying(128) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_entrust_pay_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -1752,20 +1688,20 @@ CREATE INDEX idx_entrust_pay_info_reportno ON app_entrust_pay_info USING ubtree 
 SET search_path = bosz_test;
 CREATE TABLE app_finance_index_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    accountmonth character varying(32),
-    reportscope character varying(64),
-    sheetno character varying(64),
-    reportperiod character varying(64),
-    indextype character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    accountmonth character varying(32) COLLATE "C",
+    reportscope character varying(64) COLLATE "C",
+    sheetno character varying(64) COLLATE "C",
+    reportperiod character varying(64) COLLATE "C",
+    indextype character varying(64) COLLATE "C",
     indexvalue numeric(18,2),
     yoyvalue numeric(12,4),
     changevalue numeric(18,2),
     changerate numeric(12,4),
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    currencyunit character varying(32),
+    currencyunit character varying(32) COLLATE "C",
     CONSTRAINT app_finance_index_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 211
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -1793,18 +1729,18 @@ CREATE INDEX idx_finance_index_info_reportno ON app_finance_index_info USING ubt
 SET search_path = bosz_test;
 CREATE TABLE app_finance_report_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    accountmonth character varying(32),
-    sheetno character varying(64),
-    reportscope character varying(64),
-    reportperiod character varying(64),
-    auditflag character varying(32),
-    currency character varying(32),
-    reportstatus character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    accountmonth character varying(32) COLLATE "C",
+    sheetno character varying(64) COLLATE "C",
+    reportscope character varying(64) COLLATE "C",
+    reportperiod character varying(64) COLLATE "C",
+    auditflag character varying(32) COLLATE "C",
+    currency character varying(32) COLLATE "C",
+    reportstatus character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    currencyunit character varying(32),
+    currencyunit character varying(32) COLLATE "C",
     CONSTRAINT app_finance_report_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 11
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -1828,12 +1764,12 @@ CREATE INDEX idx_finance_report_info_reportno ON app_finance_report_info USING u
 SET search_path = bosz_test;
 CREATE TABLE app_guarantor_credit_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    guarantorname character varying(128),
-    querytime character varying(32),
-    zxreportno character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    guarantorname character varying(128) COLLATE "C",
+    querytime character varying(32) COLLATE "C",
+    zxreportno character varying(128) COLLATE "C",
     totalloanbal numeric(18,2),
     operateloanbal numeric(18,2),
     consumeloanbal numeric(18,2),
@@ -1860,7 +1796,7 @@ CREATE TABLE app_guarantor_credit_info (
     guaranteehkabnormalbal numeric(18,2),
     credituserate numeric(12,4),
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    guarantorid character varying(64),
+    guarantorid character varying(64) COLLATE "C",
     nonbankliabtotal numeric(18,2),
     CONSTRAINT app_guarantor_credit_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 4
@@ -1907,15 +1843,15 @@ CREATE INDEX idx_guarantor_credit_info_reportno ON app_guarantor_credit_info USI
 SET search_path = bosz_test;
 CREATE TABLE app_guarantor_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    guarantorname character varying(128),
-    guarantortype character varying(32),
-    isstateowned character varying(64),
-    education character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    guarantorname character varying(128) COLLATE "C",
+    guarantortype character varying(32) COLLATE "C",
+    isstateowned character varying(64) COLLATE "C",
+    education character varying(64) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    guarantorid character varying(64),
+    guarantorid character varying(64) COLLATE "C",
     CONSTRAINT app_guarantor_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 3
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -1935,10 +1871,10 @@ CREATE INDEX idx_guarantor_info_reportno ON app_guarantor_info USING ubtree (rep
 SET search_path = bosz_test;
 CREATE TABLE app_guofa_report_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    querytime character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    querytime character varying(32) COLLATE "C",
     gfrevenue numeric(18,2),
     gfreceivable numeric(18,2),
     gfpayable numeric(18,2),
@@ -1964,19 +1900,19 @@ CREATE INDEX idx_guofa_report_info_reportno ON app_guofa_report_info USING ubtre
 SET search_path = bosz_test;
 CREATE TABLE app_ic_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    snapshot_type character varying(32),
-    iclegalperson character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    snapshot_type character varying(32) COLLATE "C",
+    iclegalperson character varying(128) COLLATE "C",
     icregistercapital numeric(18,2),
     icpaidincapital numeric(18,2),
-    icbeneficiaryname character varying(128),
-    systemactualcontroller character varying(128),
+    icbeneficiaryname character varying(128) COLLATE "C",
+    systemactualcontroller character varying(128) COLLATE "C",
     icbeneficiarypercent numeric(12,4),
-    isstateowned character varying(64),
-    isfakestateowned character varying(64),
-    cancellationdate character varying(32),
+    isstateowned character varying(64) COLLATE "C",
+    isfakestateowned character varying(64) COLLATE "C",
+    cancellationdate character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_ic_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2002,15 +1938,15 @@ CREATE INDEX idx_ic_info_reportno ON app_ic_info USING ubtree (reportno) WITH (s
 SET search_path = bosz_test;
 CREATE TABLE app_ic_shareholder_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    snapshot_type character varying(32),
-    icshareholdername character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    snapshot_type character varying(32) COLLATE "C",
+    icshareholdername character varying(128) COLLATE "C",
     icstocknum integer,
     icstockpercent numeric(12,4),
     icamount numeric(18,2),
-    changetime character varying(32),
+    changetime character varying(32) COLLATE "C",
     percentbefore numeric(12,4),
     percentafter numeric(12,4),
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
@@ -2036,11 +1972,11 @@ CREATE INDEX idx_ic_shareholder_info_reportno ON app_ic_shareholder_info USING u
 SET search_path = bosz_test;
 CREATE TABLE app_loan_plan_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    producttype character varying(32),
-    nextpaydate character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    producttype character varying(32) COLLATE "C",
+    nextpaydate character varying(32) COLLATE "C",
     payprincipalamt numeric(18,2),
     payinterestamt numeric(18,2),
     payfineamt numeric(18,2),
@@ -2066,27 +2002,27 @@ CREATE INDEX idx_loan_plan_info_reportno ON app_loan_plan_info USING ubtree (rep
 SET search_path = bosz_test;
 CREATE TABLE app_loan_receipt_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    loanserialno character varying(64),
-    loanstatus character varying(64),
-    productname character varying(128),
-    producttype character varying(64),
-    purposename character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    loanserialno character varying(64) COLLATE "C",
+    loanstatus character varying(64) COLLATE "C",
+    productname character varying(128) COLLATE "C",
+    producttype character varying(64) COLLATE "C",
+    purposename character varying(128) COLLATE "C",
     balance numeric(18,2),
-    productbelongname character varying(128),
+    productbelongname character varying(128) COLLATE "C",
     overduebalance numeric(18,2),
     overdueinterestamt numeric(18,2),
-    isrestructed character varying(32),
+    isrestructed character varying(32) COLLATE "C",
     extendbalance numeric(18,2),
     restructedbalance numeric(18,2),
     reorgtimes integer,
     reorgbalance numeric(18,2),
     loanchangerptcounts integer,
     loanchangerptbalance numeric(18,2),
-    occurtype character varying(32),
-    isextend character varying(32),
+    occurtype character varying(32) COLLATE "C",
+    isextend character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_loan_receipt_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2120,11 +2056,11 @@ CREATE INDEX idx_loan_receipt_info_reportno ON app_loan_receipt_info USING ubtre
 SET search_path = bosz_test;
 CREATE TABLE app_opinion_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
     phaseopinion text,
-    endtime character varying(32),
+    endtime character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_opinion_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2142,10 +2078,10 @@ CREATE INDEX idx_opinion_info_reportno ON app_opinion_info USING ubtree (reportn
 SET search_path = bosz_test;
 CREATE TABLE app_payroll_stat_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    statmonth character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    statmonth character varying(32) COLLATE "C",
     payrollcount integer,
     payrollamount numeric(18,2),
     countmom numeric(12,4),
@@ -2174,19 +2110,19 @@ CREATE INDEX idx_payroll_stat_info_reportno ON app_payroll_stat_info USING ubtre
 SET search_path = bosz_test;
 CREATE TABLE app_report_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    reporttitle character varying(128),
-    checktaskno character varying(64),
-    reportdate character varying(32),
-    reportstatus character varying(32),
-    generatorname character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    reporttitle character varying(128) COLLATE "C",
+    checktaskno character varying(64) COLLATE "C",
+    reportdate character varying(32) COLLATE "C",
+    reportstatus character varying(32) COLLATE "C",
+    generatorname character varying(64) COLLATE "C",
     generatetime timestamp without time zone,
-    approvestatus character varying(32),
+    approvestatus character varying(32) COLLATE "C",
     approveopinion text,
     approvetime timestamp without time zone,
-    reporturl character varying(256),
+    reporturl character varying(256) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_report_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2211,13 +2147,13 @@ CREATE UNIQUE INDEX uk_report_no ON app_report_info USING ubtree (reportno) WITH
 SET search_path = bosz_test;
 CREATE TABLE app_reputation_event_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    subjecttype character varying(32),
-    subjectname character varying(128),
-    eventtime character varying(32),
-    eventtype character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    subjecttype character varying(32) COLLATE "C",
+    subjectname character varying(128) COLLATE "C",
+    eventtime character varying(32) COLLATE "C",
+    eventtype character varying(64) COLLATE "C",
     eventdesc text,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_reputation_event_info_pkey PRIMARY KEY (id)
@@ -2239,15 +2175,15 @@ CREATE INDEX idx_reputation_event_info_reportno ON app_reputation_event_info USI
 SET search_path = bosz_test;
 CREATE TABLE app_settle_account_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    accountno character varying(64),
-    accountstatus character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    accountno character varying(64) COLLATE "C",
+    accountstatus character varying(64) COLLATE "C",
     accountbalance numeric(18,2),
     frozenamount numeric(18,2),
     yearavgdeposit numeric(18,2),
-    superviseflag character varying(64),
+    superviseflag character varying(64) COLLATE "C",
     propertyincome numeric(18,2),
     propertyincomeyoy numeric(18,2),
     propertyincomesupervised numeric(18,2),
@@ -2281,15 +2217,15 @@ CREATE INDEX idx_settle_account_info_reportno ON app_settle_account_info USING u
 SET search_path = bosz_test;
 CREATE TABLE app_settle_counterparty_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    counterpartyname character varying(128),
-    direction character varying(16),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    counterpartyname character varying(128) COLLATE "C",
+    direction character varying(16) COLLATE "C",
     amount numeric(18,2),
-    rankno character varying(16),
-    upstreamflag character varying(32),
-    remark character varying(512),
+    rankno character varying(16) COLLATE "C",
+    upstreamflag character varying(32) COLLATE "C",
+    remark character varying(512) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_settle_counterparty_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2312,17 +2248,17 @@ CREATE INDEX idx_settle_counterparty_info_reportno ON app_settle_counterparty_in
 SET search_path = bosz_test;
 CREATE TABLE app_shareholder_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    name character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    name character varying(128) COLLATE "C",
     stock_num integer,
     amount numeric(18,2),
     stock_percent numeric(12,4),
-    is_quoted character varying(32),
-    is_state_owned character varying(64),
-    is_fake_state_owned character varying(32),
-    is_listed_company character varying(32),
+    is_quoted character varying(32) COLLATE "C",
+    is_state_owned character varying(64) COLLATE "C",
+    is_fake_state_owned character varying(32) COLLATE "C",
+    is_listed_company character varying(32) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_shareholder_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2346,23 +2282,23 @@ CREATE INDEX idx_shareholder_info_reportno ON app_shareholder_info USING ubtree 
 SET search_path = bosz_test;
 CREATE TABLE app_space_config (
     space_id integer DEFAULT nextval('app_space_config_space_id_seq'::regclass) NOT NULL,
-    space_name character varying(100) DEFAULT NULL::character varying,
-    space_desc character varying(1000) DEFAULT NULL::character varying,
-    relation_account character varying(2000) DEFAULT NULL::character varying,
-    index_space_flag character varying(1) DEFAULT 'N'::character varying,
+    space_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    space_desc character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    relation_account character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    index_space_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
     index_content text,
-    default_prompt character varying(1000) DEFAULT NULL::character varying,
+    default_prompt character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     sort_no integer DEFAULT 0,
-    space_status character varying(1) DEFAULT 'Y'::character varying,
-    upload_flag character varying(1) DEFAULT 'N'::character varying,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    relation_org character varying(500) DEFAULT NULL::character varying,
-    space_code character varying(100) DEFAULT NULL::character varying,
-    finance_upload_flag character varying(2) DEFAULT 'N'::character varying,
-    welcome_content character varying(100) DEFAULT NULL::character varying,
-    black_icon character varying(500) DEFAULT NULL::character varying,
-    icon character varying(500) DEFAULT NULL::character varying
+    space_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
+    upload_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    relation_org character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    space_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    finance_upload_flag character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    welcome_content character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    black_icon character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    icon character varying(500) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE app_space_config IS '应用空间管理表';
@@ -2390,19 +2326,19 @@ SET search_path = bosz_test;
 CREATE TABLE app_space_inspiration_config (
     id integer DEFAULT nextval('app_space_inspiration_config_id_seq'::regclass) NOT NULL,
     space_id integer,
-    belong_group character varying(100) DEFAULT NULL::character varying,
-    question character varying(500) DEFAULT NULL::character varying,
-    status character varying(1) DEFAULT 'Y'::character varying,
+    belong_group character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    question character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer DEFAULT 0,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    question_type character varying(32) DEFAULT NULL::character varying,
-    entity_type character varying(40) DEFAULT NULL::character varying,
-    entity_name character varying(200) DEFAULT NULL::character varying,
-    index_code character varying(100) DEFAULT NULL::character varying,
-    index_id character varying(32) DEFAULT NULL::character varying,
-    show_deepseek character varying(10) DEFAULT 'N'::character varying,
-    hover_flag character varying(100) DEFAULT ''::character varying
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    question_type character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    entity_type character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    entity_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    index_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    index_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    show_deepseek character varying(10) COLLATE "C" DEFAULT 'N'::character varying,
+    hover_flag character varying(100) COLLATE "C" DEFAULT ''::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE app_space_inspiration_config IS '应用空间灵感配置表';
@@ -2426,17 +2362,17 @@ ALTER TABLE app_space_inspiration_config ADD CONSTRAINT app_space_inspiration_co
 SET search_path = bosz_test;
 CREATE TABLE app_space_relate_account (
     id integer DEFAULT nextval('app_space_relate_account_id_seq'::regclass) NOT NULL,
-    account character varying(100) DEFAULT NULL::character varying,
-    relate_org character varying(100) DEFAULT NULL::character varying,
-    space_id character varying(1000) DEFAULT NULL::character varying,
-    status character varying(1) DEFAULT 'Y'::character varying,
+    account character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    relate_org character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    space_id character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer DEFAULT 0,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    do_auth_index character varying(2) DEFAULT 'Y'::character varying NOT NULL,
-    report_text_type character varying(10) DEFAULT 'h5'::character varying,
-    relate_knowledge character varying(2000) DEFAULT NULL::character varying,
-    relate_menu character varying(2000) DEFAULT NULL::character varying
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    do_auth_index character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
+    report_text_type character varying(10) COLLATE "C" DEFAULT 'h5'::character varying,
+    relate_knowledge character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    relate_menu character varying(2000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE app_space_relate_account IS '应用空间关联账户信息表';
@@ -2461,9 +2397,9 @@ CREATE TABLE app_space_relate_agent (
     space_id integer,
     agent_id integer,
     sort_no integer DEFAULT 0,
-    status character varying(1) DEFAULT 'Y'::character varying,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying
+    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE app_space_relate_agent IS '应用空间关联Agent信息表';
@@ -2480,19 +2416,19 @@ SET search_path = bosz_test;
 CREATE TABLE app_space_relate_knowledge (
     id integer DEFAULT nextval('app_space_relate_knowledge_id_seq'::regclass) NOT NULL,
     space_id integer,
-    label_code_level_1 character varying(100) DEFAULT NULL::character varying,
-    label_name_level_1 character varying(200) DEFAULT NULL::character varying,
-    label_code_level_2 character varying(100) DEFAULT NULL::character varying,
-    label_name_level_2 character varying(200) DEFAULT NULL::character varying,
-    label_code_level_3 character varying(100) DEFAULT NULL::character varying,
-    label_name_level_3 character varying(200) DEFAULT NULL::character varying,
-    label_code_level_4 character varying(100) DEFAULT NULL::character varying,
-    label_name_level_4 character varying(200) DEFAULT NULL::character varying,
-    label_dict_code character varying(32) DEFAULT NULL::character varying,
-    status character varying(1) DEFAULT 'Y'::character varying,
+    label_code_level_1 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_1 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_2 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_2 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_3 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_4 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    label_dict_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer DEFAULT 0,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE app_space_relate_knowledge IS '应用空间关联知识库信息表';
@@ -2516,32 +2452,32 @@ ALTER TABLE app_space_relate_knowledge ADD CONSTRAINT app_space_relate_knowledge
 SET search_path = bosz_test;
 CREATE TABLE app_specific_loan_check_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    objectname character varying(64),
-    productname character varying(128),
-    productbelongname character varying(128),
-    contractno character varying(64),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    objectname character varying(64) COLLATE "C",
+    productname character varying(128) COLLATE "C",
+    productbelongname character varying(128) COLLATE "C",
+    contractno character varying(64) COLLATE "C",
     businesssum numeric(18,2),
     balance numeric(18,2),
     duebilltotalbusinesssum numeric(18,2),
     nominalbalancesum numeric(18,2),
     repaysum numeric(18,2),
-    purpose character varying(128),
-    vouchtype character varying(32),
-    projectbegindate character varying(32),
-    projectfinishdate character varying(32),
-    ifbulid character varying(32),
-    ifconstructionexpect character varying(32),
-    ifgetpermission character varying(32),
-    ifmatch character varying(32),
-    ifopenaccount character varying(32),
-    ifsign character varying(32),
-    ifoverinvest character varying(32),
+    purpose character varying(128) COLLATE "C",
+    vouchtype character varying(32) COLLATE "C",
+    projectbegindate character varying(32) COLLATE "C",
+    projectfinishdate character varying(32) COLLATE "C",
+    ifbulid character varying(32) COLLATE "C",
+    ifconstructionexpect character varying(32) COLLATE "C",
+    ifgetpermission character varying(32) COLLATE "C",
+    ifmatch character varying(32) COLLATE "C",
+    ifopenaccount character varying(32) COLLATE "C",
+    ifsign character varying(32) COLLATE "C",
+    ifoverinvest character varying(32) COLLATE "C",
     overinvest text,
-    ifoperate character varying(32),
-    ifrunexpect character varying(32),
+    ifoperate character varying(32) COLLATE "C",
+    ifrunexpect character varying(32) COLLATE "C",
     schedulecheckcondition text,
     lastschedulecheckcondition text,
     capitalcheckcondition text,
@@ -2626,10 +2562,10 @@ CREATE INDEX idx_specific_loan_check_info_reportno ON app_specific_loan_check_in
 SET search_path = bosz_test;
 CREATE TABLE app_tax_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    taxperiod character varying(32),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    taxperiod character varying(32) COLLATE "C",
     monthlytaxsales numeric(18,2),
     yoychange numeric(18,2),
     yoyrate numeric(12,4),
@@ -2665,18 +2601,18 @@ CREATE INDEX idx_tax_info_reportno ON app_tax_info USING ubtree (reportno) WITH 
 SET search_path = bosz_test;
 CREATE TABLE app_xd_shareholder_info (
     id bigint AUTO_INCREMENT NOT NULL,
-    reportno character varying(64) NOT NULL,
-    customerid character varying(64),
-    customername character varying(128),
-    name character varying(128),
+    reportno character varying(64) COLLATE "C" NOT NULL,
+    customerid character varying(64) COLLATE "C",
+    customername character varying(128) COLLATE "C",
+    name character varying(128) COLLATE "C",
     investmentprop numeric(12,4),
-    relationship character varying(128),
-    currencytype character varying(64),
+    relationship character varying(128) COLLATE "C",
+    currencytype character varying(64) COLLATE "C",
     oughtsum numeric(18,2),
     investmentsum numeric(18,2),
-    investdate character varying(64),
-    inputuserid character varying(64),
-    inputorgid character varying(64),
+    investdate character varying(64) COLLATE "C",
+    inputuserid character varying(64) COLLATE "C",
+    inputorgid character varying(64) COLLATE "C",
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     CONSTRAINT app_xd_shareholder_info_pkey PRIMARY KEY (id)
 ) AUTO_INCREMENT = 1
@@ -2701,17 +2637,17 @@ CREATE INDEX idx_xd_shareholder_info_reportno ON app_xd_shareholder_info USING u
 SET search_path = bosz_test;
 CREATE TABLE bank_internal_indicators_config (
     id integer DEFAULT nextval('bank_internal_indicators_config_id_seq'::regclass) NOT NULL,
-    question_category character varying(100) DEFAULT NULL::character varying,
-    category character varying(100) DEFAULT NULL::character varying,
-    sub_category character varying(100) DEFAULT NULL::character varying,
+    question_category character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    category character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    sub_category character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     indicator_code text,
     indicator text,
     indicator_show_code text,
     indicator_show text,
     key_word text,
-    source_table character varying(100) DEFAULT NULL::character varying,
-    empty_indicator_method character varying(100) DEFAULT NULL::character varying,
-    org_account character varying(400) DEFAULT NULL::character varying
+    source_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    empty_indicator_method character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    org_account character varying(400) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE bank_internal_indicators_config IS '行内指标配置表';
@@ -2731,9 +2667,9 @@ ALTER TABLE bank_internal_indicators_config ADD CONSTRAINT bank_internal_indicat
 SET search_path = bosz_test;
 CREATE TABLE bank_module_info (
     _id bigint DEFAULT nextval('bank_module_info__id_seq'::regclass) NOT NULL,
-    bankid character varying(1000) DEFAULT NULL::character varying,
-    modulecode character varying(1000) DEFAULT NULL::character varying,
-    largemodelcode character varying(1000) DEFAULT NULL::character varying
+    bankid character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    modulecode character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    largemodelcode character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN bank_module_info._id IS '主键ID';
@@ -2741,12 +2677,12 @@ ALTER TABLE bank_module_info ADD CONSTRAINT bank_module_info_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE batch_prompt_task (
-    id character varying(100) NOT NULL,
-    trace_id character varying(32) DEFAULT NULL::character varying,
-    knowledge_code character varying(100) DEFAULT NULL::character varying,
+    id character varying(100) COLLATE "C" NOT NULL,
+    trace_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     prompt_content text,
-    operate_time character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(200) DEFAULT NULL::character varying
+    operate_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE batch_prompt_task IS '知识库批量任务表';
@@ -2759,44 +2695,44 @@ ALTER TABLE batch_prompt_task ADD CONSTRAINT batch_prompt_task_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE call_llm_record (
-    hub_account character varying(256) NOT NULL,
-    trace_id character varying(64) NOT NULL,
+    hub_account character varying(256) COLLATE "C" NOT NULL,
+    trace_id character varying(64) COLLATE "C" NOT NULL,
     sort_no bigint NOT NULL,
-    request_time character varying(40) NOT NULL,
+    request_time character varying(40) COLLATE "C" NOT NULL,
     status integer,
     content text,
     request_body text,
-    response_time character varying(40) DEFAULT NULL::character varying,
-    large_model_code character varying(64) DEFAULT NULL::character varying,
-    api_key character varying(256) DEFAULT NULL::character varying,
+    response_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    api_key character varying(256) COLLATE "C" DEFAULT NULL::character varying,
     prompt_tokens bigint,
     completion_tokens bigint,
-    session_msg_no character varying(64) DEFAULT NULL::character varying
+    session_msg_no character varying(64) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 ALTER TABLE call_llm_record ADD CONSTRAINT call_llm_record_pkey PRIMARY KEY USING ubtree  (trace_id, sort_no) WITH (storage_type=USTORE);
 
 SET search_path = bosz_test;
 CREATE TABLE ces_field_kongj (
-    id character varying(36) NOT NULL,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    name character varying(32) DEFAULT NULL::character varying,
-    sex character varying(32) DEFAULT NULL::character varying,
-    radio character varying(32) DEFAULT NULL::character varying,
-    checkbox character varying(32) DEFAULT NULL::character varying,
-    sel_mut character varying(32) DEFAULT NULL::character varying,
-    sel_search character varying(32) DEFAULT NULL::character varying,
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    sex character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    radio character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    checkbox character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    sel_mut character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    sel_search character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     birthday timestamp without time zone,
-    pic character varying(1000) DEFAULT NULL::character varying,
-    files character varying(1000) DEFAULT NULL::character varying,
+    pic character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    files character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     remakr text,
     fuwenb text,
-    user_sel character varying(200) DEFAULT NULL::character varying,
-    dep_sel character varying(200) DEFAULT NULL::character varying,
+    user_sel character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    dep_sel character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     ddd numeric(10,0) DEFAULT NULL::numeric
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -2824,18 +2760,18 @@ ALTER TABLE ces_field_kongj ADD CONSTRAINT ces_field_kongj_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE ces_order_customer (
-    id character varying(36) NOT NULL,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    name character varying(32) DEFAULT NULL::character varying,
-    sex character varying(1) DEFAULT NULL::character varying,
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    sex character varying(1) COLLATE "C" DEFAULT NULL::character varying,
     birthday timestamp without time zone,
     age integer,
-    address character varying(300) DEFAULT NULL::character varying,
-    order_main_id character varying(32) DEFAULT NULL::character varying
+    address character varying(300) COLLATE "C" DEFAULT NULL::character varying,
+    order_main_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN ces_order_customer.create_by IS '创建人';
@@ -2853,17 +2789,17 @@ ALTER TABLE ces_order_customer ADD CONSTRAINT ces_order_customer_pkey PRIMARY KE
 
 SET search_path = bosz_test;
 CREATE TABLE ces_order_goods (
-    id character varying(36) NOT NULL,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    good_name character varying(32) DEFAULT NULL::character varying,
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    good_name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     price numeric,
     num integer,
     zong_price numeric,
-    order_main_id character varying(32) DEFAULT NULL::character varying
+    order_main_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN ces_order_goods.create_by IS '创建人';
@@ -2880,16 +2816,16 @@ ALTER TABLE ces_order_goods ADD CONSTRAINT ces_order_goods_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE ces_order_main (
-    id character varying(36) NOT NULL,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    order_code character varying(32) DEFAULT NULL::character varying,
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    order_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     xd_date timestamp without time zone,
     money numeric,
-    remark character varying(500) DEFAULT NULL::character varying
+    remark character varying(500) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN ces_order_main.create_by IS '创建人';
@@ -2905,17 +2841,17 @@ ALTER TABLE ces_order_main ADD CONSTRAINT ces_order_main_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE ces_shop_goods (
-    id character varying(36) NOT NULL,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    name character varying(32) DEFAULT NULL::character varying,
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     price numeric(10,5) DEFAULT NULL::numeric,
     chuc_date timestamp without time zone,
     contents text,
-    good_type_id character varying(32) DEFAULT NULL::character varying
+    good_type_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN ces_shop_goods.id IS '主键';
@@ -2933,17 +2869,17 @@ ALTER TABLE ces_shop_goods ADD CONSTRAINT ces_shop_goods_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE ces_shop_type (
-    id character varying(36) NOT NULL,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    name character varying(32) DEFAULT NULL::character varying,
-    content character varying(200) DEFAULT NULL::character varying,
-    pics character varying(500) DEFAULT NULL::character varying,
-    pid character varying(32) DEFAULT NULL::character varying,
-    has_child character varying(3) DEFAULT NULL::character varying
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    content character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    pics character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    pid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    has_child character varying(3) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN ces_shop_type.create_by IS '创建人';
@@ -2961,13 +2897,13 @@ ALTER TABLE ces_shop_type ADD CONSTRAINT ces_shop_type_pkey PRIMARY KEY USING ub
 SET search_path = bosz_test;
 CREATE TABLE chat_session_msg_feedback (
     id integer DEFAULT nextval('chat_session_msg_feedback_id_seq'::regclass) NOT NULL,
-    user_id character varying(64) DEFAULT ''::character varying NOT NULL,
-    client_id character varying(64) DEFAULT ''::character varying NOT NULL,
-    session_msg_no character varying(64) DEFAULT ''::character varying NOT NULL,
+    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    client_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     grade integer DEFAULT 100 NOT NULL,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    feedback_text character varying(256) DEFAULT ''::character varying NOT NULL
+    feedback_text character varying(256) COLLATE "C" DEFAULT ''::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE chat_session_msg_feedback IS '会话答复评价';
@@ -2985,39 +2921,39 @@ ALTER TABLE chat_session_msg_feedback ADD CONSTRAINT chat_session_msg_feedback_p
 SET search_path = bosz_test;
 CREATE TABLE client_agent_index_config (
     id integer DEFAULT nextval('client_agent_index_config_id_seq'::regclass) NOT NULL,
-    index_name character varying(100) NOT NULL,
-    index_code character varying(32) NOT NULL,
-    index_topic character varying(100) DEFAULT NULL::character varying,
-    use_flag character varying(1) DEFAULT 'Y'::character varying NOT NULL,
+    index_name character varying(100) COLLATE "C" NOT NULL,
+    index_code character varying(32) COLLATE "C" NOT NULL,
+    index_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    use_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
     synonym_word text,
     key_word text,
     center_key_word text,
-    entity_type character varying(500) DEFAULT NULL::character varying,
-    inner_priority character varying(50) DEFAULT NULL::character varying,
-    source_type character varying(200) DEFAULT NULL::character varying,
-    external_priority character varying(50) DEFAULT NULL::character varying,
-    rec_group character varying(400) DEFAULT NULL::character varying,
-    rec_question character varying(400) DEFAULT NULL::character varying,
-    has_index_rela character varying(1) DEFAULT NULL::character varying,
+    entity_type character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    inner_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    source_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    external_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    has_index_rela character varying(1) COLLATE "C" DEFAULT NULL::character varying,
     remark text,
-    input_time character varying(40) NOT NULL,
-    update_time character varying(40) NOT NULL,
+    input_time character varying(40) COLLATE "C" NOT NULL,
+    update_time character varying(40) COLLATE "C" NOT NULL,
     index_desc text,
     sample_question text,
-    object_type character varying(256) DEFAULT NULL::character varying,
-    index_classification character varying(100) DEFAULT NULL::character varying,
-    visible_flag character varying(1) DEFAULT 'Y'::character varying,
+    object_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
+    index_classification character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    visible_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     index_prompt text,
-    hub_account character varying(200) DEFAULT NULL::character varying,
-    none_test_flag character varying(2) DEFAULT '1'::character varying NOT NULL,
-    final_result_flag character varying(1) DEFAULT 'N'::character varying,
-    rec_enterprise character varying(400) DEFAULT NULL::character varying,
-    text_type character varying(100) DEFAULT 'h5'::character varying,
-    source_card_channel character varying(100) DEFAULT NULL::character varying,
-    large_model_code character varying(100) DEFAULT NULL::character varying,
-    large_model_content character varying(2000) DEFAULT NULL::character varying,
-    rela_knowledge_id character varying(100) DEFAULT NULL::character varying,
-    large_model_flag character varying(1) DEFAULT 'Y'::character varying
+    hub_account character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    none_test_flag character varying(2) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
+    final_result_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
+    rec_enterprise character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    text_type character varying(100) COLLATE "C" DEFAULT 'h5'::character varying,
+    source_card_channel character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    rela_knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE client_agent_index_config IS '客户组件配置表';
@@ -3059,14 +2995,14 @@ ALTER TABLE client_agent_index_config ADD CONSTRAINT client_agent_index_config_p
 SET search_path = bosz_test;
 CREATE TABLE coze_cache_industry_mapping (
     id integer DEFAULT nextval('coze_cache_industry_mapping_id_seq'::regclass) NOT NULL,
-    ent_name character varying(255) DEFAULT NULL::character varying,
-    national_standard_industry character varying(255) DEFAULT NULL::character varying,
-    model_parsed_industry character varying(255) DEFAULT NULL::character varying,
-    user_input_industry character varying(255) DEFAULT NULL::character varying,
-    cached_industry character varying(255) DEFAULT NULL::character varying,
-    final_output_industry character varying(255) DEFAULT NULL::character varying,
+    ent_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    national_standard_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    model_parsed_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    user_input_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    cached_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    final_output_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     created_at timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    product character varying(800) DEFAULT NULL::character varying
+    product character varying(800) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE coze_cache_industry_mapping IS '行业映射表';
@@ -3084,8 +3020,8 @@ ALTER TABLE coze_cache_industry_mapping ADD CONSTRAINT coze_cache_industry_mappi
 SET search_path = bosz_test;
 CREATE TABLE data_entname_indname_reference_records (
     id integer DEFAULT nextval('data_entname_indname_reference_records_id_seq'::regclass) NOT NULL,
-    ent_name character varying(200) DEFAULT NULL::character varying,
-    ind_name character varying(200) DEFAULT NULL::character varying
+    ent_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    ind_name character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE data_entname_indname_reference_records IS '企业行业对照信息表';
@@ -3099,10 +3035,10 @@ CREATE TABLE data_relate_account (
     id integer DEFAULT nextval('data_relate_account_id_seq'::regclass) NOT NULL,
     data_id integer,
     account_id integer,
-    relate_time character varying(40) DEFAULT NULL::character varying,
-    relate_status character varying(2) DEFAULT '1'::character varying,
-    is_internal character varying(2) DEFAULT 'N'::character varying,
-    prefix_url character varying(1000) DEFAULT NULL::character varying
+    relate_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    relate_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
+    is_internal character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    prefix_url character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE data_relate_account IS '数据更新关联机构表';
@@ -3118,20 +3054,20 @@ ALTER TABLE data_relate_account ADD CONSTRAINT data_relate_account_pkey PRIMARY 
 SET search_path = bosz_test;
 CREATE TABLE data_update_config (
     id integer DEFAULT nextval('data_update_config_id_seq'::regclass) NOT NULL,
-    title character varying(100) NOT NULL,
+    title character varying(100) COLLATE "C" NOT NULL,
     parent_id integer,
-    parent_title character varying(100) DEFAULT NULL::character varying,
+    parent_title character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     user_evaluation text,
-    app_channel character varying(50) DEFAULT NULL::character varying,
-    app_type character varying(50) DEFAULT NULL::character varying,
-    use_status character varying(2) DEFAULT 'N'::character varying,
+    app_channel character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    app_type character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    use_status character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     sort_no integer,
     content_text text,
-    input_time character varying(40) NOT NULL,
-    update_time character varying(40) NOT NULL,
-    sort_time character varying(40) DEFAULT NULL::character varying,
+    input_time character varying(40) COLLATE "C" NOT NULL,
+    update_time character varying(40) COLLATE "C" NOT NULL,
+    sort_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     remark text,
-    is_public character varying(2) DEFAULT 'N'::character varying
+    is_public character varying(2) COLLATE "C" DEFAULT 'N'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE data_update_config IS '数据更新配置表';
@@ -3154,17 +3090,17 @@ ALTER TABLE data_update_config ADD CONSTRAINT data_update_config_pkey PRIMARY KE
 
 SET search_path = bosz_test;
 CREATE TABLE demo_field_def_val_main (
-    id character varying(36) NOT NULL,
-    code character varying(200) DEFAULT NULL::character varying,
-    name character varying(200) DEFAULT NULL::character varying,
-    sex character varying(200) DEFAULT NULL::character varying,
-    address character varying(200) DEFAULT NULL::character varying,
-    address_param character varying(32) DEFAULT NULL::character varying,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    sex character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    address character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    address_param character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN demo_field_def_val_main.code IS '编码';
@@ -3181,16 +3117,16 @@ ALTER TABLE demo_field_def_val_main ADD CONSTRAINT demo_field_def_val_main_pkey 
 
 SET search_path = bosz_test;
 CREATE TABLE demo_field_def_val_sub (
-    id character varying(36) NOT NULL,
-    code character varying(200) DEFAULT NULL::character varying,
-    name character varying(200) DEFAULT NULL::character varying,
-    "date" character varying(200) DEFAULT NULL::character varying,
-    main_id character varying(200) DEFAULT NULL::character varying,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    "date" character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    main_id character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN demo_field_def_val_sub.code IS '编码';
@@ -3207,10 +3143,10 @@ ALTER TABLE demo_field_def_val_sub ADD CONSTRAINT demo_field_def_val_sub_pkey PR
 SET search_path = bosz_test;
 CREATE TABLE ent_rel_shortname_info (
     id integer DEFAULT nextval('ent_rel_shortname_info_id_seq'::regclass) NOT NULL,
-    ent_rel_name character varying(200) DEFAULT NULL::character varying,
-    ent_name character varying(200) DEFAULT NULL::character varying,
+    ent_rel_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     dw_ins_date timestamp without time zone DEFAULT pg_systimestamp(),
-    status character varying(10) DEFAULT NULL::character varying
+    status character varying(10) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE ent_rel_shortname_info IS '人工维护企业简称表';
@@ -3222,17 +3158,17 @@ ALTER TABLE ent_rel_shortname_info ADD CONSTRAINT ent_rel_shortname_info_pkey PR
 
 SET search_path = bosz_test;
 CREATE TABLE ent_srd_task (
-    task_id character varying(45) NOT NULL,
-    file_name character varying(1000) DEFAULT NULL::character varying,
-    user_uuid character varying(200) NOT NULL,
+    task_id character varying(45) COLLATE "C" NOT NULL,
+    file_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    user_uuid character varying(200) COLLATE "C" NOT NULL,
     ent_count integer DEFAULT 0,
-    parse_status character varying(40) DEFAULT '初始化'::character varying NOT NULL,
+    parse_status character varying(40) COLLATE "C" DEFAULT '初始化'::character varying NOT NULL,
     parsing_percentage integer DEFAULT 0,
     task_from_stage smallint NOT NULL,
-    task_status character varying(40) DEFAULT '初始化'::character varying NOT NULL,
+    task_status character varying(40) COLLATE "C" DEFAULT '初始化'::character varying NOT NULL,
     screening_failed_count integer DEFAULT 0,
-    input_time character varying(24) NOT NULL,
-    update_time character varying(24) NOT NULL,
+    input_time character varying(24) COLLATE "C" NOT NULL,
+    update_time character varying(24) COLLATE "C" NOT NULL,
     screening_success_count integer
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -3253,28 +3189,28 @@ ALTER TABLE ent_srd_task ADD CONSTRAINT ent_srd_task_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE ext_intf_manage (
-    id character varying(32) NOT NULL,
-    supplier_id character varying(100) DEFAULT NULL::character varying,
-    intf_no character varying(100) DEFAULT NULL::character varying,
-    intf_name character varying(200) DEFAULT NULL::character varying,
-    intf_path character varying(200) DEFAULT NULL::character varying,
-    intf_type_name character varying(200) DEFAULT NULL::character varying,
-    intf_request_type character varying(50) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intf_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    intf_path character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    intf_type_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    intf_request_type character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     intf_time_out integer DEFAULT 0,
-    intf_status character varying(2) DEFAULT '1'::character varying,
-    intf_desc character varying(500) DEFAULT NULL::character varying,
-    refer_intf_no character varying(100) DEFAULT NULL::character varying,
-    refer_intf_status character varying(2) DEFAULT '1'::character varying,
-    async_save character varying(2) DEFAULT '0'::character varying,
-    battle_flag character varying(2) DEFAULT '0'::character varying,
-    battle_report_content character varying(1000) DEFAULT NULL::character varying,
-    before_handler character varying(100) DEFAULT NULL::character varying,
-    input_user_id character varying(100) DEFAULT NULL::character varying,
-    input_user_name character varying(100) DEFAULT NULL::character varying,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_user_id character varying(100) DEFAULT NULL::character varying,
-    update_user_name character varying(100) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
+    intf_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
+    intf_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    refer_intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    refer_intf_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
+    async_save character varying(2) COLLATE "C" DEFAULT '0'::character varying,
+    battle_flag character varying(2) COLLATE "C" DEFAULT '0'::character varying,
+    battle_report_content character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    before_handler character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     intf_structure text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -3305,19 +3241,19 @@ ALTER TABLE ext_intf_manage ADD CONSTRAINT ext_intf_manage_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE ext_intf_param_define (
-    id character varying(32) NOT NULL,
-    supplier_id character varying(100) DEFAULT NULL::character varying,
-    param_code character varying(100) DEFAULT NULL::character varying,
-    param_type character varying(10) DEFAULT NULL::character varying,
-    param_value character varying(2000) DEFAULT NULL::character varying,
-    input_user_id character varying(100) DEFAULT NULL::character varying,
-    input_user_name character varying(100) DEFAULT NULL::character varying,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_user_id character varying(100) DEFAULT NULL::character varying,
-    update_user_name character varying(100) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    param_position character varying(10) DEFAULT '1'::character varying,
-    param_is_required character varying(2) DEFAULT '0'::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    param_value character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    param_position character varying(10) COLLATE "C" DEFAULT '1'::character varying,
+    param_is_required character varying(2) COLLATE "C" DEFAULT '0'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE ext_intf_param_define IS '外部服务公共参数定义表';
@@ -3338,31 +3274,31 @@ ALTER TABLE ext_intf_param_define ADD CONSTRAINT ext_intf_param_define_pkey PRIM
 
 SET search_path = bosz_test;
 CREATE TABLE ext_intf_param_manage (
-    id character varying(32) NOT NULL,
-    supplier_id character varying(100) DEFAULT NULL::character varying,
-    intf_no character varying(100) DEFAULT NULL::character varying,
-    param_code character varying(100) DEFAULT NULL::character varying,
-    param_name character varying(200) DEFAULT NULL::character varying,
-    param_type character varying(10) DEFAULT NULL::character varying,
-    param_is_required character varying(2) DEFAULT NULL::character varying,
-    param_position character varying(10) DEFAULT NULL::character varying,
-    param_source character varying(20) DEFAULT NULL::character varying,
-    param_value character varying(200) DEFAULT NULL::character varying,
-    input_user_id character varying(100) DEFAULT NULL::character varying,
-    input_user_name character varying(100) DEFAULT NULL::character varying,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_user_id character varying(100) DEFAULT NULL::character varying,
-    update_user_name character varying(100) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    source_type_detail character varying(100) DEFAULT NULL::character varying,
-    source_param_code character varying(100) DEFAULT NULL::character varying,
-    source_param_type character varying(10) DEFAULT NULL::character varying,
-    child_param_code character varying(100) DEFAULT NULL::character varying,
-    child_param_name character varying(100) DEFAULT NULL::character varying,
-    child_param_type character varying(10) DEFAULT NULL::character varying,
-    source_field_dict_id character varying(100) DEFAULT NULL::character varying,
-    source_field character varying(100) DEFAULT NULL::character varying,
-    source_field_name character varying(100) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    param_is_required character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    param_position character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    param_source character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    param_value character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    source_type_detail character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    child_param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    child_param_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    child_param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    source_field_dict_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_field character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_field_name character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE ext_intf_param_manage IS '外部接口参数配置表';
@@ -3395,17 +3331,17 @@ ALTER TABLE ext_intf_param_manage ADD CONSTRAINT ext_intf_param_manage_pkey PRIM
 
 SET search_path = bosz_test;
 CREATE TABLE ext_intf_supplier_manage (
-    supplier_id character varying(100) NOT NULL,
-    supplier_name character varying(200) DEFAULT NULL::character varying,
-    intf_type character varying(10) DEFAULT NULL::character varying,
-    intf_path character varying(100) DEFAULT NULL::character varying,
-    status character varying(2) DEFAULT NULL::character varying,
-    input_user_id character varying(100) DEFAULT NULL::character varying,
-    input_user_name character varying(100) DEFAULT NULL::character varying,
-    input_time character varying(20) DEFAULT NULL::character varying,
-    update_user_id character varying(100) DEFAULT NULL::character varying,
-    update_user_name character varying(100) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying
+    supplier_id character varying(100) COLLATE "C" NOT NULL,
+    supplier_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    intf_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    intf_path character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE ext_intf_supplier_manage IS '外部服务配置表';
@@ -3424,20 +3360,20 @@ ALTER TABLE ext_intf_supplier_manage ADD CONSTRAINT ext_intf_supplier_manage_pke
 
 SET search_path = bosz_test;
 CREATE TABLE financial_abnormal_transaction_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    account_no character varying(100) DEFAULT NULL::character varying,
-    label_name character varying(20) DEFAULT NULL::character varying,
-    amount character varying(100) DEFAULT NULL::character varying,
-    abnormal_type character varying(100) DEFAULT NULL::character varying,
-    year_month_str character varying(20) DEFAULT NULL::character varying,
-    trade_date character varying(20) DEFAULT NULL::character varying,
-    transfer_name character varying(100) DEFAULT NULL::character varying,
-    trade_time character varying(20) DEFAULT NULL::character varying,
-    trans_type character varying(1000) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    account_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    amount character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    abnormal_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    year_month_str character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    trade_date character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    trade_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    trans_type character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3463,11 +3399,11 @@ ALTER TABLE financial_abnormal_transaction_info ADD CONSTRAINT financial_abnorma
 
 SET search_path = bosz_test;
 CREATE TABLE financial_batch_task_records (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    status character varying(20) DEFAULT 'init'::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(20) COLLATE "C" DEFAULT 'init'::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3484,25 +3420,25 @@ ALTER TABLE financial_batch_task_records ADD CONSTRAINT financial_batch_task_rec
 
 SET search_path = bosz_test;
 CREATE TABLE financial_core_income_expenditure_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    label_name character varying(10) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     proportion numeric(18,2) DEFAULT NULL::numeric,
-    trade_amount_format character varying(100) DEFAULT NULL::character varying,
+    trade_amount_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     trade_num integer,
-    avg_trade_amount_format character varying(100) DEFAULT NULL::character varying,
-    merge_trans character varying(10) DEFAULT NULL::character varying,
+    avg_trade_amount_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    merge_trans character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     business_proportion numeric(18,2) DEFAULT NULL::numeric,
     business_trade_amount numeric(18,2) DEFAULT NULL::numeric,
-    transfer_name character varying(100) DEFAULT NULL::character varying,
-    business_proportion_format character varying(100) DEFAULT NULL::character varying,
+    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    business_proportion_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     trade_amount numeric(18,2) DEFAULT NULL::numeric,
     avg_trade_amount numeric(18,2) DEFAULT NULL::numeric,
     trans_business_trade_amount numeric(18,2) DEFAULT NULL::numeric,
-    proportion_format character varying(200) DEFAULT NULL::character varying,
+    proportion_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3533,19 +3469,19 @@ ALTER TABLE financial_core_income_expenditure_info ADD CONSTRAINT financial_core
 
 SET search_path = bosz_test;
 CREATE TABLE financial_counterparty_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    name character varying(100) DEFAULT NULL::character varying,
-    transfer_name character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     amount_list text,
-    income_format character varying(200) DEFAULT NULL::character varying,
+    income_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     expenditure numeric(18,2) DEFAULT NULL::numeric,
     income numeric(18,2) DEFAULT NULL::numeric,
-    expenditure_format character varying(200) DEFAULT NULL::character varying,
-    diff_amount character varying(200) DEFAULT NULL::character varying,
+    expenditure_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    diff_amount character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3570,16 +3506,16 @@ ALTER TABLE financial_counterparty_info ADD CONSTRAINT financial_counterparty_in
 
 SET search_path = bosz_test;
 CREATE TABLE financial_direct_relation_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    income_format character varying(200) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    income_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     expenditure numeric(18,2) DEFAULT NULL::numeric,
     income numeric(18,2) DEFAULT NULL::numeric,
-    expenditure_format character varying(200) DEFAULT NULL::character varying,
-    diff_amount character varying(200) DEFAULT NULL::character varying,
+    expenditure_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    diff_amount character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3601,19 +3537,19 @@ ALTER TABLE financial_direct_relation_info ADD CONSTRAINT financial_direct_relat
 
 SET search_path = bosz_test;
 CREATE TABLE financial_focus_counterparty_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    transfer_name character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     income_amount numeric(18,2) DEFAULT NULL::numeric,
-    income_trade_amount character varying(100) DEFAULT NULL::character varying,
-    income_ratio character varying(100) DEFAULT NULL::character varying,
+    income_trade_amount character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    income_ratio character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     expend_amount numeric(18,2) DEFAULT NULL::numeric,
-    expend_trade_amount character varying(100) DEFAULT NULL::character varying,
-    expend_ratio character varying(100) DEFAULT NULL::character varying,
-    follow_rule character varying(10) DEFAULT NULL::character varying,
+    expend_trade_amount character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    expend_ratio character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    follow_rule character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3638,16 +3574,16 @@ ALTER TABLE financial_focus_counterparty_info ADD CONSTRAINT financial_focus_cou
 
 SET search_path = bosz_test;
 CREATE TABLE financial_main_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    cash_flow_total_format character varying(100) DEFAULT NULL::character varying,
-    balance_day_format character varying(100) DEFAULT NULL::character varying,
-    profit_loss_total_format character varying(100) DEFAULT NULL::character varying,
-    income_total_format character varying(100) DEFAULT NULL::character varying,
-    expenditure_total_format character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    cash_flow_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    balance_day_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    profit_loss_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    income_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    expenditure_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3669,28 +3605,28 @@ ALTER TABLE financial_main_info ADD CONSTRAINT financial_main_info_pkey PRIMARY 
 
 SET search_path = bosz_test;
 CREATE TABLE financial_profit_loss_info (
-    id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    label_name character varying(10) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     profit_loss_total numeric(18,2) DEFAULT NULL::numeric,
-    profit_loss_total_format character varying(100) DEFAULT NULL::character varying,
+    profit_loss_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     income_total numeric(18,2) DEFAULT NULL::numeric,
-    income_total_format character varying(100) DEFAULT NULL::character varying,
+    income_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     average_monthly_income numeric(18,2) DEFAULT NULL::numeric,
-    average_monthly_income_format character varying(100) DEFAULT NULL::character varying,
+    average_monthly_income_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     average_monthly_expenditure numeric(18,2) DEFAULT NULL::numeric,
-    average_monthly_expenditure_format character varying(100) DEFAULT NULL::character varying,
+    average_monthly_expenditure_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     year_income numeric(18,2) DEFAULT NULL::numeric,
-    year_income_format character varying(100) DEFAULT NULL::character varying,
+    year_income_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     year_expenditure numeric(18,2) DEFAULT NULL::numeric,
-    year_expenditure_format character varying(100) DEFAULT NULL::character varying,
+    year_expenditure_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     expenditure_total numeric(18,2) DEFAULT NULL::numeric,
-    expenditure_total_format character varying(100) DEFAULT NULL::character varying,
+    expenditure_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     average_monthly_profit_loss numeric(18,2) DEFAULT NULL::numeric,
-    average_monthly_profit_loss_format character varying(100) DEFAULT NULL::character varying,
+    average_monthly_profit_loss_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -3725,77 +3661,77 @@ ALTER TABLE financial_profit_loss_info ADD CONSTRAINT financial_profit_loss_info
 SET search_path = bosz_test;
 CREATE TABLE financial_transaction_records (
     _id bigint DEFAULT nextval('financial_transaction_records__id_seq'::regclass) NOT NULL,
-    id character varying(64) NOT NULL,
-    line_id character varying(32) NOT NULL,
-    uuid character varying(64) DEFAULT NULL::character varying,
-    batch_id character varying(20) DEFAULT NULL::character varying,
-    task_id character varying(20) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    line_id character varying(32) COLLATE "C" NOT NULL,
+    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     page integer,
     "row" integer,
-    trade_date character varying(20) DEFAULT NULL::character varying,
-    trade_date_local character varying(20) DEFAULT NULL::character varying,
-    trade_time character varying(20) DEFAULT NULL::character varying,
-    name character varying(100) DEFAULT NULL::character varying,
-    account_no character varying(50) DEFAULT NULL::character varying,
-    transfer_name character varying(100) DEFAULT NULL::character varying,
-    transfer_account_no character varying(50) DEFAULT NULL::character varying,
-    transfer_bank_name character varying(100) DEFAULT NULL::character varying,
-    transaction_type character varying(2000) DEFAULT NULL::character varying,
-    amount character varying(20) DEFAULT NULL::character varying,
+    trade_date character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    trade_date_local character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    trade_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    account_no character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_account_no character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_bank_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    transaction_type character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    amount character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     amount_cny numeric(18,2) DEFAULT NULL::numeric,
     amount_format numeric(18,2) DEFAULT NULL::numeric,
-    balance character varying(20) DEFAULT NULL::character varying,
+    balance character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     balance_format numeric(18,2) DEFAULT NULL::numeric,
     balance_cny numeric(18,2) DEFAULT NULL::numeric,
-    notes character varying(100) DEFAULT NULL::character varying,
-    trans_type character varying(200) DEFAULT NULL::character varying,
+    notes character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    trans_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     running_days integer,
-    label_name character varying(50) DEFAULT NULL::character varying,
-    norm_ids character varying(255) DEFAULT NULL::character varying,
-    label_type character varying(2) DEFAULT NULL::character varying,
-    label_source character varying(50) DEFAULT NULL::character varying,
-    in_or_out character varying(2) DEFAULT NULL::character varying,
-    cuser character varying(20) DEFAULT NULL::character varying,
+    label_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    norm_ids character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    label_type character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    label_source character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    in_or_out character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    cuser character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     ctime bigint,
-    error_type character varying(10) DEFAULT NULL::character varying,
+    error_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     year_and_month integer,
-    trade_date_format character varying(20) DEFAULT NULL::character varying,
-    is_del character varying(2) DEFAULT '0'::character varying,
-    ds_note character varying(100) DEFAULT NULL::character varying,
-    alter_label_type character varying(2) DEFAULT NULL::character varying,
-    muser character varying(20) DEFAULT NULL::character varying,
-    mtime character varying(20) DEFAULT NULL::character varying,
-    delete_flag character varying(2) DEFAULT NULL::character varying,
-    holiday_name character varying(50) DEFAULT NULL::character varying,
-    label_con_type character varying(20) DEFAULT NULL::character varying,
-    recp_task_id character varying(50) DEFAULT NULL::character varying,
-    recp_flow_id character varying(50) DEFAULT NULL::character varying,
-    pay_notes character varying(100) DEFAULT NULL::character varying,
+    trade_date_format character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    is_del character varying(2) COLLATE "C" DEFAULT '0'::character varying,
+    ds_note character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    alter_label_type character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    muser character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    mtime character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    delete_flag character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    holiday_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    label_con_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    recp_task_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    recp_flow_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    pay_notes character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     proportion numeric(10,2) DEFAULT NULL::numeric,
     total numeric(18,2) DEFAULT NULL::numeric,
     relevance_amount numeric(18,2) DEFAULT NULL::numeric,
-    postscript character varying(100) DEFAULT NULL::character varying,
-    purpose character varying(1000) DEFAULT NULL::character varying,
-    remark character varying(255) DEFAULT NULL::character varying,
-    currency character varying(10) DEFAULT 'CNY'::character varying,
+    postscript character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    purpose character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    remark character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    currency character varying(10) COLLATE "C" DEFAULT 'CNY'::character varying,
     interest numeric(18,2) DEFAULT NULL::numeric,
-    is_abnormal character varying(2) DEFAULT NULL::character varying,
+    is_abnormal character varying(2) COLLATE "C" DEFAULT NULL::character varying,
     truth_check smallint,
-    abnormal_type character varying(20) DEFAULT NULL::character varying,
-    bank_name character varying(100) DEFAULT NULL::character varying,
-    bank_code character varying(20) DEFAULT NULL::character varying,
-    bank_logo character varying(255) DEFAULT NULL::character varying,
-    bank_cid character varying(50) DEFAULT NULL::character varying,
-    lend_type_name character varying(50) DEFAULT NULL::character varying,
-    order_date character varying(20) DEFAULT NULL::character varying,
+    abnormal_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    bank_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    bank_code character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    bank_logo character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    bank_cid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    lend_type_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    order_date character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     order_money numeric(18,2) DEFAULT NULL::numeric,
-    trade_date_time character varying(20) DEFAULT NULL::character varying,
-    contact_info character varying(100) DEFAULT NULL::character varying,
-    address character varying(255) DEFAULT NULL::character varying,
-    transfer_contact_info character varying(100) DEFAULT NULL::character varying,
-    transfer_address character varying(255) DEFAULT NULL::character varying,
-    means_payment character varying(50) DEFAULT NULL::character varying,
-    wx_or_zfb character varying(10) DEFAULT NULL::character varying,
+    trade_date_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    contact_info character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    address character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_contact_info character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    transfer_address character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    means_payment character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    wx_or_zfb character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     num_amount numeric(18,2) DEFAULT 0.00,
     num_balance numeric(18,2) DEFAULT 0.00
 )
@@ -3881,7 +3817,7 @@ SET search_path = bosz_test;
 CREATE TABLE finatial_records (
     task_id integer DEFAULT nextval('finatial_records_task_id_seq'::regclass) NOT NULL,
     sent_content text NOT NULL,
-    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    status character varying(20) COLLATE "C" DEFAULT 'pending'::character varying NOT NULL,
     upload_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -3895,17 +3831,17 @@ ALTER TABLE finatial_records ADD CONSTRAINT finatial_records_pkey PRIMARY KEY US
 SET search_path = bosz_test;
 CREATE TABLE finatial_upload_task (
     id integer DEFAULT nextval('finatial_upload_task_id_seq'::regclass) NOT NULL,
-    user_id character varying(64) DEFAULT ''::character varying NOT NULL,
-    session_no character varying(100) DEFAULT ''::character varying NOT NULL,
-    file_id character varying(2048) DEFAULT ''::character varying NOT NULL,
-    file_name character varying(500) DEFAULT ''::character varying NOT NULL,
-    file_path character varying(500) DEFAULT ''::character varying NOT NULL,
+    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    session_no character varying(100) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    file_id character varying(2048) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    file_name character varying(500) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    file_path character varying(500) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     file_size integer DEFAULT 0 NOT NULL,
-    parsing_state character varying(20) DEFAULT 'parsing'::character varying NOT NULL,
-    ent_name character varying(256) DEFAULT ''::character varying NOT NULL,
+    parsing_state character varying(20) COLLATE "C" DEFAULT 'parsing'::character varying NOT NULL,
+    ent_name character varying(256) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    fail_reason character varying(2000) DEFAULT NULL::character varying
+    fail_reason character varying(2000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE finatial_upload_task IS '财务上传任务表';
@@ -3925,12 +3861,12 @@ ALTER TABLE finatial_upload_task ADD CONSTRAINT finatial_upload_task_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE graphs_info (
-    user_id character varying(64) DEFAULT NULL::character varying,
-    graph_id character varying(64) NOT NULL,
-    biz_type character varying(256) DEFAULT NULL::character varying,
+    user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    graph_id character varying(64) COLLATE "C" NOT NULL,
+    biz_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
     graph_desc text,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    status character varying(50) DEFAULT NULL::character varying,
+    status character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     graph_summary text,
     node_classification text,
     update_time timestamp without time zone DEFAULT pg_systimestamp()
@@ -3952,9 +3888,9 @@ SET search_path = bosz_test;
 CREATE TABLE index_agent_rela (
     id integer DEFAULT nextval('index_agent_rela_id_seq'::regclass) NOT NULL,
     index_id integer,
-    index_status character varying(1) DEFAULT 'Y'::character varying,
-    rec_group character varying(400) DEFAULT NULL::character varying,
-    rec_question character varying(400) DEFAULT NULL::character varying,
+    index_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
+    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
     agent_id integer,
     extra_column text,
     index_agent_prompt text
@@ -3974,15 +3910,15 @@ ALTER TABLE index_agent_rela ADD CONSTRAINT index_agent_rela_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE index_base_group (
-    groupid character varying(32) NOT NULL,
-    groupvalue character varying(100) DEFAULT NULL::character varying,
-    groupname character varying(200) DEFAULT NULL::character varying,
-    parentgroupid character varying(32) DEFAULT NULL::character varying,
-    parentgroupname character varying(200) DEFAULT NULL::character varying,
-    sortno character varying(10) DEFAULT '0'::character varying,
-    groupstatus character varying(10) DEFAULT '1'::character varying,
-    inputtime character varying(32) DEFAULT NULL::character varying,
-    updatetime character varying(32) DEFAULT NULL::character varying
+    groupid character varying(32) COLLATE "C" NOT NULL,
+    groupvalue character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    groupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    parentgroupid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    parentgroupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    sortno character varying(10) COLLATE "C" DEFAULT '0'::character varying,
+    groupstatus character varying(10) COLLATE "C" DEFAULT '1'::character varying,
+    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE index_base_group IS '分组信息';
@@ -4000,14 +3936,14 @@ ALTER TABLE index_base_group ADD CONSTRAINT index_base_group_pkey PRIMARY KEY US
 SET search_path = bosz_test;
 CREATE TABLE index_detail_code_library (
     _id bigint DEFAULT nextval('index_detail_code_library__id_seq'::regclass) NOT NULL,
-    index_detail_name character varying(100) DEFAULT NULL::character varying,
-    index_detail_code character varying(32) DEFAULT NULL::character varying,
-    index_detail_layer1_item_name character varying(100) DEFAULT NULL::character varying,
-    index_detail_layer1_item_code character varying(32) DEFAULT NULL::character varying,
-    index_detail_layer2_item_name character varying(100) DEFAULT NULL::character varying,
-    index_detail_layer2_item_code character varying(32) DEFAULT NULL::character varying,
-    index_detail_layer3_item_name character varying(100) DEFAULT NULL::character varying,
-    index_detail_layer3_item_code character varying(32) DEFAULT NULL::character varying,
+    index_detail_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_layer1_item_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_layer1_item_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_layer2_item_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_layer2_item_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_layer3_item_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_layer3_item_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     synonym_word text,
     key_word text
 )
@@ -4029,15 +3965,15 @@ SET search_path = bosz_test;
 CREATE TABLE index_detail_config (
     id integer DEFAULT nextval('index_detail_config_id_seq'::regclass) NOT NULL,
     index_id integer,
-    index_detail_name character varying(100) DEFAULT NULL::character varying,
-    source_type_detail character varying(32) DEFAULT NULL::character varying,
-    default_value character varying(128) DEFAULT NULL::character varying,
-    remark character varying(200) DEFAULT NULL::character varying,
-    param_value_id character varying(266) DEFAULT NULL::character varying,
-    index_detail_field character varying(100) DEFAULT NULL::character varying,
-    index_detail_field_type character varying(100) DEFAULT NULL::character varying,
-    ai_identify_param character varying(100) DEFAULT NULL::character varying,
-    sample_question character varying(200) DEFAULT NULL::character varying
+    index_detail_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_type_detail character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    default_value character varying(128) COLLATE "C" DEFAULT NULL::character varying,
+    remark character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    param_value_id character varying(266) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_field character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    index_detail_field_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    ai_identify_param character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    sample_question character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE index_detail_config IS '指标分析维度配置表';
@@ -4057,9 +3993,9 @@ ALTER TABLE index_detail_config ADD CONSTRAINT index_detail_config_pkey PRIMARY 
 SET search_path = bosz_test;
 CREATE TABLE index_info_temp (
     _id bigint DEFAULT nextval('index_info_temp__id_seq'::regclass) NOT NULL,
-    paramno character varying(32) DEFAULT NULL::character varying,
-    paramid character varying(200) DEFAULT NULL::character varying,
-    paramname character varying(200) DEFAULT NULL::character varying
+    paramno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    paramid character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN index_info_temp._id IS '主键ID';
@@ -4067,28 +4003,28 @@ ALTER TABLE index_info_temp ADD CONSTRAINT index_info_temp_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE index_label_rela (
-    index_name character varying(100) NOT NULL,
-    index_code character varying(32) NOT NULL,
-    source_type character varying(200) NOT NULL,
-    label_database_type character varying(20) DEFAULT '分类知识库'::character varying NOT NULL,
-    label_name_level_1 character varying(100) DEFAULT NULL::character varying,
-    label_code_level_1 character varying(32) DEFAULT NULL::character varying,
-    label_name_level_2 character varying(100) DEFAULT NULL::character varying,
-    label_code_level_2 character varying(32) DEFAULT NULL::character varying,
-    label_name_level_3 character varying(100) DEFAULT NULL::character varying,
-    label_code_level_3 character varying(100) DEFAULT NULL::character varying,
-    label_name_level_4 character varying(100) DEFAULT NULL::character varying,
-    label_code_level_4 character varying(100) DEFAULT NULL::character varying,
-    interface_no character varying(256) DEFAULT NULL::character varying,
-    label_database character varying(100) DEFAULT NULL::character varying,
-    label_table character varying(100) DEFAULT NULL::character varying,
-    label_column character varying(100) DEFAULT NULL::character varying,
-    label_vectordb_addr character varying(100) DEFAULT NULL::character varying,
-    label_dict_code_1 character varying(100) DEFAULT NULL::character varying,
-    label_dict_code_2 character varying(100) DEFAULT NULL::character varying,
-    label_dict_code_3 character varying(100) DEFAULT NULL::character varying,
-    label_dict_code_4 character varying(100) DEFAULT NULL::character varying,
-    knowledge_id character varying(100) DEFAULT NULL::character varying
+    index_name character varying(100) COLLATE "C" NOT NULL,
+    index_code character varying(32) COLLATE "C" NOT NULL,
+    source_type character varying(200) COLLATE "C" NOT NULL,
+    label_database_type character varying(20) COLLATE "C" DEFAULT '分类知识库'::character varying NOT NULL,
+    label_name_level_1 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_1 character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_2 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_2 character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_name_level_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_code_level_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    interface_no character varying(256) COLLATE "C" DEFAULT NULL::character varying,
+    label_database character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_column character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_vectordb_addr character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_dict_code_1 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_dict_code_2 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_dict_code_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    label_dict_code_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN index_label_rela.index_name IS '指标名称';
@@ -4117,65 +4053,65 @@ ALTER TABLE index_label_rela ADD CONSTRAINT index_label_rela_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE index_params (
-    paramno character varying(32) NOT NULL,
-    paramid character varying(100) DEFAULT NULL::character varying,
-    paramname character varying(200) DEFAULT NULL::character varying,
-    paramtype character varying(10) DEFAULT NULL::character varying,
-    codemethod character varying(20) DEFAULT NULL::character varying,
-    codeno character varying(120) DEFAULT NULL::character varying,
-    required character varying(10) DEFAULT NULL::character varying,
-    readonly character varying(10) DEFAULT NULL::character varying,
-    defaultformat character varying(120) DEFAULT NULL::character varying,
-    inputmethod character varying(40) DEFAULT NULL::character varying,
-    fromparamno character varying(32) DEFAULT NULL::character varying,
-    defaultvalue character varying(2000) DEFAULT NULL::character varying,
-    parentparamno character varying(32) DEFAULT NULL::character varying,
-    publicparamstatus character varying(10) DEFAULT NULL::character varying,
-    modelno character varying(32) DEFAULT NULL::character varying,
-    initmethod character varying(100) DEFAULT NULL::character varying,
-    datamethod character varying(10) DEFAULT NULL::character varying,
-    parentparamname character varying(200) DEFAULT NULL::character varying,
-    reportversion character varying(100) DEFAULT NULL::character varying,
-    versionno character varying(100) DEFAULT NULL::character varying,
-    paramsource character varying(100) DEFAULT NULL::character varying,
-    charttype character varying(100) DEFAULT NULL::character varying,
-    sortno character varying(10) DEFAULT NULL::character varying,
-    placeholder character varying(2000) DEFAULT NULL::character varying,
-    acturecolumn character varying(100) DEFAULT NULL::character varying,
-    columnlength character varying(100) DEFAULT NULL::character varying,
-    columntype character varying(100) DEFAULT NULL::character varying,
-    columnremark character varying(100) DEFAULT NULL::character varying,
-    columnisnull character varying(100) DEFAULT NULL::character varying,
-    columncomment character varying(100) DEFAULT NULL::character varying,
-    columnfromtable character varying(100) DEFAULT NULL::character varying,
-    columnfromdatasource character varying(100) DEFAULT NULL::character varying,
-    otherconfig character varying(1000) DEFAULT NULL::character varying,
-    scripttype character varying(100) DEFAULT NULL::character varying,
+    paramno character varying(32) COLLATE "C" NOT NULL,
+    paramid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    paramtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    codemethod character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    codeno character varying(120) COLLATE "C" DEFAULT NULL::character varying,
+    required character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    readonly character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    defaultformat character varying(120) COLLATE "C" DEFAULT NULL::character varying,
+    inputmethod character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    fromparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    defaultvalue character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    parentparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    publicparamstatus character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    modelno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    initmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    datamethod character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    parentparamname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    reportversion character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    versionno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    paramsource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    charttype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    placeholder character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    acturecolumn character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnlength character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columntype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnremark character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnisnull character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columncomment character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnfromtable character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnfromdatasource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    otherconfig character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    scripttype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     script text,
-    validators character varying(500) DEFAULT NULL::character varying,
-    chartinitmethod character varying(100) DEFAULT NULL::character varying,
-    inputuserid character varying(32) DEFAULT NULL::character varying,
-    inputorgid character varying(32) DEFAULT NULL::character varying,
-    inputtime character varying(32) DEFAULT NULL::character varying,
-    updateuserid character varying(32) DEFAULT NULL::character varying,
-    updateorgid character varying(32) DEFAULT NULL::character varying,
-    updatetime character varying(32) DEFAULT NULL::character varying,
-    supplierid character varying(100) DEFAULT NULL::character varying,
-    intfno character varying(100) DEFAULT NULL::character varying,
-    intfparams character varying(3000) DEFAULT NULL::character varying,
+    validators character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    chartinitmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    inputuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    inputorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updateuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updateorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    supplierid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intfno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intfparams character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
     intffield text,
-    intffieldtype character varying(10) DEFAULT NULL::character varying,
+    intffieldtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     structure text,
     extendfield text,
-    otherno character varying(100) DEFAULT NULL::character varying,
+    otherno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     count_field text,
     is_online smallint DEFAULT 0::smallint,
-    metric_intro character varying(500) DEFAULT ''::character varying,
-    data_unit character varying(50) DEFAULT ''::character varying,
-    data_example character varying(1000) DEFAULT ''::character varying,
-    data_type character varying(30) DEFAULT ''::character varying,
+    metric_intro character varying(500) COLLATE "C" DEFAULT ''::character varying,
+    data_unit character varying(50) COLLATE "C" DEFAULT ''::character varying,
+    data_example character varying(1000) COLLATE "C" DEFAULT ''::character varying,
+    data_type character varying(30) COLLATE "C" DEFAULT ''::character varying,
     data_content_parse text,
-    paramkey character varying(200) DEFAULT NULL::character varying
+    paramkey character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE index_params IS '指标参数信息表';
@@ -4243,10 +4179,10 @@ ALTER TABLE index_params ADD CONSTRAINT index_params_pkey PRIMARY KEY USING ubtr
 SET search_path = bosz_test;
 CREATE TABLE index_params_temp (
     _id bigint DEFAULT nextval('index_params_temp__id_seq'::regclass) NOT NULL,
-    paramno character varying(32) DEFAULT NULL::character varying,
+    paramno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     intfparams text,
     script text,
-    scripttype character varying(10) DEFAULT NULL::character varying
+    scripttype character varying(10) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN index_params_temp._id IS '主键ID';
@@ -4254,59 +4190,59 @@ ALTER TABLE index_params_temp ADD CONSTRAINT index_params_temp_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE index_params_version (
-    id character varying(32) NOT NULL,
-    paramno character varying(32) NOT NULL,
-    paramversion character varying(100) NOT NULL,
-    paramid character varying(100) DEFAULT NULL::character varying,
-    paramname character varying(200) DEFAULT NULL::character varying,
-    paramtype character varying(10) DEFAULT NULL::character varying,
-    codemethod character varying(20) DEFAULT NULL::character varying,
-    codeno character varying(120) DEFAULT NULL::character varying,
-    required character varying(10) DEFAULT NULL::character varying,
-    readonly character varying(10) DEFAULT NULL::character varying,
-    defaultformat character varying(120) DEFAULT NULL::character varying,
-    inputmethod character varying(40) DEFAULT NULL::character varying,
-    fromparamno character varying(32) DEFAULT NULL::character varying,
-    defaultvalue character varying(2000) DEFAULT NULL::character varying,
-    parentparamno character varying(32) DEFAULT NULL::character varying,
-    publicparamstatus character varying(10) DEFAULT NULL::character varying,
-    modelno character varying(32) DEFAULT NULL::character varying,
-    initmethod character varying(100) DEFAULT NULL::character varying,
-    datamethod character varying(10) DEFAULT NULL::character varying,
-    parentparamname character varying(200) DEFAULT NULL::character varying,
-    reportversion character varying(100) DEFAULT NULL::character varying,
-    versionno character varying(100) DEFAULT NULL::character varying,
-    paramsource character varying(100) DEFAULT NULL::character varying,
-    charttype character varying(100) DEFAULT NULL::character varying,
-    sortno character varying(10) DEFAULT NULL::character varying,
-    placeholder character varying(2000) DEFAULT NULL::character varying,
-    acturecolumn character varying(100) DEFAULT NULL::character varying,
-    columnlength character varying(100) DEFAULT NULL::character varying,
-    columntype character varying(100) DEFAULT NULL::character varying,
-    columnremark character varying(100) DEFAULT NULL::character varying,
-    columnisnull character varying(100) DEFAULT NULL::character varying,
-    columncomment character varying(100) DEFAULT NULL::character varying,
-    columnfromtable character varying(100) DEFAULT NULL::character varying,
-    columnfromdatasource character varying(100) DEFAULT NULL::character varying,
-    otherconfig character varying(1000) DEFAULT NULL::character varying,
-    scripttype character varying(10) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    paramno character varying(32) COLLATE "C" NOT NULL,
+    paramversion character varying(100) COLLATE "C" NOT NULL,
+    paramid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    paramtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    codemethod character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    codeno character varying(120) COLLATE "C" DEFAULT NULL::character varying,
+    required character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    readonly character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    defaultformat character varying(120) COLLATE "C" DEFAULT NULL::character varying,
+    inputmethod character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    fromparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    defaultvalue character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    parentparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    publicparamstatus character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    modelno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    initmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    datamethod character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    parentparamname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    reportversion character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    versionno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    paramsource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    charttype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    placeholder character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    acturecolumn character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnlength character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columntype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnremark character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnisnull character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columncomment character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnfromtable character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    columnfromdatasource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    otherconfig character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    scripttype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     script text,
-    validators character varying(500) DEFAULT NULL::character varying,
-    chartinitmethod character varying(100) DEFAULT NULL::character varying,
-    inputuserid character varying(32) DEFAULT NULL::character varying,
-    inputorgid character varying(32) DEFAULT NULL::character varying,
-    inputtime character varying(32) DEFAULT NULL::character varying,
-    updateuserid character varying(32) DEFAULT NULL::character varying,
-    updateorgid character varying(32) DEFAULT NULL::character varying,
-    updatetime character varying(32) DEFAULT NULL::character varying,
-    supplierid character varying(100) DEFAULT NULL::character varying,
-    intfno character varying(100) DEFAULT NULL::character varying,
-    intfparams character varying(3000) DEFAULT NULL::character varying,
+    validators character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    chartinitmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    inputuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    inputorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updateuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updateorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    supplierid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intfno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intfparams character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
     intffield text,
-    intffieldtype character varying(10) DEFAULT NULL::character varying,
+    intffieldtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     structure text,
     extendfield text,
-    otherno character varying(100) DEFAULT NULL::character varying,
+    otherno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     count_field text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -4369,12 +4305,12 @@ ALTER TABLE index_params_version ADD CONSTRAINT index_params_version_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE index_relate_index_info (
-    id character varying(32) NOT NULL,
-    param_no character varying(64) DEFAULT NULL::character varying,
-    relate_param_no character varying(64) DEFAULT NULL::character varying,
-    relate_param_id character varying(200) DEFAULT NULL::character varying,
-    relate_param_name character varying(200) DEFAULT NULL::character varying,
-    relate_group_id character varying(64) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    param_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_id character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_group_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp()
 )
@@ -4393,10 +4329,10 @@ ALTER TABLE index_relate_index_info ADD CONSTRAINT index_relate_index_info_pkey 
 SET search_path = bosz_test;
 CREATE TABLE index_relate_info (
     id integer DEFAULT nextval('index_relate_info_id_seq'::regclass) NOT NULL,
-    index_id character varying(100) DEFAULT NULL::character varying,
-    relate_index_id character varying(100) DEFAULT NULL::character varying,
-    relate_time character varying(40) DEFAULT NULL::character varying,
-    comment character varying(500) DEFAULT NULL::character varying
+    index_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    relate_index_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    relate_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE index_relate_info IS '指标关联信息表';
@@ -4408,13 +4344,13 @@ ALTER TABLE index_relate_info ADD CONSTRAINT index_relate_info_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE index_relate_knowledge_info (
-    id character varying(32) NOT NULL,
-    param_no character varying(64) DEFAULT NULL::character varying,
-    relate_knowledge_no character varying(64) DEFAULT NULL::character varying,
-    relate_knowledge_code character varying(500) DEFAULT NULL::character varying,
-    relate_knowledge_name character varying(200) DEFAULT NULL::character varying,
-    relate_group_id character varying(64) DEFAULT NULL::character varying,
-    relate_items character varying(500) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    param_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    relate_knowledge_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    relate_knowledge_code character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    relate_knowledge_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_group_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    relate_items character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp()
 )
@@ -4434,8 +4370,8 @@ ALTER TABLE index_relate_knowledge_info ADD CONSTRAINT index_relate_knowledge_in
 SET search_path = bosz_test;
 CREATE TABLE jeecg_monthly_growth_analysis (
     id integer DEFAULT nextval('jeecg_monthly_growth_analysis_id_seq'::regclass) NOT NULL,
-    year character varying(50) DEFAULT NULL::character varying,
-    month character varying(50) DEFAULT NULL::character varying,
+    year character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    month character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     main_income numeric(18,2) DEFAULT 0.00,
     other_income numeric(18,2) DEFAULT 0.00
 )
@@ -4447,16 +4383,16 @@ ALTER TABLE jeecg_monthly_growth_analysis ADD CONSTRAINT jeecg_monthly_growth_an
 
 SET search_path = bosz_test;
 CREATE TABLE jeecg_order_customer (
-    id character varying(32) NOT NULL,
-    name character varying(100) NOT NULL,
-    sex character varying(4) DEFAULT NULL::character varying,
-    idcard character varying(18) DEFAULT NULL::character varying,
-    idcard_pic character varying(500) DEFAULT NULL::character varying,
-    telphone character varying(32) DEFAULT NULL::character varying,
-    order_id character varying(32) NOT NULL,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    name character varying(100) COLLATE "C" NOT NULL,
+    sex character varying(4) COLLATE "C" DEFAULT NULL::character varying,
+    idcard character varying(18) COLLATE "C" DEFAULT NULL::character varying,
+    idcard_pic character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    telphone character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    order_id character varying(32) COLLATE "C" NOT NULL,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -4475,15 +4411,15 @@ ALTER TABLE jeecg_order_customer ADD CONSTRAINT jeecg_order_customer_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE jeecg_order_main (
-    id character varying(32) NOT NULL,
-    order_code character varying(50) DEFAULT NULL::character varying,
-    ctype character varying(500) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    order_code character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    ctype character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     order_date timestamp without time zone,
     order_money numeric(10,3) DEFAULT NULL::numeric,
-    content character varying(500) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    content character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -4501,13 +4437,13 @@ ALTER TABLE jeecg_order_main ADD CONSTRAINT jeecg_order_main_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE jeecg_order_ticket (
-    id character varying(32) NOT NULL,
-    ticket_code character varying(100) NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
+    ticket_code character varying(100) COLLATE "C" NOT NULL,
     tickect_date timestamp without time zone,
-    order_id character varying(32) NOT NULL,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    order_id character varying(32) COLLATE "C" NOT NULL,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -4524,7 +4460,7 @@ ALTER TABLE jeecg_order_ticket ADD CONSTRAINT jeecg_order_ticket_pkey PRIMARY KE
 SET search_path = bosz_test;
 CREATE TABLE jeecg_project_nature_income (
     id integer DEFAULT nextval('jeecg_project_nature_income_id_seq'::regclass) NOT NULL,
-    nature character varying(50) NOT NULL,
+    nature character varying(50) COLLATE "C" NOT NULL,
     insurance_fee numeric(18,2) DEFAULT 0.00,
     risk_consulting_fee numeric(18,2) DEFAULT 0.00,
     evaluation_fee numeric(18,2) DEFAULT 0.00,
@@ -4544,16 +4480,16 @@ ALTER TABLE jeecg_project_nature_income ADD CONSTRAINT jeecg_project_nature_inco
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_base_group (
-    groupid character varying(32) NOT NULL,
-    groupname character varying(200) DEFAULT NULL::character varying,
-    parentgroupid character varying(32) DEFAULT NULL::character varying,
-    parentgroupname character varying(200) DEFAULT NULL::character varying,
-    sortno character varying(10) DEFAULT NULL::character varying,
-    groupstatus character varying(10) DEFAULT '1'::character varying,
-    inputtime character varying(32) DEFAULT NULL::character varying,
-    updatetime character varying(32) DEFAULT NULL::character varying,
-    groupvalue character varying(100) DEFAULT NULL::character varying,
-    grouptype character varying(20) DEFAULT 'get_knowledge'::character varying
+    groupid character varying(32) COLLATE "C" NOT NULL,
+    groupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    parentgroupid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    parentgroupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    groupstatus character varying(10) COLLATE "C" DEFAULT '1'::character varying,
+    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    groupvalue character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    grouptype character varying(20) COLLATE "C" DEFAULT 'get_knowledge'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE knowledge_base_group IS '知识库分组信息';
@@ -4571,49 +4507,49 @@ ALTER TABLE knowledge_base_group ADD CONSTRAINT knowledge_base_group_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_base_params (
-    paramid character varying(32) NOT NULL,
-    paramno character varying(500) DEFAULT NULL::character varying,
-    paramname character varying(200) DEFAULT NULL::character varying,
-    paramtype character varying(10) DEFAULT NULL::character varying,
-    paramentitytype character varying(10) DEFAULT NULL::character varying,
-    paramlabel character varying(500) DEFAULT NULL::character varying,
-    modelno character varying(32) DEFAULT NULL::character varying,
-    parentparamid character varying(32) DEFAULT NULL::character varying,
-    parentparamname character varying(200) DEFAULT NULL::character varying,
-    reportversion character varying(100) DEFAULT NULL::character varying,
-    sortno character varying(10) DEFAULT NULL::character varying,
+    paramid character varying(32) COLLATE "C" NOT NULL,
+    paramno character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    paramtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    paramentitytype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    paramlabel character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    modelno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    parentparamid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    parentparamname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    reportversion character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     prompt text,
-    agentid character varying(1000) DEFAULT NULL::character varying,
-    otherconfig character varying(1000) DEFAULT NULL::character varying,
-    paramstatus character varying(10) DEFAULT 'Y'::character varying,
-    inputuserid character varying(32) DEFAULT NULL::character varying,
-    inputtime character varying(32) DEFAULT NULL::character varying,
-    updateuserid character varying(32) DEFAULT NULL::character varying,
-    updatetime character varying(32) DEFAULT NULL::character varying,
-    groupid character varying(100) DEFAULT NULL::character varying,
-    "online" character varying(10) DEFAULT 'N'::character varying,
-    prompttype character varying(10) DEFAULT 'basic'::character varying,
+    agentid character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    otherconfig character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    paramstatus character varying(10) COLLATE "C" DEFAULT 'Y'::character varying,
+    inputuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updateuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    groupid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    "online" character varying(10) COLLATE "C" DEFAULT 'N'::character varying,
+    prompttype character varying(10) COLLATE "C" DEFAULT 'basic'::character varying,
     contentdesc text,
     input_param text,
-    large_model_code character varying(1000) DEFAULT NULL::character varying,
+    large_model_code character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     trace_config text,
     image_config text,
     whole_source_config text,
     large_model_content text,
     relate_index_set text,
-    black_content_desc character varying(2000) DEFAULT NULL::character varying,
-    black_model_code character varying(100) DEFAULT NULL::character varying,
-    is_markdown character varying(2) DEFAULT 'N'::character varying,
-    param_description character varying(5000) DEFAULT NULL::character varying,
+    black_content_desc character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    black_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    is_markdown character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    param_description character varying(5000) COLLATE "C" DEFAULT NULL::character varying,
     input_condition text,
-    is_client_search character varying(2) DEFAULT 'N'::character varying,
-    is_online_search character varying(2) DEFAULT 'N'::character varying,
+    is_client_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    is_online_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     input_index text,
     large_model_param text,
-    is_top character varying(2) DEFAULT 'N'::character varying,
+    is_top character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     splitter_param text,
     tool_parameters_config text,
-    is_cloud_search character varying(2) DEFAULT 'N'::character varying,
+    is_cloud_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     user_prompt text,
     split_strategy_param text,
     business_experience text
@@ -4670,35 +4606,35 @@ ALTER TABLE knowledge_base_params ADD CONSTRAINT knowledge_base_params_pkey PRIM
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_base_version (
-    id character varying(32) NOT NULL,
-    param_id character varying(32) NOT NULL,
-    version_no character varying(200) NOT NULL,
-    version_name character varying(200) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    param_id character varying(32) COLLATE "C" NOT NULL,
+    version_no character varying(200) COLLATE "C" NOT NULL,
+    version_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    create_user_id character varying(20) DEFAULT NULL::character varying,
-    create_user_name character varying(20) DEFAULT NULL::character varying,
+    create_user_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    create_user_name character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     sort_no integer DEFAULT 0,
     latest_flag integer DEFAULT 1,
     prompt text,
     content_desc text,
-    large_model_code character varying(100) DEFAULT NULL::character varying,
+    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     trace_config text,
     large_model_content text,
     image_config text,
     whole_source_config text,
     relate_index_set text,
-    black_content_desc character varying(2000) DEFAULT NULL::character varying,
-    black_model_code character varying(100) DEFAULT NULL::character varying,
+    black_content_desc character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    black_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     input_condition text,
     input_index text,
-    large_model_param character varying(2000) DEFAULT ''::character varying,
-    is_top character varying(2) DEFAULT 'N'::character varying,
+    large_model_param character varying(2000) COLLATE "C" DEFAULT ''::character varying,
+    is_top character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     splitter_param text,
-    is_cloud_search character varying(2) DEFAULT 'N'::character varying,
-    is_markdown character varying(2) DEFAULT 'N'::character varying,
-    is_online_search character varying(2) DEFAULT 'N'::character varying,
-    is_client_search character varying(2) DEFAULT 'N'::character varying,
+    is_cloud_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    is_markdown character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    is_online_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
+    is_client_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     user_prompt text,
     split_strategy_param text,
     business_experience text
@@ -4742,23 +4678,23 @@ ALTER TABLE knowledge_base_version ADD CONSTRAINT knowledge_base_version_pkey PR
 SET search_path = bosz_test;
 CREATE TABLE knowledge_black_params_config (
     id integer DEFAULT nextval('knowledge_black_params_config_id_seq'::regclass) NOT NULL,
-    relate_knowledge_id character varying(32) DEFAULT NULL::character varying,
-    param_no character varying(32) DEFAULT NULL::character varying,
-    param_code character varying(32) DEFAULT NULL::character varying,
-    param_type character varying(10) DEFAULT NULL::character varying,
-    param_name character varying(200) DEFAULT NULL::character varying,
-    param_desc character varying(500) DEFAULT NULL::character varying,
-    param_value character varying(1000) DEFAULT NULL::character varying,
-    param_status character varying(2) DEFAULT 'Y'::character varying,
-    relate_dict_id character varying(32) DEFAULT NULL::character varying,
-    relate_source_param character varying(200) DEFAULT NULL::character varying,
-    relate_param_code character varying(200) DEFAULT NULL::character varying,
-    relate_param_name character varying(200) DEFAULT NULL::character varying,
-    show_name character varying(200) DEFAULT NULL::character varying,
-    sort_no character varying(10) DEFAULT NULL::character varying,
-    input_time character varying(32) DEFAULT NULL::character varying,
-    update_time character varying(32) DEFAULT NULL::character varying,
-    relate_dict_value character varying(1000) DEFAULT NULL::character varying
+    relate_knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    param_no character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    param_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    param_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    param_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    param_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
+    relate_dict_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    relate_source_param character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    show_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    sort_no character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    relate_dict_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE knowledge_black_params_config IS '知识库黑盒参数配置表';
@@ -4785,24 +4721,24 @@ ALTER TABLE knowledge_black_params_config ADD CONSTRAINT knowledge_black_params_
 SET search_path = bosz_test;
 CREATE TABLE knowledge_black_params_config_version (
     id integer DEFAULT nextval('knowledge_black_params_config_version_id_seq'::regclass) NOT NULL,
-    relate_knowledge_id character varying(32) DEFAULT NULL::character varying,
-    version_no character varying(100) NOT NULL,
-    param_no character varying(32) DEFAULT NULL::character varying,
-    param_code character varying(32) DEFAULT NULL::character varying,
-    param_type character varying(10) DEFAULT NULL::character varying,
-    param_name character varying(200) DEFAULT NULL::character varying,
-    param_desc character varying(500) DEFAULT NULL::character varying,
-    param_value character varying(1000) DEFAULT NULL::character varying,
-    param_status character varying(2) DEFAULT 'Y'::character varying,
-    relate_dict_id character varying(32) DEFAULT NULL::character varying,
-    relate_source_param character varying(200) DEFAULT NULL::character varying,
-    relate_param_code character varying(200) DEFAULT NULL::character varying,
-    relate_param_name character varying(200) DEFAULT NULL::character varying,
-    show_name character varying(200) DEFAULT NULL::character varying,
-    sort_no character varying(10) DEFAULT NULL::character varying,
-    input_time character varying(32) DEFAULT NULL::character varying,
-    update_time character varying(32) DEFAULT NULL::character varying,
-    relate_dict_value character varying(1000) DEFAULT NULL::character varying
+    relate_knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    version_no character varying(100) COLLATE "C" NOT NULL,
+    param_no character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    param_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    param_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    param_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    param_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
+    relate_dict_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    relate_source_param character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    relate_param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    show_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    sort_no character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    relate_dict_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE knowledge_black_params_config_version IS '知识库黑盒参数配置版本记录表';
@@ -4829,20 +4765,20 @@ ALTER TABLE knowledge_black_params_config_version ADD CONSTRAINT knowledge_black
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_query_result (
-    id character varying(100) NOT NULL,
-    trace_id character varying(100) DEFAULT NULL::character varying,
-    knowledge_code character varying(100) DEFAULT NULL::character varying,
-    supplier_id character varying(100) DEFAULT NULL::character varying,
-    intf_no character varying(100) DEFAULT NULL::character varying,
+    id character varying(100) COLLATE "C" NOT NULL,
+    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     intf_param text,
     script_sql text,
     sql_param text,
-    query_status character varying(1) DEFAULT 'Y'::character varying,
+    query_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     query_type integer DEFAULT 0,
     query_result text,
-    query_time character varying(40) DEFAULT NULL::character varying,
+    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     cost_time integer,
-    comment character varying(500) DEFAULT NULL::character varying
+    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE knowledge_query_result IS '知识库查询记录表';
@@ -4864,19 +4800,19 @@ ALTER TABLE knowledge_query_result ADD CONSTRAINT knowledge_query_result_pkey PR
 SET search_path = bosz_test;
 CREATE TABLE knowledge_query_result_for_batch (
     id integer DEFAULT nextval('knowledge_query_result_for_batch_id_seq'::regclass) NOT NULL,
-    trace_id character varying(100) DEFAULT NULL::character varying,
-    knowledge_code character varying(100) DEFAULT NULL::character varying,
-    supplier_id character varying(100) DEFAULT NULL::character varying,
-    intf_no character varying(100) DEFAULT NULL::character varying,
+    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     intf_param text,
-    script_sql character varying(2000) DEFAULT NULL::character varying,
-    sql_param character varying(500) DEFAULT NULL::character varying,
-    query_status character varying(1) DEFAULT 'Y'::character varying,
+    script_sql character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    sql_param character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    query_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     query_type integer DEFAULT 0,
     query_result text,
-    query_time character varying(40) DEFAULT NULL::character varying,
+    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     cost_time integer,
-    comment character varying(500) DEFAULT NULL::character varying
+    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE knowledge_query_result_for_batch IS '知识库查批量询记录表';
@@ -4898,16 +4834,16 @@ ALTER TABLE knowledge_query_result_for_batch ADD CONSTRAINT knowledge_query_resu
 SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_index (
     id integer DEFAULT nextval('knowledge_relate_index_id_seq'::regclass) NOT NULL,
-    knowledge_id character varying(64) DEFAULT NULL::character varying,
-    index_no character varying(64) DEFAULT NULL::character varying,
-    parent_index_no character varying(64) DEFAULT NULL::character varying,
-    index_name character varying(200) DEFAULT NULL::character varying,
-    index_type character varying(10) DEFAULT NULL::character varying,
-    supplier_id character varying(64) DEFAULT NULL::character varying,
-    intf_no character varying(64) DEFAULT NULL::character varying,
-    add_type character varying(20) DEFAULT 'add'::character varying,
-    trace_status character(2) DEFAULT 'N'::bpchar NOT NULL,
-    trace_card_status character(2) DEFAULT 'N'::bpchar NOT NULL,
+    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    parent_index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    index_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    index_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    supplier_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    intf_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    add_type character varying(20) COLLATE "C" DEFAULT 'add'::character varying,
+    trace_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
+    trace_card_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
     trace_config text,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
@@ -4933,17 +4869,17 @@ ALTER TABLE knowledge_relate_index ADD CONSTRAINT knowledge_relate_index_pkey PR
 SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_index_version (
     id integer DEFAULT nextval('knowledge_relate_index_version_id_seq'::regclass) NOT NULL,
-    knowledge_id character varying(64) DEFAULT NULL::character varying,
-    version_no character varying(100) NOT NULL,
-    index_no character varying(64) DEFAULT NULL::character varying,
-    parent_index_no character varying(64) DEFAULT NULL::character varying,
-    index_name character varying(200) DEFAULT NULL::character varying,
-    index_type character varying(10) DEFAULT NULL::character varying,
-    supplier_id character varying(64) DEFAULT NULL::character varying,
-    intf_no character varying(64) DEFAULT NULL::character varying,
-    add_type character varying(20) DEFAULT 'add'::character varying,
-    trace_status character(2) DEFAULT 'N'::bpchar NOT NULL,
-    trace_card_status character(2) DEFAULT 'N'::bpchar NOT NULL,
+    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    version_no character varying(100) COLLATE "C" NOT NULL,
+    index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    parent_index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    index_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    index_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    supplier_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    intf_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    add_type character varying(20) COLLATE "C" DEFAULT 'add'::character varying,
+    trace_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
+    trace_card_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
     trace_config text,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
@@ -4969,10 +4905,10 @@ ALTER TABLE knowledge_relate_index_version ADD CONSTRAINT knowledge_relate_index
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_input_param (
-    id character varying(32) NOT NULL,
-    knowledge_id character varying(64) DEFAULT NULL::character varying,
-    input_param character varying(2000) DEFAULT NULL::character varying,
-    input_param_name character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    input_param character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    input_param_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -4988,11 +4924,11 @@ ALTER TABLE knowledge_relate_input_param ADD CONSTRAINT knowledge_relate_input_p
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_input_param_version (
-    id character varying(32) NOT NULL,
-    knowledge_id character varying(64) DEFAULT NULL::character varying,
-    version_no character varying(100) NOT NULL,
-    input_param character varying(2000) DEFAULT NULL::character varying,
-    input_param_name character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    version_no character varying(100) COLLATE "C" NOT NULL,
+    input_param character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    input_param_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -5009,11 +4945,11 @@ ALTER TABLE knowledge_relate_input_param_version ADD CONSTRAINT knowledge_relate
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_sync_task (
-    id character varying(32) NOT NULL,
-    sync_type character varying(32) NOT NULL,
-    sync_status character varying(20) DEFAULT 'new'::character varying NOT NULL,
-    user_id character varying(64) DEFAULT ''::character varying NOT NULL,
-    user_name character varying(64) DEFAULT ''::character varying NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
+    sync_type character varying(32) COLLATE "C" NOT NULL,
+    sync_status character varying(20) COLLATE "C" DEFAULT 'new'::character varying NOT NULL,
+    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    user_name character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     finish_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     cost_time integer DEFAULT 0 NOT NULL
@@ -5032,9 +4968,9 @@ ALTER TABLE knowledge_sync_task ADD CONSTRAINT knowledge_sync_task_pkey PRIMARY 
 
 SET search_path = bosz_test;
 CREATE TABLE knowledge_sync_task_exception_record (
-    id character varying(32) NOT NULL,
-    task_id character varying(32) NOT NULL,
-    exception_stage character varying(100) NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
+    task_id character varying(32) COLLATE "C" NOT NULL,
+    exception_stage character varying(100) COLLATE "C" NOT NULL,
     input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     fail_reason text
 )
@@ -5050,15 +4986,15 @@ ALTER TABLE knowledge_sync_task_exception_record ADD CONSTRAINT knowledge_sync_t
 SET search_path = bosz_test;
 CREATE TABLE large_model_config (
     id integer DEFAULT nextval('large_model_config_id_seq'::regclass) NOT NULL,
-    lm_code character varying(100) NOT NULL,
-    model character varying(100) DEFAULT NULL::character varying,
-    lm_name character varying(256) DEFAULT NULL::character varying,
-    url character varying(2000) DEFAULT NULL::character varying,
-    api_key character varying(5000) DEFAULT NULL::character varying,
+    lm_code character varying(100) COLLATE "C" NOT NULL,
+    model character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    lm_name character varying(256) COLLATE "C" DEFAULT NULL::character varying,
+    url character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    api_key character varying(5000) COLLATE "C" DEFAULT NULL::character varying,
     lm_desc text,
-    use_flag character varying(2) DEFAULT 'Y'::character varying NOT NULL,
-    with_think character varying(10) DEFAULT 'N'::character varying,
-    default_think_flag character varying(4) DEFAULT 'N'::character varying,
+    use_flag character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
+    with_think character varying(10) COLLATE "C" DEFAULT 'N'::character varying,
+    default_think_flag character varying(4) COLLATE "C" DEFAULT 'N'::character varying,
     max_tokens integer DEFAULT 0,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp(),
@@ -5083,17 +5019,17 @@ ALTER TABLE large_model_config ADD CONSTRAINT large_model_config_pkey PRIMARY KE
 
 SET search_path = bosz_test;
 CREATE TABLE largemodel_queue (
-    queueid character varying(100) NOT NULL,
-    hubaccount character varying(100) NOT NULL,
-    modulecode character varying(300) NOT NULL,
-    largemodelcode character varying(300) NOT NULL,
-    largemodelreqkey character varying(300) NOT NULL,
-    processstatus character varying(300) DEFAULT 'ready'::character varying NOT NULL,
-    queuereason character varying(300) DEFAULT NULL::character varying,
-    begintime character varying(20) DEFAULT NULL::character varying,
-    endtime character varying(20) DEFAULT NULL::character varying,
-    inputtime character varying(20) NOT NULL,
-    updatetime character varying(20) NOT NULL
+    queueid character varying(100) COLLATE "C" NOT NULL,
+    hubaccount character varying(100) COLLATE "C" NOT NULL,
+    modulecode character varying(300) COLLATE "C" NOT NULL,
+    largemodelcode character varying(300) COLLATE "C" NOT NULL,
+    largemodelreqkey character varying(300) COLLATE "C" NOT NULL,
+    processstatus character varying(300) COLLATE "C" DEFAULT 'ready'::character varying NOT NULL,
+    queuereason character varying(300) COLLATE "C" DEFAULT NULL::character varying,
+    begintime character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    endtime character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    inputtime character varying(20) COLLATE "C" NOT NULL,
+    updatetime character varying(20) COLLATE "C" NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE largemodel_queue IS '大模型请求队列表';
@@ -5112,24 +5048,24 @@ ALTER TABLE largemodel_queue ADD CONSTRAINT largemodel_queue_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE llm_batch_analysis_task (
-    task_id character varying(32) NOT NULL,
-    user_id character varying(32) NOT NULL,
+    task_id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" NOT NULL,
     prompt text,
-    model_codes character varying(2000) NOT NULL,
+    model_codes character varying(2000) COLLATE "C" NOT NULL,
     start_time timestamp without time zone,
     end_time timestamp without time zone,
-    status character varying(20) DEFAULT NULL::character varying,
+    status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     failure_reason text,
     evaluation_prompt text,
     total_rounds integer DEFAULT 10 NOT NULL,
-    hallucination_check character varying(2) DEFAULT 'N'::character varying NOT NULL,
+    hallucination_check character varying(2) COLLATE "C" DEFAULT 'N'::character varying NOT NULL,
     hallucination_prompt text,
-    evaluation_title character varying(50) DEFAULT NULL::character varying,
+    evaluation_title character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     evaluation_comment text,
     other_relate_prompt text,
-    evaluate_model character varying(100) DEFAULT NULL::character varying,
-    relate_dataset character varying(2000) DEFAULT NULL::character varying,
-    evaluate_dimension character varying(2000) DEFAULT NULL::character varying
+    evaluate_model character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    relate_dataset character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    evaluate_dimension character varying(2000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE llm_batch_analysis_task IS '大模型跑批任务表';
@@ -5154,26 +5090,26 @@ ALTER TABLE llm_batch_analysis_task ADD CONSTRAINT llm_batch_analysis_task_pkey 
 
 SET search_path = bosz_test;
 CREATE TABLE llm_batch_analysis_task_detail (
-    task_id character varying(32) NOT NULL,
-    model_code character varying(128) NOT NULL,
+    task_id character varying(32) COLLATE "C" NOT NULL,
+    model_code character varying(128) COLLATE "C" NOT NULL,
     round_num integer NOT NULL,
     model_result text,
     hallucination_result text,
     evaluation_result text,
-    start_time character varying(40) NOT NULL,
-    model_end_time character varying(40) DEFAULT NULL::character varying,
-    evaluation_end_time character varying(40) DEFAULT NULL::character varying,
-    hallucination_end_time character varying(40) DEFAULT NULL::character varying,
-    status character varying(20) DEFAULT NULL::character varying,
+    start_time character varying(40) COLLATE "C" NOT NULL,
+    model_end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    evaluation_end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    hallucination_end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     evaluation_score json,
     failure_reason text,
-    evaluation_status character varying(20) DEFAULT NULL::character varying,
-    hallucination_status character varying(20) DEFAULT NULL::character varying,
+    evaluation_status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    hallucination_status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
     evaluation_comment text,
-    dataset_id character varying(32) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT ''::character varying,
-    prompt_code character varying(200) DEFAULT ''::character varying NOT NULL,
-    dataset_uid character varying(32) DEFAULT ''::character varying NOT NULL
+    dataset_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT ''::character varying,
+    prompt_code character varying(200) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    dataset_uid character varying(32) COLLATE "C" DEFAULT ''::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE llm_batch_analysis_task_detail IS '大模型跑批任务明细表';
@@ -5198,18 +5134,18 @@ ALTER TABLE llm_batch_analysis_task_detail ADD CONSTRAINT llm_batch_analysis_tas
 
 SET search_path = bosz_test;
 CREATE TABLE llm_batch_analysis_task_hallucination (
-    task_id character varying(32) NOT NULL,
-    model_code character varying(128) NOT NULL,
+    task_id character varying(32) COLLATE "C" NOT NULL,
+    model_code character varying(128) COLLATE "C" NOT NULL,
     round_num integer NOT NULL,
-    sequence_num character varying(36) NOT NULL,
+    sequence_num character varying(36) COLLATE "C" NOT NULL,
     hallucination_type text,
     hallucination_desc text,
-    evaluation_source character varying(50) DEFAULT NULL::character varying,
-    manual_review_result character varying(20) DEFAULT NULL::character varying,
-    reviewer character varying(50) DEFAULT NULL::character varying,
-    review_time character varying(40) DEFAULT NULL::character varying,
+    evaluation_source character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    manual_review_result character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    reviewer character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    review_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     review_notes text,
-    prompt_code character varying(200) DEFAULT NULL::character varying
+    prompt_code character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE llm_batch_analysis_task_hallucination IS '大模型跑批任务明细幻觉信息表';
@@ -5229,13 +5165,13 @@ ALTER TABLE llm_batch_analysis_task_hallucination ADD CONSTRAINT llm_batch_analy
 
 SET search_path = bosz_test;
 CREATE TABLE llm_evaluate_dataset_management (
-    id character varying(32) NOT NULL,
-    dataset_code character varying(100) NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
+    dataset_code character varying(100) COLLATE "C" NOT NULL,
     dataset_desc text,
     input_time timestamp without time zone DEFAULT pg_systimestamp(),
-    create_by character varying(50) DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE llm_evaluate_dataset_management IS '大模型评估测试集';
@@ -5250,16 +5186,16 @@ ALTER TABLE llm_evaluate_dataset_management ADD CONSTRAINT llm_evaluate_dataset_
 
 SET search_path = bosz_test;
 CREATE TABLE llm_evaluate_dataset_management_detail (
-    id character varying(32) NOT NULL,
-    dataset_id character varying(32) NOT NULL,
-    ent_name character varying(100) NOT NULL,
-    prompt_code character varying(100) NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
+    dataset_id character varying(32) COLLATE "C" NOT NULL,
+    ent_name character varying(100) COLLATE "C" NOT NULL,
+    prompt_code character varying(100) COLLATE "C" NOT NULL,
     prompt text,
     expected_output text,
     input_time timestamp without time zone DEFAULT pg_systimestamp(),
-    create_by character varying(50) DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     requirements text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5280,10 +5216,10 @@ ALTER TABLE llm_evaluate_dataset_management_detail ADD CONSTRAINT llm_evaluate_d
 
 SET search_path = bosz_test;
 CREATE TABLE login_verfication_code (
-    id character varying(64) NOT NULL,
-    user_id character varying(50) DEFAULT NULL::character varying,
-    verfication_code character varying(200) DEFAULT NULL::character varying,
-    input_time character varying(50) DEFAULT NULL::character varying
+    id character varying(64) COLLATE "C" NOT NULL,
+    user_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    verfication_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    input_time character varying(50) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN login_verfication_code.user_id IS '用户id';
@@ -5295,14 +5231,14 @@ SET search_path = bosz_test;
 CREATE TABLE message_push_config (
     id integer DEFAULT nextval('message_push_config_id_seq'::regclass) NOT NULL,
     content_text text,
-    input_time character varying(40) NOT NULL,
-    update_time character varying(40) NOT NULL,
-    push_time character varying(40) DEFAULT NULL::character varying,
-    push_channel character varying(200) DEFAULT NULL::character varying,
-    push_flag character varying(2) DEFAULT '1'::character varying,
-    push_status character varying(2) DEFAULT '1'::character varying,
-    remark character varying(500) DEFAULT NULL::character varying,
-    title character varying(200) DEFAULT NULL::character varying
+    input_time character varying(40) COLLATE "C" NOT NULL,
+    update_time character varying(40) COLLATE "C" NOT NULL,
+    push_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    push_channel character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    push_flag character varying(2) COLLATE "C" DEFAULT '1'::character varying,
+    push_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
+    remark character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    title character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE message_push_config IS '消息推送配置表';
@@ -5323,8 +5259,8 @@ CREATE TABLE message_relate_account (
     id integer DEFAULT nextval('message_relate_account_id_seq'::regclass) NOT NULL,
     message_id integer,
     account_id integer,
-    relate_time character varying(40) DEFAULT NULL::character varying,
-    relate_status character varying(2) DEFAULT '1'::character varying
+    relate_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    relate_status character varying(2) COLLATE "C" DEFAULT '1'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE message_relate_account IS '消息推送关联机构表';
@@ -5337,12 +5273,12 @@ ALTER TABLE message_relate_account ADD CONSTRAINT message_relate_account_pkey PR
 
 SET search_path = bosz_test;
 CREATE TABLE module_code_prompt_cache (
-    module_code character varying(200) NOT NULL,
-    module_name character varying(200) DEFAULT NULL::character varying,
+    module_code character varying(200) COLLATE "C" NOT NULL,
+    module_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     params text,
-    params_md5 character varying(200) NOT NULL,
+    params_md5 character varying(200) COLLATE "C" NOT NULL,
     prompt text,
-    status character varying(1) DEFAULT 'Y'::character varying,
+    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -5360,12 +5296,12 @@ ALTER TABLE module_code_prompt_cache ADD CONSTRAINT module_code_prompt_cache_pke
 
 SET search_path = bosz_test;
 CREATE TABLE ocr_parse_task (
-    task_id character varying(64) NOT NULL,
-    file_name character varying(512) NOT NULL,
-    file_type character varying(32) NOT NULL,
-    status character varying(32) NOT NULL,
-    source_file_path character varying(1024) NOT NULL,
-    storage_type character varying(32) NOT NULL,
+    task_id character varying(64) COLLATE "C" NOT NULL,
+    file_name character varying(512) COLLATE "C" NOT NULL,
+    file_type character varying(32) COLLATE "C" NOT NULL,
+    status character varying(32) COLLATE "C" NOT NULL,
+    source_file_path character varying(1024) COLLATE "C" NOT NULL,
+    storage_type character varying(32) COLLATE "C" NOT NULL,
     result text,
     result_content_json text,
     error text,
@@ -5377,28 +5313,28 @@ ALTER TABLE ocr_parse_task ADD CONSTRAINT ocr_parse_task_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE open_api_conf (
-    id character varying(32) NOT NULL,
-    provider_id character varying(100) DEFAULT NULL::character varying,
-    api_code character varying(50) NOT NULL,
-    api_type character varying(50) NOT NULL,
-    api_desc character varying(500) NOT NULL,
-    api_category_code character varying(50) DEFAULT NULL::character varying,
-    upstream_path character varying(255) DEFAULT NULL::character varying,
-    http_method character varying(10) NOT NULL,
-    message_type character varying(10) DEFAULT NULL::character varying,
-    header character varying(3000) DEFAULT NULL::character varying,
-    request_param character varying(3000) NOT NULL,
-    success_code_field character varying(20) DEFAULT NULL::character varying,
-    success_code_value character varying(20) DEFAULT NULL::character varying,
-    response_biz_data_field character varying(100) DEFAULT NULL::character varying,
-    response_biz_data_type character varying(100) DEFAULT NULL::character varying,
-    response_param character varying(3000) DEFAULT NULL::character varying,
-    stream_flag character varying(5) DEFAULT 'false'::character varying,
-    create_time character varying(20) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    update_by character varying(32) DEFAULT NULL::character varying,
-    api_name character varying(200) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    provider_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    api_code character varying(50) COLLATE "C" NOT NULL,
+    api_type character varying(50) COLLATE "C" NOT NULL,
+    api_desc character varying(500) COLLATE "C" NOT NULL,
+    api_category_code character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    upstream_path character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    http_method character varying(10) COLLATE "C" NOT NULL,
+    message_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    header character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
+    request_param character varying(3000) COLLATE "C" NOT NULL,
+    success_code_field character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    success_code_value character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    response_biz_data_field character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    response_biz_data_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    response_param character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
+    stream_flag character varying(5) COLLATE "C" DEFAULT 'false'::character varying,
+    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    api_name character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE open_api_conf IS 'api_openapi定义';
@@ -5429,41 +5365,41 @@ ALTER TABLE open_api_conf ADD CONSTRAINT open_api_conf_pkey PRIMARY KEY USING ub
 
 SET search_path = bosz_test;
 CREATE TABLE package_agent_index_config (
-    id character varying(32) NOT NULL,
-    index_name character varying(100) NOT NULL,
-    index_code character varying(32) NOT NULL,
-    index_topic character varying(100) DEFAULT NULL::character varying,
-    use_flag character varying(1) DEFAULT 'Y'::character varying NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
+    index_name character varying(100) COLLATE "C" NOT NULL,
+    index_code character varying(32) COLLATE "C" NOT NULL,
+    index_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    use_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
     synonym_word text,
     key_word text,
     center_key_word text,
-    entity_type character varying(200) DEFAULT NULL::character varying,
-    inner_priority character varying(50) DEFAULT NULL::character varying,
-    source_type character varying(200) DEFAULT NULL::character varying,
-    external_priority character varying(50) DEFAULT NULL::character varying,
-    rec_group character varying(400) DEFAULT NULL::character varying,
-    rec_question character varying(400) DEFAULT NULL::character varying,
-    has_index_rela character varying(1) DEFAULT NULL::character varying,
+    entity_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    inner_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    source_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    external_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    has_index_rela character varying(1) COLLATE "C" DEFAULT NULL::character varying,
     remark text,
-    input_time character varying(40) NOT NULL,
-    update_time character varying(40) NOT NULL,
+    input_time character varying(40) COLLATE "C" NOT NULL,
+    update_time character varying(40) COLLATE "C" NOT NULL,
     index_desc text,
     sample_question text,
-    object_type character varying(256) DEFAULT NULL::character varying,
-    index_classification character varying(100) DEFAULT NULL::character varying,
-    visible_flag character varying(1) DEFAULT 'Y'::character varying,
+    object_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
+    index_classification character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    visible_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     index_prompt text,
-    hub_account character varying(200) DEFAULT NULL::character varying,
-    none_test_flag character varying(100) DEFAULT '1'::character varying NOT NULL,
-    final_result_flag character varying(1) DEFAULT 'N'::character varying,
-    rec_enterprise character varying(400) DEFAULT NULL::character varying,
-    text_type character varying(100) DEFAULT 'H5'::character varying,
-    source_card_channel character varying(100) DEFAULT NULL::character varying,
-    large_model_code character varying(100) DEFAULT NULL::character varying,
-    large_model_content character varying(2000) DEFAULT NULL::character varying,
-    rela_knowledge_id character varying(100) DEFAULT NULL::character varying,
-    large_model_flag character varying(1) DEFAULT 'Y'::character varying,
-    is_recommend character varying(2) DEFAULT 'N'::character varying,
+    hub_account character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    none_test_flag character varying(100) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
+    final_result_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
+    rec_enterprise character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    text_type character varying(100) COLLATE "C" DEFAULT 'H5'::character varying,
+    source_card_channel character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
+    rela_knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
+    is_recommend character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     recommend_weight integer DEFAULT 0
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5510,11 +5446,11 @@ CREATE TABLE post_glm_records (
     id integer DEFAULT nextval('post_glm_records_id_seq'::regclass) NOT NULL,
     question text,
     answer text,
-    remark1 character varying(400) DEFAULT NULL::character varying,
-    remark2 character varying(400) DEFAULT NULL::character varying,
-    remark3 character varying(400) DEFAULT NULL::character varying,
+    remark1 character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    remark2 character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    remark3 character varying(400) COLLATE "C" DEFAULT NULL::character varying,
     createtime timestamp without time zone DEFAULT pg_systimestamp(),
-    time_cost character varying(400) DEFAULT NULL::character varying
+    time_cost character varying(400) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE post_glm_records IS '请求glm记录表';
@@ -5527,21 +5463,21 @@ ALTER TABLE post_glm_records ADD CONSTRAINT post_glm_records_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_query_result (
-    id character varying(32) NOT NULL,
-    module_code character varying(100) DEFAULT NULL::character varying,
-    module_name character varying(100) DEFAULT NULL::character varying,
-    ent_name character varying(100) DEFAULT NULL::character varying,
-    is_muti_ent character varying(10) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    module_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    module_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    is_muti_ent character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     query_param text,
-    result_mode character varying(10) DEFAULT NULL::character varying,
-    query_status character varying(1) DEFAULT NULL::character varying,
+    result_mode character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    query_status character varying(1) COLLATE "C" DEFAULT NULL::character varying,
     cost_time integer,
     query_result text,
     fail_reason text,
-    query_time character varying(40) DEFAULT NULL::character varying,
-    comment character varying(500) DEFAULT NULL::character varying,
-    trace_id character varying(100) DEFAULT NULL::character varying,
-    end_time character varying(20) DEFAULT NULL::character varying
+    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    end_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE prompt_query_result IS 'prompt请求结果记录表';
@@ -5562,16 +5498,16 @@ ALTER TABLE prompt_query_result ADD CONSTRAINT prompt_query_result_pkey PRIMARY 
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_result_compare_task (
-    id character varying(64) NOT NULL,
-    scene_id character varying(64) DEFAULT NULL::character varying,
-    result_id_list character varying(500) DEFAULT NULL::character varying,
-    standard_result_id character varying(100) DEFAULT NULL::character varying,
-    create_time character varying(20) DEFAULT NULL::character varying,
-    start_time character varying(20) DEFAULT NULL::character varying,
-    end_time character varying(20) DEFAULT NULL::character varying,
-    compare_result_summary character varying(2000) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    scene_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    result_id_list character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    standard_result_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    start_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    end_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    compare_result_summary character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
     compare_result_statistic text,
-    status character varying(20) DEFAULT 'init'::character varying NOT NULL
+    status character varying(20) COLLATE "C" DEFAULT 'init'::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE prompt_verify_running_result_compare_task IS '大模型校验结果对比表';
@@ -5588,16 +5524,16 @@ ALTER TABLE prompt_verify_running_result_compare_task ADD CONSTRAINT prompt_veri
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task (
-    id character varying(64) NOT NULL,
-    scene_id character varying(64) DEFAULT NULL::character varying,
-    prompt_id character varying(64) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    scene_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    prompt_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     prompt_template text,
-    task_name character varying(200) DEFAULT NULL::character varying,
-    task_desc character varying(500) DEFAULT NULL::character varying,
-    large_model_code_list character varying(1000) DEFAULT NULL::character varying,
-    create_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    task_status character varying(20) DEFAULT 'none'::character varying NOT NULL,
+    task_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    task_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_code_list character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    task_status character varying(20) COLLATE "C" DEFAULT 'none'::character varying NOT NULL,
     concurrent_num integer
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5616,11 +5552,11 @@ ALTER TABLE prompt_verify_running_task ADD CONSTRAINT prompt_verify_running_task
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task_detail (
-    id character varying(64) NOT NULL,
-    task_id character varying(64) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    task_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     prompt_params text,
     prompt_template text,
-    prompt_params_md5 character varying(200) DEFAULT NULL::character varying
+    prompt_params_md5 character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE prompt_verify_running_task_detail IS '大模型校验任务详情表';
@@ -5633,13 +5569,13 @@ ALTER TABLE prompt_verify_running_task_detail ADD CONSTRAINT prompt_verify_runni
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task_result (
-    id character varying(64) NOT NULL,
-    task_id character varying(64) DEFAULT NULL::character varying,
-    start_time character varying(20) DEFAULT NULL::character varying,
-    end_time character varying(20) DEFAULT NULL::character varying,
-    evaluation character varying(1000) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    task_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    start_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    end_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    evaluation character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     prompt_template text,
-    large_model_code character varying(64) DEFAULT NULL::character varying
+    large_model_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE prompt_verify_running_task_result IS '大模型校验任务结果表';
@@ -5652,17 +5588,17 @@ ALTER TABLE prompt_verify_running_task_result ADD CONSTRAINT prompt_verify_runni
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task_result_detail (
-    task_result_id character varying(64) DEFAULT NULL::character varying,
-    task_detail_id character varying(64) DEFAULT NULL::character varying,
+    task_result_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    task_detail_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     task_time numeric(10,4) DEFAULT NULL::numeric,
-    prompt_params_md5 character varying(200) DEFAULT NULL::character varying,
+    prompt_params_md5 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     prompt_result text,
-    format_standard character varying(2) DEFAULT NULL::character varying,
-    id character varying(64) NOT NULL,
-    start_time character varying(64) DEFAULT NULL::character varying,
-    end_time character varying(64) DEFAULT NULL::character varying,
+    format_standard character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    start_time character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    end_time character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     error_msg text,
-    expect_format character varying(50) DEFAULT NULL::character varying,
+    expect_format character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     prompt_sample text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5682,13 +5618,13 @@ ALTER TABLE prompt_verify_running_task_result_detail ADD CONSTRAINT prompt_verif
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_scene_info (
-    id character varying(64) NOT NULL,
-    scene_code character varying(200) DEFAULT NULL::character varying,
-    scene_name character varying(200) DEFAULT NULL::character varying,
-    create_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    scene_group character varying(100) DEFAULT ''::character varying,
-    scene_desc character varying(1000) DEFAULT ''::character varying
+    id character varying(64) COLLATE "C" NOT NULL,
+    scene_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    scene_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    scene_group character varying(100) COLLATE "C" DEFAULT ''::character varying,
+    scene_desc character varying(1000) COLLATE "C" DEFAULT ''::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE prompt_verify_scene_info IS '场景信息表';
@@ -5705,15 +5641,15 @@ ALTER TABLE prompt_verify_scene_info ADD CONSTRAINT prompt_verify_scene_info_pke
 
 SET search_path = bosz_test;
 CREATE TABLE prompt_verify_scene_relate_prompt_info (
-    id character varying(64) NOT NULL,
-    scene_id character varying(64) DEFAULT NULL::character varying,
-    large_model_code character varying(100) DEFAULT NULL::character varying,
-    prompt_name character varying(200) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    scene_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    prompt_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     prompt_template text,
-    status character varying(2) DEFAULT 'Y'::character varying NOT NULL,
-    create_time character varying(20) DEFAULT NULL::character varying,
-    update_time character varying(20) DEFAULT NULL::character varying,
-    expect_format character varying(255) DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
+    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    expect_format character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     prompt_parameters text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5731,13 +5667,13 @@ ALTER TABLE prompt_verify_scene_relate_prompt_info ADD CONSTRAINT prompt_verify_
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_knowledge_base_info (
-    knowledge_id character varying(64) NOT NULL,
-    knowledge_code character varying(255) NOT NULL,
-    knowledge_name character varying(50) DEFAULT NULL::character varying,
+    knowledge_id character varying(64) COLLATE "C" NOT NULL,
+    knowledge_code character varying(255) COLLATE "C" NOT NULL,
+    knowledge_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    create_user_id character varying(50) DEFAULT NULL::character varying,
-    belong_user_id character varying(50) DEFAULT NULL::character varying,
+    create_user_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    belong_user_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     knowledge_desc text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5754,19 +5690,19 @@ ALTER TABLE qianxun_knowledge_base_info ADD CONSTRAINT qianxun_knowledge_base_in
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_knowledge_base_upload_file_info (
-    file_id character varying(64) NOT NULL,
-    knowledge_id character varying(64) DEFAULT NULL::character varying,
-    file_name character varying(255) NOT NULL,
-    file_extension character varying(10) NOT NULL,
-    user_uuid character varying(64) DEFAULT NULL::character varying,
-    session_no character varying(64) DEFAULT NULL::character varying,
+    file_id character varying(64) COLLATE "C" NOT NULL,
+    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    file_name character varying(255) COLLATE "C" NOT NULL,
+    file_extension character varying(10) COLLATE "C" NOT NULL,
+    user_uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    session_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     file_size bigint DEFAULT 0::bigint NOT NULL,
-    file_storage_path character varying(255) NOT NULL,
+    file_storage_path character varying(255) COLLATE "C" NOT NULL,
     upload_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     finish_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     description text,
-    file_flag character varying(20) DEFAULT '0'::character varying,
-    parse_status character varying(30) DEFAULT 'uploading'::character varying,
+    file_flag character varying(20) COLLATE "C" DEFAULT '0'::character varying,
+    parse_status character varying(30) COLLATE "C" DEFAULT 'uploading'::character varying,
     fail_count integer DEFAULT 0
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -5789,24 +5725,24 @@ ALTER TABLE qianxun_knowledge_base_upload_file_info ADD CONSTRAINT qianxun_knowl
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_order_info (
-    order_id character varying(32) NOT NULL,
-    order_name character varying(32) NOT NULL,
-    org_id character varying(64) NOT NULL,
+    order_id character varying(32) COLLATE "C" NOT NULL,
+    order_name character varying(32) COLLATE "C" NOT NULL,
+    org_id character varying(64) COLLATE "C" NOT NULL,
     is_all_user smallint DEFAULT 0::smallint NOT NULL,
     is_long_term smallint DEFAULT 0::smallint NOT NULL,
-    consumption_method character varying(50) NOT NULL,
+    consumption_method character varying(50) COLLATE "C" NOT NULL,
     count_limit bigint DEFAULT 0::bigint,
     consumption_org_count bigint DEFAULT 0::bigint,
-    consumption_object character varying(50) NOT NULL,
-    is_online character varying(2) DEFAULT 'N'::character varying,
+    consumption_object character varying(50) COLLATE "C" NOT NULL,
+    is_online character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
     order_description text,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    expire_date character varying(10) DEFAULT NULL::character varying,
-    org_id_list character varying(500) DEFAULT NULL::character varying,
-    ai_component_display_format character varying(50) DEFAULT 'H5'::character varying,
-    is_resource character varying(2) DEFAULT 'Y'::character varying,
-    qianxun_version character varying(100) DEFAULT 'classic-经典版'::character varying
+    expire_date character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    org_id_list character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    ai_component_display_format character varying(50) COLLATE "C" DEFAULT 'H5'::character varying,
+    is_resource character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
+    qianxun_version character varying(100) COLLATE "C" DEFAULT 'classic-经典版'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE qianxun_order_info IS '千寻订单信息表';
@@ -5832,19 +5768,19 @@ ALTER TABLE qianxun_order_info ADD CONSTRAINT qianxun_order_info_pkey PRIMARY KE
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_organization_info (
-    id character varying(64) NOT NULL,
-    org_id character varying(64) DEFAULT NULL::character varying,
-    org_name character varying(255) DEFAULT NULL::character varying,
-    parent_id character varying(64) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    org_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    org_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    parent_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     org_description text,
-    hub_account character varying(100) DEFAULT NULL::character varying,
+    hub_account character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     sort_no integer,
-    ai_component_display_format character varying(50) DEFAULT NULL::character varying,
-    origin_org_id character varying(64) DEFAULT NULL::character varying,
-    app_key character varying(500) DEFAULT NULL::character varying,
-    app_key_expire_date character varying(20) DEFAULT NULL::character varying
+    ai_component_display_format character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    origin_org_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    app_key character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    app_key_expire_date character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE qianxun_organization_info IS '千寻机构信息表';
@@ -5867,10 +5803,10 @@ ALTER TABLE qianxun_organization_info ADD CONSTRAINT qianxun_organization_info_p
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_ai_component_relation (
-    id character varying(32) NOT NULL,
-    package_id character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     ai_component_id integer,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
@@ -5888,15 +5824,15 @@ ALTER TABLE qianxun_package_ai_component_relation ADD CONSTRAINT qianxun_package
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_index_relation (
-    id character varying(32) NOT NULL,
-    package_id character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     index_id integer,
-    status character varying(2) DEFAULT 'Y'::character varying,
-    is_visible character varying(2) DEFAULT 'Y'::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
+    is_visible character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    relate_index_id character varying(100) DEFAULT NULL::character varying
+    relate_index_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE qianxun_package_index_relation IS '千寻套餐关联组件信息表';
@@ -5913,10 +5849,10 @@ ALTER TABLE qianxun_package_index_relation ADD CONSTRAINT qianxun_package_index_
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_info (
-    package_id character varying(32) NOT NULL,
-    package_name character varying(255) NOT NULL,
+    package_id character varying(32) COLLATE "C" NOT NULL,
+    package_name character varying(255) COLLATE "C" NOT NULL,
     package_desc text,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -5932,10 +5868,10 @@ ALTER TABLE qianxun_package_info ADD CONSTRAINT qianxun_package_info_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_knowledge_relation (
-    id character varying(32) NOT NULL,
-    package_id character varying(32) DEFAULT NULL::character varying,
-    knowledge_id character varying(64) DEFAULT NULL::character varying,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
@@ -5953,10 +5889,10 @@ ALTER TABLE qianxun_package_knowledge_relation ADD CONSTRAINT qianxun_package_kn
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_menu_relation (
-    id character varying(32) NOT NULL,
-    package_id character varying(32) DEFAULT NULL::character varying,
-    menu_id character varying(32) DEFAULT NULL::character varying,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    menu_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
@@ -5974,10 +5910,10 @@ ALTER TABLE qianxun_package_menu_relation ADD CONSTRAINT qianxun_package_menu_re
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_order_relation (
-    id character varying(32) NOT NULL,
-    package_id character varying(32) DEFAULT NULL::character varying,
-    order_id character varying(32) DEFAULT NULL::character varying,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    order_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
 )
@@ -5993,10 +5929,10 @@ ALTER TABLE qianxun_package_order_relation ADD CONSTRAINT qianxun_package_order_
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_package_space_relation (
-    id character varying(32) NOT NULL,
-    package_id character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     space_id integer,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     sort_no integer,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
@@ -6014,7 +5950,7 @@ ALTER TABLE qianxun_package_space_relation ADD CONSTRAINT qianxun_package_space_
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_source_cards (
-    session_msg_no character varying(200) NOT NULL,
+    session_msg_no character varying(200) COLLATE "C" NOT NULL,
     source_card_content text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6022,25 +5958,25 @@ ALTER TABLE qianxun_source_cards ADD CONSTRAINT qianxun_source_cards_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_user_info (
-    id character varying(64) NOT NULL,
-    user_id character varying(64) DEFAULT NULL::character varying,
-    user_name character varying(255) DEFAULT NULL::character varying,
-    org_id character varying(64) DEFAULT NULL::character varying,
-    phone_number character varying(100) DEFAULT NULL::character varying,
-    password character varying(255) DEFAULT NULL::character varying,
-    salt character varying(255) DEFAULT NULL::character varying,
-    label character varying(1000) DEFAULT NULL::character varying,
-    email character varying(100) DEFAULT NULL::character varying,
-    status character varying(1) DEFAULT 'Y'::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    user_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    org_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    phone_number character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    password character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    salt character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    label character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    email character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     last_active_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    user_source character varying(50) DEFAULT NULL::character varying,
-    remark character varying(50) DEFAULT NULL::character varying,
-    origin_user_id character varying(64) DEFAULT NULL::character varying,
-    org_id_list character varying(500) DEFAULT NULL::character varying,
-    app_key character varying(500) DEFAULT NULL::character varying,
-    app_key_expire_date character varying(20) DEFAULT NULL::character varying
+    user_source character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    remark character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    origin_user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    org_id_list character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    app_key character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    app_key_expire_date character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE qianxun_user_info IS '千寻用户信息表';
@@ -6068,27 +6004,27 @@ ALTER TABLE qianxun_user_info ADD CONSTRAINT qianxun_user_info_pkey PRIMARY KEY 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_user_log (
     id integer DEFAULT nextval('qianxun_user_log_id_seq'::regclass) NOT NULL,
-    user_id character varying(80) NOT NULL,
-    hub_account character varying(80) DEFAULT ''::character varying NOT NULL,
-    org_id character varying(80) DEFAULT ''::character varying NOT NULL,
-    env_type character varying(40) DEFAULT ''::character varying NOT NULL,
-    version_type character varying(40) DEFAULT ''::character varying NOT NULL,
-    hub_source character varying(80) DEFAULT ''::character varying NOT NULL,
-    session_no character varying(80) NOT NULL,
-    session_msg_no character varying(80) NOT NULL,
-    parent_session_msg_no character varying(64) DEFAULT ''::character varying NOT NULL,
+    user_id character varying(80) COLLATE "C" NOT NULL,
+    hub_account character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    org_id character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    env_type character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    version_type character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    hub_source character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    session_no character varying(80) COLLATE "C" NOT NULL,
+    session_msg_no character varying(80) COLLATE "C" NOT NULL,
+    parent_session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     msg text,
     session_msg_start_time timestamp without time zone,
     first_session_msg_time timestamp without time zone,
     session_msg_end_time timestamp without time zone,
-    phone_no character varying(200) DEFAULT NULL::character varying,
-    org_info character varying(200) DEFAULT ''::character varying NOT NULL,
+    phone_no character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    org_info character varying(200) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     answer_result text,
-    org_name character varying(1000) DEFAULT NULL::character varying,
-    role_name character varying(1000) DEFAULT NULL::character varying,
-    menu_name character varying(500) DEFAULT NULL::character varying,
-    menu_name_code character varying(500) DEFAULT NULL::character varying,
-    order_id character varying(100) DEFAULT NULL::character varying
+    org_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    role_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    menu_name character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    menu_name_code character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    order_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE qianxun_user_log IS '千寻提问处理时间埋点信息表';
@@ -6115,10 +6051,10 @@ ALTER TABLE qianxun_user_log ADD CONSTRAINT qianxun_user_log_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE qianxun_user_order_relation (
-    id character varying(32) NOT NULL,
-    user_id character varying(64) DEFAULT NULL::character varying,
-    order_id character varying(32) DEFAULT NULL::character varying,
-    status character varying(2) DEFAULT 'Y'::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    order_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
     consumption_user_count bigint DEFAULT 0::bigint
@@ -6137,10 +6073,10 @@ ALTER TABLE qianxun_user_order_relation ADD CONSTRAINT qianxun_user_order_relati
 
 SET search_path = bosz_test;
 CREATE TABLE rasa_agent_logs (
-    session_msg_no character varying(64) NOT NULL,
-    agent_code character varying(256) NOT NULL,
-    start_time character varying(40) NOT NULL,
-    hub_account character varying(80) NOT NULL
+    session_msg_no character varying(64) COLLATE "C" NOT NULL,
+    agent_code character varying(256) COLLATE "C" NOT NULL,
+    start_time character varying(40) COLLATE "C" NOT NULL,
+    hub_account character varying(80) COLLATE "C" NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN rasa_agent_logs.session_msg_no IS '问题id';
@@ -6152,14 +6088,14 @@ ALTER TABLE rasa_agent_logs ADD CONSTRAINT rasa_agent_logs_pkey PRIMARY KEY USIN
 SET search_path = bosz_test;
 CREATE TABLE rasa_chat_detail_info (
     id integer DEFAULT nextval('rasa_chat_detail_info_id_seq'::regclass) NOT NULL,
-    session_no character varying(64) DEFAULT ''::character varying NOT NULL,
-    session_msg_no character varying(64) DEFAULT ''::character varying NOT NULL,
-    report_no character varying(64) DEFAULT NULL::character varying,
-    user_id character varying(64) DEFAULT ''::character varying NOT NULL,
-    hub_account character varying(64) DEFAULT ''::character varying NOT NULL,
-    role_type character varying(64) DEFAULT ''::character varying NOT NULL,
-    plugin_name character varying(200) DEFAULT ''::character varying NOT NULL,
-    knowledge_ids character varying(200) DEFAULT NULL::character varying,
+    session_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    report_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    hub_account character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    role_type character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    plugin_name character varying(200) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    knowledge_ids character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     question text,
     start_time timestamp without time zone,
     end_time timestamp without time zone,
@@ -6174,10 +6110,10 @@ CREATE TABLE rasa_chat_detail_info (
     agent_info text,
     fallback_info text,
     results text,
-    actions_time_cost character varying(256) DEFAULT NULL::character varying,
+    actions_time_cost character varying(256) COLLATE "C" DEFAULT NULL::character varying,
     rewrite_question text,
-    question_topic character varying(100) DEFAULT NULL::character varying,
-    question_answer_validation_class character varying(200) DEFAULT NULL::character varying,
+    question_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    question_answer_validation_class character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     question_answer_validation_original_reault text
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6212,12 +6148,12 @@ ALTER TABLE rasa_chat_detail_info ADD CONSTRAINT rasa_chat_detail_info_pkey PRIM
 
 SET search_path = bosz_test;
 CREATE TABLE rasa_index_logs (
-    session_msg_no character varying(64) NOT NULL,
-    index_name character varying(256) NOT NULL,
-    source_type character varying(256) NOT NULL,
-    start_time character varying(40) NOT NULL,
-    index_classification character varying(40) DEFAULT NULL::character varying,
-    hub_account character varying(80) NOT NULL
+    session_msg_no character varying(64) COLLATE "C" NOT NULL,
+    index_name character varying(256) COLLATE "C" NOT NULL,
+    source_type character varying(256) COLLATE "C" NOT NULL,
+    start_time character varying(40) COLLATE "C" NOT NULL,
+    index_classification character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    hub_account character varying(80) COLLATE "C" NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN rasa_index_logs.session_msg_no IS '问题id';
@@ -6229,7 +6165,7 @@ ALTER TABLE rasa_index_logs ADD CONSTRAINT rasa_index_logs_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE rasa_question_time_cost_percent_line (
-    hour_str character varying(64) NOT NULL,
+    hour_str character varying(64) COLLATE "C" NOT NULL,
     line_80 numeric NOT NULL,
     line_85 numeric NOT NULL,
     line_90 numeric NOT NULL,
@@ -6247,10 +6183,10 @@ ALTER TABLE rasa_question_time_cost_percent_line ADD CONSTRAINT rasa_question_ti
 
 SET search_path = bosz_test;
 CREATE TABLE rasa_user_by_day (
-    day_str character varying(20) NOT NULL,
+    day_str character varying(20) COLLATE "C" NOT NULL,
     day_new_user bigint DEFAULT 0::bigint NOT NULL,
     day_user bigint DEFAULT 0::bigint NOT NULL,
-    hub_account character varying(80) NOT NULL,
+    hub_account character varying(80) COLLATE "C" NOT NULL,
     day_count_user bigint DEFAULT 0::bigint NOT NULL,
     day_qa integer DEFAULT 0 NOT NULL
 )
@@ -6268,7 +6204,7 @@ CREATE TABLE rela_index_config (
     id integer DEFAULT nextval('rela_index_config_id_seq'::regclass) NOT NULL,
     index_id integer,
     rela_index_id integer,
-    rela_index_status character varying(2) DEFAULT 'Y'::character varying
+    rela_index_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE rela_index_config IS '关联指标配置表';
@@ -6281,18 +6217,18 @@ ALTER TABLE rela_index_config ADD CONSTRAINT rela_index_config_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE report_version (
-    reportversion character varying(32) NOT NULL,
-    versionno character varying(10) NOT NULL,
-    label character varying(200) DEFAULT NULL::character varying,
-    mark character varying(200) DEFAULT NULL::character varying,
-    createtime character varying(32) DEFAULT NULL::character varying,
-    creatorid character varying(20) DEFAULT NULL::character varying,
-    creatorname character varying(20) DEFAULT NULL::character varying,
-    modifytime character varying(32) DEFAULT NULL::character varying,
-    modifierid character varying(20) DEFAULT NULL::character varying,
-    modifiername character varying(20) DEFAULT NULL::character varying,
-    sortno character varying(10) DEFAULT NULL::character varying,
-    operation character varying(10) DEFAULT '1'::character varying NOT NULL
+    reportversion character varying(32) COLLATE "C" NOT NULL,
+    versionno character varying(10) COLLATE "C" NOT NULL,
+    label character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    mark character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    createtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    creatorid character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    creatorname character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    modifytime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    modifierid character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    modifiername character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    operation character varying(10) COLLATE "C" DEFAULT '1'::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE report_version IS '报告版本信息';
@@ -6312,17 +6248,17 @@ ALTER TABLE report_version ADD CONSTRAINT report_version_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE rule_check_upload_report_files (
-    id character varying(40) NOT NULL,
-    session_no character varying(50) NOT NULL,
-    user_id character varying(32) NOT NULL,
-    ent_name character varying(256) NOT NULL,
-    file_name character varying(256) NOT NULL,
+    id character varying(40) COLLATE "C" NOT NULL,
+    session_no character varying(50) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" NOT NULL,
+    ent_name character varying(256) COLLATE "C" NOT NULL,
+    file_name character varying(256) COLLATE "C" NOT NULL,
     markdown_content text,
     segments json,
-    upload_time character varying(40) NOT NULL,
-    update_time character varying(40) DEFAULT NULL::character varying,
-    status character varying(20) NOT NULL,
-    local_path character varying(256) DEFAULT NULL::character varying
+    upload_time character varying(40) COLLATE "C" NOT NULL,
+    update_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(20) COLLATE "C" NOT NULL,
+    local_path character varying(256) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE rule_check_upload_report_files IS '规则检查上传的报告文件表';
@@ -6341,16 +6277,16 @@ ALTER TABLE rule_check_upload_report_files ADD CONSTRAINT rule_check_upload_repo
 
 SET search_path = bosz_test;
 CREATE TABLE rule_check_upload_rule_files (
-    id character varying(40) NOT NULL,
-    session_no character varying(50) NOT NULL,
-    user_id character varying(32) NOT NULL,
-    file_name character varying(256) NOT NULL,
+    id character varying(40) COLLATE "C" NOT NULL,
+    session_no character varying(50) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" NOT NULL,
+    file_name character varying(256) COLLATE "C" NOT NULL,
     markdown_content text,
     rules json,
-    upload_time character varying(40) NOT NULL,
-    update_time character varying(40) DEFAULT NULL::character varying,
-    status character varying(20) NOT NULL,
-    local_path character varying(256) DEFAULT NULL::character varying,
+    upload_time character varying(40) COLLATE "C" NOT NULL,
+    update_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(20) COLLATE "C" NOT NULL,
+    local_path character varying(256) COLLATE "C" DEFAULT NULL::character varying,
     segments json
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6371,10 +6307,10 @@ ALTER TABLE rule_check_upload_rule_files ADD CONSTRAINT rule_check_upload_rule_f
 SET search_path = bosz_test;
 CREATE TABLE scene_inflect_info (
     _id bigint DEFAULT nextval('scene_inflect_info__id_seq'::regclass) NOT NULL,
-    scenename character varying(255) DEFAULT NULL::character varying,
+    scenename character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     prompt text,
-    largemodelcode character varying(255) DEFAULT NULL::character varying,
-    expectformat character varying(255) DEFAULT NULL::character varying
+    largemodelcode character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    expectformat character varying(255) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN scene_inflect_info._id IS '主键ID';
@@ -6384,17 +6320,17 @@ SET search_path = bosz_test;
 CREATE TABLE sence_relate_info (
     _id bigint DEFAULT nextval('sence_relate_info__id_seq'::regclass) NOT NULL,
     id numeric(22,0) DEFAULT NULL::numeric,
-    knowledge_name character varying(255) DEFAULT NULL::character varying,
-    knowledge_code character varying(255) DEFAULT NULL::character varying,
-    knowledge_desc character varying(255) DEFAULT NULL::character varying,
-    parent_group_value character varying(255) DEFAULT NULL::character varying,
-    parent_group_name character varying(255) DEFAULT NULL::character varying,
-    group_value character varying(255) DEFAULT NULL::character varying,
-    group_name character varying(255) DEFAULT NULL::character varying,
-    scenename character varying(255) DEFAULT NULL::character varying,
+    knowledge_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_code character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_desc character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    parent_group_value character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    parent_group_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    group_value character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    group_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    scenename character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     prompt text,
-    largemodelcode character varying(255) DEFAULT NULL::character varying,
-    expectformat character varying(255) DEFAULT NULL::character varying
+    largemodelcode character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    expectformat character varying(255) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sence_relate_info._id IS '主键ID';
@@ -6403,8 +6339,8 @@ ALTER TABLE sence_relate_info ADD CONSTRAINT sence_relate_info_pkey PRIMARY KEY 
 SET search_path = bosz_test;
 CREATE TABLE sync_knowledge_info (
     id integer DEFAULT nextval('sync_knowledge_info_id_seq'::regclass) NOT NULL,
-    knowledge_code character varying(100) NOT NULL,
-    sync_flag character varying(2) DEFAULT 'Y'::character varying NOT NULL
+    knowledge_code character varying(100) COLLATE "C" NOT NULL,
+    sync_flag character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sync_knowledge_info IS '知识库同步信息表';
@@ -6415,29 +6351,29 @@ ALTER TABLE sync_knowledge_info ADD CONSTRAINT sync_knowledge_info_pkey PRIMARY 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_announcement (
-    id character varying(32) NOT NULL,
-    titile character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    titile character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     msg_content text,
     start_time timestamp without time zone,
     end_time timestamp without time zone,
-    sender character varying(100) DEFAULT NULL::character varying,
-    priority character varying(255) DEFAULT NULL::character varying,
-    msg_category character varying(10) DEFAULT '2'::character varying NOT NULL,
-    send_status character varying(10) DEFAULT NULL::character varying,
+    sender character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    priority character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    msg_category character varying(10) COLLATE "C" DEFAULT '2'::character varying NOT NULL,
+    send_status character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     send_time timestamp without time zone,
     cancel_time timestamp without time zone,
-    del_flag character varying(1) DEFAULT NULL::character varying,
-    bus_type character varying(20) DEFAULT NULL::character varying,
-    bus_id character varying(50) DEFAULT NULL::character varying,
-    open_type character varying(20) DEFAULT NULL::character varying,
-    open_page character varying(255) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    del_flag character varying(1) COLLATE "C" DEFAULT NULL::character varying,
+    bus_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    bus_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    open_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    open_page character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
     user_ids text,
     msg_abstract text,
-    dt_task_id character varying(100) DEFAULT NULL::character varying
+    dt_task_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_announcement IS '系统通告表';
@@ -6468,14 +6404,14 @@ ALTER TABLE sys_announcement ADD CONSTRAINT sys_announcement_pkey PRIMARY KEY US
 SET search_path = bosz_test;
 CREATE TABLE sys_announcement_send (
     _id bigint DEFAULT nextval('sys_announcement_send__id_seq'::regclass) NOT NULL,
-    id character varying(32) DEFAULT NULL::character varying,
-    annt_id character varying(32) DEFAULT NULL::character varying,
-    user_id character varying(32) DEFAULT NULL::character varying,
-    read_flag character varying(10) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    annt_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    read_flag character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     read_time timestamp without time zone,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6493,12 +6429,12 @@ ALTER TABLE sys_announcement_send ADD CONSTRAINT sys_announcement_send_pkey PRIM
 
 SET search_path = bosz_test;
 CREATE TABLE sys_api_info (
-    id character varying(32) NOT NULL,
-    api_name character varying(200) DEFAULT NULL::character varying,
-    api_des character varying(200) DEFAULT NULL::character varying,
-    api_path character varying(200) DEFAULT NULL::character varying,
-    perm_code character varying(200) DEFAULT NULL::character varying,
-    perm_desc character varying(200) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    api_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    api_des character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    api_path character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    perm_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    perm_desc character varying(200) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp()
 )
@@ -6516,28 +6452,28 @@ ALTER TABLE sys_api_info ADD CONSTRAINT sys_api_info_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE sys_category (
-    id character varying(36) NOT NULL,
-    pid character varying(36) DEFAULT NULL::character varying,
-    name character varying(100) DEFAULT NULL::character varying,
-    code character varying(100) DEFAULT NULL::character varying,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    pid character varying(36) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying,
-    has_child character varying(3) DEFAULT '0'::character varying,
-    param_value character varying(100) DEFAULT NULL::character varying,
-    param_status character varying(1) DEFAULT 'Y'::character varying,
-    synonym_word character varying(100) DEFAULT NULL::character varying,
-    key_word character varying(1000) DEFAULT NULL::character varying,
-    rela_table character varying(100) DEFAULT NULL::character varying,
-    field_attr character varying(100) DEFAULT NULL::character varying,
-    remark character varying(500) DEFAULT NULL::character varying,
-    hit_independently character varying(32) DEFAULT 'N'::character varying,
-    source_type_detail character varying(100) DEFAULT NULL::character varying,
-    source_field_type character varying(100) DEFAULT NULL::character varying,
-    param_desc character varying(1000) DEFAULT NULL::character varying,
-    sample_question character varying(1000) DEFAULT NULL::character varying
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    has_child character varying(3) COLLATE "C" DEFAULT '0'::character varying,
+    param_value character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    param_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
+    synonym_word character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    key_word character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    rela_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    field_attr character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    remark character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    hit_independently character varying(32) COLLATE "C" DEFAULT 'N'::character varying,
+    source_type_detail character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_field_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    param_desc character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    sample_question character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_category.pid IS '父级节点';
@@ -6565,14 +6501,14 @@ ALTER TABLE sys_category ADD CONSTRAINT sys_category_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE sys_check_rule (
-    id character varying(32) NOT NULL,
-    rule_name character varying(100) DEFAULT NULL::character varying,
-    rule_code character varying(100) DEFAULT NULL::character varying,
-    rule_json character varying(1024) DEFAULT NULL::character varying,
-    rule_description character varying(200) DEFAULT NULL::character varying,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    rule_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    rule_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    rule_json character varying(1024) COLLATE "C" DEFAULT NULL::character varying,
+    rule_description character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6590,13 +6526,13 @@ ALTER TABLE sys_check_rule ADD CONSTRAINT sys_check_rule_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_data_log (
-    id character varying(32) NOT NULL,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    data_table character varying(32) DEFAULT NULL::character varying,
-    data_id character varying(32) DEFAULT NULL::character varying,
+    data_table character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    data_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     data_content text,
     data_version integer
 )
@@ -6614,21 +6550,21 @@ ALTER TABLE sys_data_log ADD CONSTRAINT sys_data_log_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE sys_data_source (
-    id character varying(36) NOT NULL,
-    code character varying(100) DEFAULT NULL::character varying,
-    name character varying(100) DEFAULT NULL::character varying,
-    remark character varying(200) DEFAULT NULL::character varying,
-    db_type character varying(10) DEFAULT NULL::character varying,
-    db_driver character varying(100) DEFAULT NULL::character varying,
-    db_url character varying(500) DEFAULT NULL::character varying,
-    db_name character varying(100) DEFAULT NULL::character varying,
-    db_username character varying(100) DEFAULT NULL::character varying,
-    db_password character varying(100) DEFAULT NULL::character varying,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    remark character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    db_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    db_driver character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    db_url character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    db_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    db_username character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    db_password character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_data_source.code IS '数据源编码';
@@ -6650,28 +6586,28 @@ ALTER TABLE sys_data_source ADD CONSTRAINT sys_data_source_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE sys_depart (
-    id character varying(32) NOT NULL,
-    parent_id character varying(32) DEFAULT NULL::character varying,
-    depart_name character varying(100) NOT NULL,
-    depart_name_en character varying(500) DEFAULT NULL::character varying,
-    depart_name_abbr character varying(500) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    parent_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    depart_name character varying(100) COLLATE "C" NOT NULL,
+    depart_name_en character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    depart_name_abbr character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     depart_order integer DEFAULT 0,
-    description character varying(500) DEFAULT NULL::character varying,
-    org_category character varying(10) DEFAULT '1'::character varying NOT NULL,
-    org_type character varying(10) DEFAULT NULL::character varying,
-    org_code character varying(64) NOT NULL,
-    mobile character varying(32) DEFAULT NULL::character varying,
-    fax character varying(32) DEFAULT NULL::character varying,
-    address character varying(100) DEFAULT NULL::character varying,
-    memo character varying(500) DEFAULT NULL::character varying,
-    status character varying(1) DEFAULT NULL::character varying,
-    del_flag character varying(1) DEFAULT NULL::character varying,
-    qywx_identifier character varying(100) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    description character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    org_category character varying(10) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
+    org_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
+    org_code character varying(64) COLLATE "C" NOT NULL,
+    mobile character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    fax character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    address character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    memo character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(1) COLLATE "C" DEFAULT NULL::character varying,
+    del_flag character varying(1) COLLATE "C" DEFAULT NULL::character varying,
+    qywx_identifier character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    datadate character varying(200) DEFAULT NULL::character varying
+    datadate character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_depart IS '组织机构表';
@@ -6700,10 +6636,10 @@ ALTER TABLE sys_depart ADD CONSTRAINT sys_depart_pkey PRIMARY KEY USING ubtree  
 
 SET search_path = bosz_test;
 CREATE TABLE sys_depart_permission (
-    id character varying(32) NOT NULL,
-    depart_id character varying(32) DEFAULT NULL::character varying,
-    permission_id character varying(32) DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    depart_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_depart_permission IS '部门权限表';
@@ -6714,14 +6650,14 @@ ALTER TABLE sys_depart_permission ADD CONSTRAINT sys_depart_permission_pkey PRIM
 
 SET search_path = bosz_test;
 CREATE TABLE sys_depart_role (
-    id character varying(32) NOT NULL,
-    depart_id character varying(32) DEFAULT NULL::character varying,
-    role_name character varying(200) DEFAULT NULL::character varying,
-    role_code character varying(100) DEFAULT NULL::character varying,
-    description character varying(255) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    depart_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    role_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    role_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6738,13 +6674,13 @@ ALTER TABLE sys_depart_role ADD CONSTRAINT sys_depart_role_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE sys_depart_role_permission (
-    id character varying(32) NOT NULL,
-    depart_id character varying(32) DEFAULT NULL::character varying,
-    role_id character varying(32) DEFAULT NULL::character varying,
-    permission_id character varying(32) DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    depart_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_depart_role_permission IS '部门角色权限表';
@@ -6758,9 +6694,9 @@ ALTER TABLE sys_depart_role_permission ADD CONSTRAINT sys_depart_role_permission
 
 SET search_path = bosz_test;
 CREATE TABLE sys_depart_role_user (
-    id character varying(32) NOT NULL,
-    user_id character varying(32) DEFAULT NULL::character varying,
-    drole_id character varying(32) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    drole_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_depart_role_user IS '部门角色用户表';
@@ -6771,14 +6707,14 @@ ALTER TABLE sys_depart_role_user ADD CONSTRAINT sys_depart_role_user_pkey PRIMAR
 
 SET search_path = bosz_test;
 CREATE TABLE sys_dict (
-    id character varying(32) NOT NULL,
-    dict_name character varying(100) NOT NULL,
-    dict_code character varying(100) NOT NULL,
-    description character varying(255) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    dict_name character varying(100) COLLATE "C" NOT NULL,
+    dict_code character varying(100) COLLATE "C" NOT NULL,
+    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     del_flag integer,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
     type integer DEFAULT 0
 )
@@ -6797,22 +6733,22 @@ ALTER TABLE sys_dict ADD CONSTRAINT sys_dict_pkey PRIMARY KEY USING ubtree  (id)
 
 SET search_path = bosz_test;
 CREATE TABLE sys_dict_item (
-    id character varying(32) NOT NULL,
-    dict_id character varying(32) DEFAULT NULL::character varying,
-    item_text character varying(100) NOT NULL,
-    item_value character varying(100) NOT NULL,
-    description character varying(255) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    dict_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    item_text character varying(100) COLLATE "C" NOT NULL,
+    item_value character varying(100) COLLATE "C" NOT NULL,
+    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     sort_order integer,
     status integer,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    synonym_word character varying(100) DEFAULT NULL::character varying,
-    key_word character varying(500) DEFAULT NULL::character varying,
-    rela_table character varying(100) DEFAULT NULL::character varying,
-    field_attr character varying(400) DEFAULT NULL::character varying,
-    remark character varying(100) DEFAULT NULL::character varying
+    synonym_word character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    key_word character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    rela_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    field_attr character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    remark character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_dict_item.dict_id IS '字典id';
@@ -6830,14 +6766,14 @@ ALTER TABLE sys_dict_item ADD CONSTRAINT sys_dict_item_pkey PRIMARY KEY USING ub
 
 SET search_path = bosz_test;
 CREATE TABLE sys_fill_rule (
-    id character varying(32) NOT NULL,
-    rule_name character varying(100) DEFAULT NULL::character varying,
-    rule_code character varying(100) DEFAULT NULL::character varying,
-    rule_class character varying(100) DEFAULT NULL::character varying,
-    rule_params character varying(200) DEFAULT NULL::character varying,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    rule_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    rule_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    rule_class character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    rule_params character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6855,10 +6791,10 @@ ALTER TABLE sys_fill_rule ADD CONSTRAINT sys_fill_rule_pkey PRIMARY KEY USING ub
 
 SET search_path = bosz_test;
 CREATE TABLE sys_gateway_route (
-    id character varying(36) NOT NULL,
-    router_id character varying(50) DEFAULT NULL::character varying,
-    name character varying(32) DEFAULT NULL::character varying,
-    uri character varying(32) DEFAULT NULL::character varying,
+    id character varying(36) COLLATE "C" NOT NULL,
+    router_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    uri character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     predicates text,
     filters text,
     retryable integer,
@@ -6866,11 +6802,11 @@ CREATE TABLE sys_gateway_route (
     persistable integer,
     show_api integer,
     status integer,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(64) DEFAULT NULL::character varying
+    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_gateway_route.router_id IS '路由ID';
@@ -6892,21 +6828,21 @@ ALTER TABLE sys_gateway_route ADD CONSTRAINT sys_gateway_route_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_log (
-    id character varying(32) NOT NULL,
+    id character varying(32) COLLATE "C" NOT NULL,
     log_type integer,
-    log_content character varying(1000) DEFAULT NULL::character varying,
+    log_content character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_type integer,
-    userid character varying(32) DEFAULT NULL::character varying,
-    username character varying(100) DEFAULT NULL::character varying,
-    ip character varying(100) DEFAULT NULL::character varying,
-    method character varying(500) DEFAULT NULL::character varying,
-    request_url character varying(255) DEFAULT NULL::character varying,
+    userid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    username character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    ip character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    method character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    request_url character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     request_param text,
-    request_type character varying(10) DEFAULT NULL::character varying,
+    request_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
     cost_time bigint,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -6931,29 +6867,29 @@ ALTER TABLE sys_log ADD CONSTRAINT sys_log_pkey PRIMARY KEY USING ubtree  (id) W
 SET search_path = bosz_test;
 CREATE TABLE sys_page_view_log (
     id integer DEFAULT nextval('sys_page_view_log_id_seq'::regclass) NOT NULL,
-    user_id character varying(32) DEFAULT NULL::character varying,
-    source_first_level_module character varying(20) DEFAULT NULL::character varying,
-    source_second_level_module character varying(20) DEFAULT NULL::character varying,
-    source_hash character varying(50) DEFAULT NULL::character varying,
-    source_page_name character varying(100) DEFAULT NULL::character varying,
-    source_page_url character varying(400) DEFAULT NULL::character varying,
+    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    source_first_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    source_second_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    source_hash character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    source_page_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source_page_url character varying(400) COLLATE "C" DEFAULT NULL::character varying,
     source_page_param text,
-    dest_first_level_module character varying(20) DEFAULT NULL::character varying,
-    dest_second_level_module character varying(20) DEFAULT NULL::character varying,
-    dest_hash character varying(50) DEFAULT NULL::character varying,
-    dest_page_name character varying(400) DEFAULT NULL::character varying,
-    dest_page_url character varying(400) DEFAULT NULL::character varying,
+    dest_first_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    dest_second_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    dest_hash character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    dest_page_name character varying(400) COLLATE "C" DEFAULT NULL::character varying,
+    dest_page_url character varying(400) COLLATE "C" DEFAULT NULL::character varying,
     dest_page_param text,
-    user_agent character varying(200) DEFAULT NULL::character varying,
-    user_ip character varying(32) DEFAULT NULL::character varying,
-    create_time character varying(20) DEFAULT NULL::character varying,
-    access_time character varying(20) DEFAULT NULL::character varying,
-    session_msg_no character varying(100) DEFAULT NULL::character varying,
-    hub_account character varying(80) DEFAULT ''::character varying NOT NULL,
-    org_name character varying(1000) DEFAULT NULL::character varying,
-    role_name character varying(1000) DEFAULT NULL::character varying,
-    menu_name character varying(500) DEFAULT NULL::character varying,
-    menu_name_code character varying(500) DEFAULT NULL::character varying
+    user_agent character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    user_ip character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    access_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
+    session_msg_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    hub_account character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    org_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    role_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    menu_name character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    menu_name_code character varying(500) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_page_view_log IS '系统页面访问记录表';
@@ -6983,31 +6919,31 @@ ALTER TABLE sys_page_view_log ADD CONSTRAINT sys_page_view_log_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_permission (
-    id character varying(32) NOT NULL,
-    parent_id character varying(32) DEFAULT NULL::character varying,
-    name character varying(100) DEFAULT NULL::character varying,
-    url character varying(255) DEFAULT NULL::character varying,
-    component character varying(255) DEFAULT NULL::character varying,
-    component_name character varying(100) DEFAULT NULL::character varying,
-    redirect character varying(255) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    parent_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    url character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    component character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    component_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    redirect character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     menu_type integer,
-    perms character varying(255) DEFAULT NULL::character varying,
-    perms_type character varying(10) DEFAULT '0'::character varying,
+    perms character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    perms_type character varying(10) COLLATE "C" DEFAULT '0'::character varying,
     sort_no numeric(8,2) DEFAULT NULL::numeric,
     always_show smallint,
-    icon character varying(100) DEFAULT NULL::character varying,
+    icon character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     is_route smallint DEFAULT 1::smallint,
     is_leaf smallint,
     keep_alive smallint,
     hidden integer DEFAULT 0,
-    description character varying(255) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
     del_flag integer DEFAULT 0,
     rule_flag integer DEFAULT 0,
-    status character varying(2) DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
     internal_or_external smallint,
     is_show numeric(11,0) DEFAULT NULL::numeric
 )
@@ -7043,17 +6979,17 @@ ALTER TABLE sys_permission ADD CONSTRAINT sys_permission_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_permission_data_rule (
-    id character varying(32) NOT NULL,
-    permission_id character varying(32) DEFAULT NULL::character varying,
-    rule_name character varying(50) DEFAULT NULL::character varying,
-    rule_column character varying(50) DEFAULT NULL::character varying,
-    rule_conditions character varying(50) DEFAULT NULL::character varying,
-    rule_value character varying(300) DEFAULT NULL::character varying,
-    status character varying(3) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    rule_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    rule_column character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    rule_conditions character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    rule_value character varying(300) COLLATE "C" DEFAULT NULL::character varying,
+    status character varying(3) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_permission_data_rule.id IS 'ID';
@@ -7070,16 +7006,16 @@ ALTER TABLE sys_permission_data_rule ADD CONSTRAINT sys_permission_data_rule_pke
 
 SET search_path = bosz_test;
 CREATE TABLE sys_position (
-    id character varying(32) NOT NULL,
-    code character varying(100) DEFAULT NULL::character varying,
-    name character varying(100) DEFAULT NULL::character varying,
-    post_rank character varying(2) DEFAULT NULL::character varying,
-    company_id character varying(255) DEFAULT NULL::character varying,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    post_rank character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    company_id character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(50) DEFAULT NULL::character varying
+    sys_org_code character varying(50) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_position.code IS '职务编码';
@@ -7096,16 +7032,16 @@ ALTER TABLE sys_position ADD CONSTRAINT sys_position_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE sys_quartz_job (
-    id character varying(32) NOT NULL,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
     del_flag integer,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    job_class_name character varying(255) DEFAULT NULL::character varying,
-    cron_expression character varying(255) DEFAULT NULL::character varying,
-    parameter character varying(255) DEFAULT NULL::character varying,
-    description character varying(255) DEFAULT NULL::character varying,
+    job_class_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    cron_expression character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    parameter character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     status integer
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -7123,13 +7059,13 @@ ALTER TABLE sys_quartz_job ADD CONSTRAINT sys_quartz_job_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role (
-    id character varying(32) NOT NULL,
-    role_name character varying(200) DEFAULT NULL::character varying,
-    role_code character varying(100) NOT NULL,
-    description character varying(255) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    role_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    role_code character varying(100) COLLATE "C" NOT NULL,
+    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
@@ -7147,12 +7083,12 @@ ALTER TABLE sys_role ADD CONSTRAINT sys_role_pkey PRIMARY KEY USING ubtree  (id)
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role_ai_user (
-    id character varying(100) NOT NULL,
-    role_id character varying(32) DEFAULT NULL::character varying,
-    user_id character varying(100) DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying,
+    id character varying(100) COLLATE "C" NOT NULL,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_role_ai_user IS '角色ai用户权限表';
@@ -7165,12 +7101,12 @@ ALTER TABLE sys_role_ai_user ADD CONSTRAINT sys_role_ai_user_pkey PRIMARY KEY US
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role_index (
-    id character varying(32) NOT NULL,
-    role_id character varying(32) DEFAULT NULL::character varying,
-    index_id character varying(32) DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    index_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_role_index IS '角色指标权限表';
@@ -7183,12 +7119,12 @@ ALTER TABLE sys_role_index ADD CONSTRAINT sys_role_index_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role_knowledge (
-    id character varying(32) NOT NULL,
-    role_id character varying(32) DEFAULT NULL::character varying,
-    knowledge_id character varying(32) DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_role_knowledge IS '角色知识库权限表';
@@ -7201,12 +7137,12 @@ ALTER TABLE sys_role_knowledge ADD CONSTRAINT sys_role_knowledge_pkey PRIMARY KE
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role_knowledge_output (
-    id character varying(32) NOT NULL,
-    role_id character varying(32) DEFAULT NULL::character varying,
-    group_id character varying(32) DEFAULT NULL::character varying,
-    knowledge_id character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    group_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_role_knowledge_output IS '角色知识库输出要求权限表';
@@ -7219,12 +7155,12 @@ ALTER TABLE sys_role_knowledge_output ADD CONSTRAINT sys_role_knowledge_output_p
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role_module (
-    id character varying(32) NOT NULL,
-    role_id character varying(32) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     module_source integer,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_role_module IS '角色组件权限表';
@@ -7237,12 +7173,12 @@ ALTER TABLE sys_role_module ADD CONSTRAINT sys_role_module_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE sys_role_permission (
-    id character varying(32) NOT NULL,
-    role_id character varying(32) DEFAULT NULL::character varying,
-    permission_id character varying(32) DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     operate_date timestamp without time zone,
-    operate_ip character varying(20) DEFAULT NULL::character varying
+    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_role_permission IS '角色权限表';
@@ -7256,9 +7192,9 @@ ALTER TABLE sys_role_permission ADD CONSTRAINT sys_role_permission_pkey PRIMARY 
 SET search_path = bosz_test;
 CREATE TABLE sys_tenant (
     id integer NOT NULL,
-    name character varying(100) DEFAULT NULL::character varying,
+    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    create_by character varying(100) DEFAULT NULL::character varying,
+    create_by character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     begin_date timestamp without time zone,
     end_date timestamp without time zone,
     status integer
@@ -7276,15 +7212,15 @@ ALTER TABLE sys_tenant ADD CONSTRAINT sys_tenant_pkey PRIMARY KEY USING ubtree  
 
 SET search_path = bosz_test;
 CREATE TABLE sys_third_account (
-    id character varying(32) NOT NULL,
-    sys_user_id character varying(32) DEFAULT NULL::character varying,
-    third_type character varying(255) DEFAULT NULL::character varying,
-    avatar character varying(255) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    sys_user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    third_type character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    avatar character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     status smallint,
     del_flag smallint,
-    realname character varying(100) DEFAULT NULL::character varying,
-    third_user_uuid character varying(100) DEFAULT NULL::character varying,
-    third_user_id character varying(100) DEFAULT NULL::character varying
+    realname character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    third_user_uuid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    third_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_third_account.id IS '编号';
@@ -7300,35 +7236,35 @@ ALTER TABLE sys_third_account ADD CONSTRAINT sys_third_account_pkey PRIMARY KEY 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_user (
-    id character varying(64) NOT NULL,
-    username character varying(100) DEFAULT NULL::character varying,
-    realname character varying(100) DEFAULT NULL::character varying,
-    password character varying(255) DEFAULT NULL::character varying,
-    salt character varying(45) DEFAULT NULL::character varying,
-    avatar character varying(255) DEFAULT NULL::character varying,
+    id character varying(64) COLLATE "C" NOT NULL,
+    username character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    realname character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    password character varying(255) COLLATE "C" DEFAULT NULL::character varying,
+    salt character varying(45) COLLATE "C" DEFAULT NULL::character varying,
+    avatar character varying(255) COLLATE "C" DEFAULT NULL::character varying,
     birthday timestamp without time zone,
     sex smallint,
-    email character varying(45) DEFAULT NULL::character varying,
-    phone character varying(45) DEFAULT NULL::character varying,
-    org_code character varying(64) DEFAULT NULL::character varying,
+    email character varying(45) COLLATE "C" DEFAULT NULL::character varying,
+    phone character varying(45) COLLATE "C" DEFAULT NULL::character varying,
+    org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
     status smallint,
     del_flag smallint,
-    third_id character varying(100) DEFAULT NULL::character varying,
-    third_type character varying(100) DEFAULT NULL::character varying,
+    third_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    third_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     activiti_sync smallint,
-    work_no character varying(100) DEFAULT NULL::character varying,
-    post character varying(100) DEFAULT NULL::character varying,
-    telephone character varying(45) DEFAULT NULL::character varying,
-    create_by character varying(32) DEFAULT NULL::character varying,
+    work_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    post character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    telephone character varying(45) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_by character varying(32) DEFAULT NULL::character varying,
+    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
     user_identity smallint,
     depart_ids text,
-    rel_tenant_ids character varying(100) DEFAULT NULL::character varying,
-    client_id character varying(64) DEFAULT NULL::character varying,
-    datadate character varying(200) DEFAULT NULL::character varying,
-    user_login_name character varying(100) DEFAULT NULL::character varying
+    rel_tenant_ids character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    client_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
+    datadate character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    user_login_name character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_user IS '用户表';
@@ -7364,20 +7300,20 @@ ALTER TABLE sys_user ADD CONSTRAINT sys_user_pkey PRIMARY KEY USING ubtree  (id)
 
 SET search_path = bosz_test;
 CREATE TABLE sys_user_agent (
-    id character varying(32) NOT NULL,
-    user_name character varying(100) DEFAULT NULL::character varying,
-    agent_user_name character varying(100) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    agent_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     start_time timestamp without time zone,
     end_time timestamp without time zone,
-    status character varying(2) DEFAULT NULL::character varying,
-    create_name character varying(50) DEFAULT NULL::character varying,
-    create_by character varying(50) DEFAULT NULL::character varying,
+    status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
+    create_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     create_time timestamp without time zone,
-    update_name character varying(50) DEFAULT NULL::character varying,
-    update_by character varying(50) DEFAULT NULL::character varying,
+    update_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
     update_time timestamp without time zone,
-    sys_org_code character varying(50) DEFAULT NULL::character varying,
-    sys_company_code character varying(50) DEFAULT NULL::character varying
+    sys_org_code character varying(50) COLLATE "C" DEFAULT NULL::character varying,
+    sys_company_code character varying(50) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_user_agent IS '用户代理人设置';
@@ -7400,9 +7336,9 @@ ALTER TABLE sys_user_agent ADD CONSTRAINT sys_user_agent_pkey PRIMARY KEY USING 
 
 SET search_path = bosz_test;
 CREATE TABLE sys_user_api (
-    id character varying(32) NOT NULL,
-    user_id character varying(32) DEFAULT NULL::character varying,
-    api_id character varying(32) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    api_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_user_api IS '用户接口表';
@@ -7413,10 +7349,10 @@ ALTER TABLE sys_user_api ADD CONSTRAINT sys_user_api_pkey PRIMARY KEY USING ubtr
 
 SET search_path = bosz_test;
 CREATE TABLE sys_user_depart (
-    id character varying(32) NOT NULL,
-    user_id character varying(32) DEFAULT NULL::character varying,
-    dep_id character varying(32) DEFAULT NULL::character varying,
-    datadate character varying(200) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    dep_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    datadate character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN sys_user_depart.id IS 'id';
@@ -7426,9 +7362,9 @@ ALTER TABLE sys_user_depart ADD CONSTRAINT sys_user_depart_pkey PRIMARY KEY USIN
 
 SET search_path = bosz_test;
 CREATE TABLE sys_user_role (
-    id character varying(32) NOT NULL,
-    user_id character varying(32) DEFAULT NULL::character varying,
-    role_id character varying(32) DEFAULT NULL::character varying
+    id character varying(32) COLLATE "C" NOT NULL,
+    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
+    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE sys_user_role IS '用户角色表';
@@ -7439,20 +7375,20 @@ ALTER TABLE sys_user_role ADD CONSTRAINT sys_user_role_pkey PRIMARY KEY USING ub
 
 SET search_path = bosz_test;
 CREATE TABLE tasks_qa_industry_parse (
-    task_id character varying(100) NOT NULL,
-    notice_title character varying(1000) DEFAULT NULL::character varying,
-    url character varying(1000) DEFAULT NULL::character varying,
-    file_name character varying(1000) DEFAULT NULL::character varying,
-    file_type character varying(100) DEFAULT NULL::character varying,
-    pubdate character varying(100) DEFAULT NULL::character varying,
-    source character varying(1000) DEFAULT NULL::character varying,
+    task_id character varying(100) COLLATE "C" NOT NULL,
+    notice_title character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    url character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    file_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    file_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    pubdate character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    source character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
     inputtime timestamp without time zone DEFAULT pg_systimestamp(),
     updatetime timestamp without time zone DEFAULT pg_systimestamp(),
-    status character varying(100) DEFAULT 'init'::character varying,
-    userid character varying(100) DEFAULT NULL::character varying,
+    status character varying(100) COLLATE "C" DEFAULT 'init'::character varying,
+    userid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     error_info text,
-    ftp_url character varying(1000) DEFAULT NULL::character varying,
-    original_no character varying(100) DEFAULT NULL::character varying
+    ftp_url character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
+    original_no character varying(100) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON COLUMN tasks_qa_industry_parse.task_id IS 'md5';
@@ -7460,19 +7396,19 @@ ALTER TABLE tasks_qa_industry_parse ADD CONSTRAINT tasks_qa_industry_parse_pkey 
 
 SET search_path = bosz_test;
 CREATE TABLE tool_management (
-    id character varying(32) NOT NULL,
-    tool_category character varying(50) NOT NULL,
-    tool_name character varying(100) NOT NULL,
-    tool_description character varying(500) DEFAULT NULL::character varying,
+    id character varying(32) COLLATE "C" NOT NULL,
+    tool_category character varying(50) COLLATE "C" NOT NULL,
+    tool_name character varying(100) COLLATE "C" NOT NULL,
+    tool_description character varying(500) COLLATE "C" DEFAULT NULL::character varying,
     tool_parameters text,
-    impl_type character varying(20) DEFAULT 'custom'::character varying,
-    module_code character varying(100) DEFAULT NULL::character varying,
+    impl_type character varying(20) COLLATE "C" DEFAULT 'custom'::character varying,
+    module_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     module_code_parameters text,
-    tool_status character varying(2) DEFAULT 'Y'::character varying,
+    tool_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
     create_time timestamp without time zone DEFAULT pg_systimestamp(),
     update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    cn_label character varying(200) DEFAULT NULL::character varying,
-    en_label character varying(200) DEFAULT NULL::character varying
+    cn_label character varying(200) COLLATE "C" DEFAULT NULL::character varying,
+    en_label character varying(200) COLLATE "C" DEFAULT NULL::character varying
 )
 WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
 COMMENT ON TABLE tool_management IS '大模型工具管理表';
@@ -7495,14 +7431,14 @@ ALTER TABLE tool_management ADD CONSTRAINT tool_management_pkey PRIMARY KEY USIN
 SET search_path = bosz_test;
 CREATE TABLE trace_query_result (
     id integer DEFAULT nextval('trace_query_result_id_seq'::regclass) NOT NULL,
-    trace_id character varying(100) DEFAULT NULL::character varying,
-    knowledge_code character varying(100) DEFAULT NULL::character varying,
-    query_status character varying(1) DEFAULT 'Y'::character varying,
+    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
+    query_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
     query_result text,
-    query_time character varying(40) DEFAULT NULL::character varying,
+    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
     cost_time integer,
-    comment character varying(500) DEFAULT NULL::character varying,
-    app_source_query_result character varying(100) DEFAULT NULL::character varying,
+    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying,
+    app_source_query_result character varying(100) COLLATE "C" DEFAULT NULL::character varying,
     image_query_result text,
     whole_source_query_result text,
     image_cost_time integer,
@@ -7527,8 +7463,8 @@ ALTER TABLE trace_query_result ADD CONSTRAINT trace_query_result_pkey PRIMARY KE
 SET search_path = bosz_test;
 CREATE TABLE workflow_return_records (
     id integer DEFAULT nextval('workflow_return_records_id_seq'::regclass) NOT NULL,
-    session_msg_no character varying(64) DEFAULT ''::character varying NOT NULL,
-    user_id character varying(64) DEFAULT ''::character varying NOT NULL,
+    session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
+    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
     question text,
     question_rewrite text,
     start_time text,
