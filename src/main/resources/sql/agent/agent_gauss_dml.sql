@@ -21,4 +21,4 @@ INSERT INTO "sys_user_role" ("id", "user_id", "role_id") VALUES ('20319684369509
 
 -- Auto-generated SQL script #202608272127
 INSERT INTO bosz_test.sys_dict_item (id,dict_id,item_text,item_value,sort_order,status,create_by)
-	VALUES ('2089983692360650755','2089983692201267202','openGauss','7',6,1,'admin');
+	VALUES ('2089983692360650755','2089983692201267202','openGauss','16',6,1,'admin');
