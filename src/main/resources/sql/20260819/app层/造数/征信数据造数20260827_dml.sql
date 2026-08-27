@@ -4,17 +4,17 @@
 -- 目标表 5 张：app_guarantor_info(2) / app_credit_report_info(6) / app_credit_debt_detail(48) / app_guarantor_credit_info(3) / app_credit_query_info(3)
 -- 说明：
 --   1. 前置：先执行 征信数据造数20260827_表结构调整.sql（或按最新建表脚本建库）；
---   2. guarantorId 统一为 RPT-CUST-003（张三）/ CUST-002（泰州公司）；
+--   2. guarantorId 统一为 CUST-003（张三）/ CUST-002（泰州公司）；
 --   3. 样例 '-' 按 NULL 处理；nonBankHighRateLoan 小数百分比放大为整数（0.11→11、0.09→9）；
 --   4. queryTime/expireDate 存日期（YYYY-MM-DD），inputtime 存时间戳；
 --   5. id 与造数文件一致显式给出（首次导入无冲突，重复执行请删 id 列）。
 -- =====================================================================
 
--- app_guarantor_info（担保人信息表）—— guarantorId 统一: CUST-003→RPT-CUST-003
+-- app_guarantor_info（担保人信息表）—— guarantorId 统一: CUST-003→CUST-003
 INSERT INTO app_guarantor_info
     (id, reportNo, customerId, customerName, guarantorId, guarantorName, guarantorType, isStateOwned, education, inputtime)
 VALUES
-    (1, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', '自然人', NULL, '高中', NULL),
+    (1, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', '自然人', NULL, '高中', NULL),
     (2, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-002', '泰州公司', '法人', '否', NULL, NULL);
 
 -- app_credit_report_info（企业征信快照表（一期一行））
@@ -85,14 +85,14 @@ VALUES
 INSERT INTO app_guarantor_credit_info
     (id, reportNo, customerId, customerName, guarantorId, guarantorName, zxReportNo, queryTime, totalLoanBal, operateLoanBal, consumeLoanBal, houseLoanBal, otherLoanBal, totalLoanCount, operateLoanCount, consumeLoanCount, houseLoanCount, otherLoanCount, bzcBal, badBal, loanCurrentOverdue, cardCurrentOverdue, guaranteeOverdueAmt, nonBankGuaranteeBal, nonBankHighRateLoan, guaranteeAbnormalBal, extendBal, delayBal, creditAbnormalBal, acctAbnormalBal, cardAbnormalBal, guaranteeHkAbnormalBal, creditUseRate, inputtime, nonBankLiabTotal)
 VALUES
-    (1, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', 'ZX00320260620001', '2026-06-20', 1850, 800, 200, 650, 200, 6, 3, 1, 1, 1, 50, 30, 80, 5, 60, 80, 15.2, 45, 100, 70, 55, 40, 25, 35, 92, '2026-06-20 16:00:00', 300),
-    (2, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', 'ZX00320251215002', '2025-12-15', 1520, 650, 180, 500, 190, 5, 2, 1, 1, 1, 0, 0, 0, 0, 0, 20, 0, 0, 30, 0, 0, 0, 0, 0, 35, '2025-12-15 14:30:00', 50),
-    (3, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', 'ZX00320250310003', '2025-03-10', 1200, 500, 150, 400, 150, 4, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, '2025-03-10 10:00:00', 0);
+    (1, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', 'ZX00320260620001', '2026-06-20', 1850, 800, 200, 650, 200, 6, 3, 1, 1, 1, 50, 30, 80, 5, 60, 80, 15.2, 45, 100, 70, 55, 40, 25, 35, 92, '2026-06-20 16:00:00', 300),
+    (2, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', 'ZX00320251215002', '2025-12-15', 1520, 650, 180, 500, 190, 5, 2, 1, 1, 1, 0, 0, 0, 0, 0, 20, 0, 0, 30, 0, 0, 0, 0, 0, 35, '2025-12-15 14:30:00', 50),
+    (3, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', 'ZX00320250310003', '2025-03-10', 1200, 500, 150, 400, 150, 4, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, '2025-03-10 10:00:00', 0);
 
 -- app_credit_query_info（征信查询次数表）
 INSERT INTO app_credit_query_info
     (id, reportNo, customerId, customerName, guarantorId, guarantorName, queryTime, zxReportNo, loanQuery12m, loanQuery6m, loanQuery3m, cardQuery12m, cardQuery6m, cardQuery3m, selfQuery1m, inputtime)
 VALUES
-    (1, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', '2026-06-20', 'ZX00320260620001', 14, 10, 7, 8, 5, 3, 2, '2026-06-20 16:00:00'),
-    (2, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', '2025-12-15', 'ZX00320251215002', 6, 4, 2, 4, 2, 1, 1, '2025-12-15 14:30:00'),
-    (3, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'RPT-CUST-003', '张三', '2025-03-10', 'ZX00320250310003', 4, 3, 1, 3, 2, 1, 0, '2025-03-10 10:00:00');
+    (1, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', '2026-06-20', 'ZX00320260620001', 14, 10, 7, 8, 5, 3, 2, '2026-06-20 16:00:00'),
+    (2, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', '2025-12-15', 'ZX00320251215002', 6, 4, 2, 4, 2, 1, 1, '2025-12-15 14:30:00'),
+    (3, 'RPT-202603-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'CUST-003', '张三', '2025-03-10', 'ZX00320250310003', 4, 3, 1, 3, 2, 1, 0, '2025-03-10 10:00:00');
