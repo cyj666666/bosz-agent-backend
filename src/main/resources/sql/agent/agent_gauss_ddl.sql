@@ -1,3 +1,68 @@
+-- =====================================================================
+-- agent_gauss_ddl.sql 自包含版（v6，openGauss/高斯DB 直接执行）
+--   1. SET search_path = bosz_test, public：保证全部 213 张表（含第一张 agent_config）都建到 bosz_test
+--   2. 补建 50 个自增序列（openGauss 不支持 CREATE SEQUENCE IF NOT EXISTS，用纯 CREATE SEQUENCE；
+--      全新库一次成功；若库中已有部分序列，对应行报 already exists 时跳过该行即可）
+--   3. 全部 character varying/character 列显式 COLLATE "C"：openGauss lc_collate 为 C 时必需，否则报
+--      Un-support feature: type varchar cannot be set to binary collation
+-- 前置条件：schema bosz_test 必须已存在（不存在先执行 CREATE SCHEMA bosz_test）
+-- =====================================================================
+
+SET search_path = bosz_test, public;
+
+-- ---------- 自增序列（50） ----------
+CREATE SEQUENCE agent_config_id_seq;
+CREATE SEQUENCE agent_index_config_id_seq;
+CREATE SEQUENCE agent_rule_id_seq;
+CREATE SEQUENCE agent_search_memory_id_seq;
+CREATE SEQUENCE ai_component_config_id_seq;
+CREATE SEQUENCE amar_claw_memory_backups__id_seq;
+CREATE SEQUENCE app_space_config_space_id_seq;
+CREATE SEQUENCE app_space_inspiration_config_id_seq;
+CREATE SEQUENCE app_space_relate_account_id_seq;
+CREATE SEQUENCE app_space_relate_agent_id_seq;
+CREATE SEQUENCE app_space_relate_knowledge_id_seq;
+CREATE SEQUENCE bank_internal_indicators_config_id_seq;
+CREATE SEQUENCE bank_module_info__id_seq;
+CREATE SEQUENCE chat_session_msg_feedback_id_seq;
+CREATE SEQUENCE client_agent_index_config_id_seq;
+CREATE SEQUENCE coze_cache_industry_mapping_id_seq;
+CREATE SEQUENCE data_entname_indname_reference_records_id_seq;
+CREATE SEQUENCE data_relate_account_id_seq;
+CREATE SEQUENCE data_update_config_id_seq;
+CREATE SEQUENCE ent_rel_shortname_info_id_seq;
+CREATE SEQUENCE financial_transaction_records__id_seq;
+CREATE SEQUENCE finatial_records_task_id_seq;
+CREATE SEQUENCE finatial_upload_task_id_seq;
+CREATE SEQUENCE index_agent_rela_id_seq;
+CREATE SEQUENCE index_detail_code_library__id_seq;
+CREATE SEQUENCE index_detail_config_id_seq;
+CREATE SEQUENCE index_info_temp__id_seq;
+CREATE SEQUENCE index_params_temp__id_seq;
+CREATE SEQUENCE index_relate_info_id_seq;
+CREATE SEQUENCE jeecg_monthly_growth_analysis_id_seq;
+CREATE SEQUENCE jeecg_project_nature_income_id_seq;
+CREATE SEQUENCE knowledge_black_params_config_id_seq;
+CREATE SEQUENCE knowledge_black_params_config_version_id_seq;
+CREATE SEQUENCE knowledge_query_result_for_batch_id_seq;
+CREATE SEQUENCE knowledge_relate_index_id_seq;
+CREATE SEQUENCE knowledge_relate_index_version_id_seq;
+CREATE SEQUENCE large_model_config_id_seq;
+CREATE SEQUENCE message_push_config_id_seq;
+CREATE SEQUENCE message_relate_account_id_seq;
+CREATE SEQUENCE post_glm_records_id_seq;
+CREATE SEQUENCE qianxun_user_log_id_seq;
+CREATE SEQUENCE rasa_chat_detail_info_id_seq;
+CREATE SEQUENCE rela_index_config_id_seq;
+CREATE SEQUENCE scene_inflect_info__id_seq;
+CREATE SEQUENCE sence_relate_info__id_seq;
+CREATE SEQUENCE sync_knowledge_info_id_seq;
+CREATE SEQUENCE sys_announcement_send__id_seq;
+CREATE SEQUENCE sys_page_view_log_id_seq;
+CREATE SEQUENCE trace_query_result_id_seq;
+CREATE SEQUENCE workflow_return_records_id_seq;
+
+-- ================= 原脚本内容（213 张表 + 约束 + 注释 + 索引） =================
 CREATE TABLE agent_config (
     id integer DEFAULT nextval('agent_config_id_seq'::regclass) NOT NULL,
     agent_name character varying(100) COLLATE "C" NOT NULL,
