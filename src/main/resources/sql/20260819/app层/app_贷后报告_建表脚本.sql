@@ -664,6 +664,9 @@ CREATE TABLE IF NOT EXISTS app_credit_report_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    subjectType            VARCHAR(64),
+    guarantorId            VARCHAR(64),
+    guarantorName          VARCHAR(128),
     queryTime              VARCHAR(32),
     zxReportNo             VARCHAR(128),
     expireDate             VARCHAR(32),
@@ -681,16 +684,28 @@ CREATE TABLE IF NOT EXISTS app_credit_report_info (
     transferDebtBal        DECIMAL(18,2),
     newOldDebtBal          DECIMAL(18,2),
     nonBankLiabTotal       DECIMAL(18,2),
-    bankLeaseOrgCount      INT,
     nonBankHighRateLoan    DECIMAL(12,4),
+    nonBankGuaranteeBal    DECIMAL(18,2),
+    workingCapitalLoanBal  DECIMAL(18,2),
+    workingCapitalLoan1yBal DECIMAL(18,2),
+    loanBankOrgCount       INT,
+    guaranteeBankOrgCount  INT,
+    creditShortTermDiff    DECIMAL(18,2),
+    creditLongTermDiff     DECIMAL(18,2),
+    creditDebtDeviation    DECIMAL(12,4),
+    guaranteeNetAsset      DECIMAL(12,4),
+    guaranteeBalanceExBank DECIMAL(18,2),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
-COMMENT ON TABLE app_credit_report_info IS '企业征信快照表（一期一行）';
+COMMENT ON TABLE app_credit_report_info IS '企业征信快照表（一期一行，subjectType区分借款人/担保人主体）';
 COMMENT ON COLUMN app_credit_report_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_credit_report_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_credit_report_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_credit_report_info.subjectType IS '主体类型（码值：借款人/担保人）';
+COMMENT ON COLUMN app_credit_report_info.guarantorId IS '担保人客户编号（subjectType=担保人时填写）';
+COMMENT ON COLUMN app_credit_report_info.guarantorName IS '担保人名称（subjectType=担保人时填写）';
 COMMENT ON COLUMN app_credit_report_info.queryTime IS '征信查询时间';
 COMMENT ON COLUMN app_credit_report_info.zxReportNo IS '征信报告记录号';
 COMMENT ON COLUMN app_credit_report_info.expireDate IS '征信报告有效期';
@@ -708,8 +723,17 @@ COMMENT ON COLUMN app_credit_report_info.renewDebtBal IS '无还本续贷未结�
 COMMENT ON COLUMN app_credit_report_info.transferDebtBal IS '其他机构转入未结清余额（万元）';
 COMMENT ON COLUMN app_credit_report_info.newOldDebtBal IS '借新还旧债务未结清余额（万元）';
 COMMENT ON COLUMN app_credit_report_info.nonBankLiabTotal IS '在非银机构负债合计（万元，上游直给：qy_fyjg_liab_tot/gr_fyjg_liab_tot）';
-COMMENT ON COLUMN app_credit_report_info.bankLeaseOrgCount IS '合作银行及融资租赁机构数（上游直给：qy_hzyh_rzzl_cnt）';
 COMMENT ON COLUMN app_credit_report_info.nonBankHighRateLoan IS '非银机构较高利率借款推算利率最大值（%，企业，上游直给：qy_fyjg_gjlv_loan_max；较高利率判断依据）';
+COMMENT ON COLUMN app_credit_report_info.nonBankGuaranteeBal IS '在非银机构对外担保余额（万元，上游直给：qy_fyjg_dwdb_bal）';
+COMMENT ON COLUMN app_credit_report_info.workingCapitalLoanBal IS '流动资金贷款余额（万元，上游直给：qy_zhint_wjq_xyldk_bal）';
+COMMENT ON COLUMN app_credit_report_info.workingCapitalLoan1yBal IS '一年期以下的流动资金贷款余额（万元，上游直给：qy_zhint_wjq_xyldk_1year_bal）';
+COMMENT ON COLUMN app_credit_report_info.loanBankOrgCount IS '企业借贷交易合作银行及融资租赁机构数（上游直给：qy_jiedai_hzyh_org_cnt）';
+COMMENT ON COLUMN app_credit_report_info.guaranteeBankOrgCount IS '企业担保交易合作银行及融资租赁机构数（上游直给：qy_danbao_hzyh_org_cnt）';
+COMMENT ON COLUMN app_credit_report_info.creditShortTermDiff IS '征信短期借款未结清余额与财报短期借款相差（万元，加工结果默认已有）';
+COMMENT ON COLUMN app_credit_report_info.creditLongTermDiff IS '征信中长期借款未结清余额与财报长期借款（含一年内到期的长期借款）相差（万元，加工结果默认已有）';
+COMMENT ON COLUMN app_credit_report_info.creditDebtDeviation IS '征信债务与财报债务偏离度（%，加工结果默认已有）';
+COMMENT ON COLUMN app_credit_report_info.guaranteeNetAsset IS '对外担保/净资产（%）';
+COMMENT ON COLUMN app_credit_report_info.guaranteeBalanceExBank IS '对外担保（相关还款责任）余额（剔除我行）（万元，上游直给：qy_dwdb_bal_exc_wx）';
 COMMENT ON COLUMN app_credit_report_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_credit_report_info_reportNo ON app_credit_report_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_credit_report_info_customerId ON app_credit_report_info (customerId);
@@ -719,6 +743,9 @@ CREATE TABLE IF NOT EXISTS app_credit_debt_detail (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    subjectType            VARCHAR(64),
+    guarantorId            VARCHAR(64),
+    guarantorName          VARCHAR(128),
     queryTime              VARCHAR(32),
     zxReportNo             VARCHAR(128),
     debtType               VARCHAR(64),
@@ -732,6 +759,9 @@ COMMENT ON TABLE app_credit_debt_detail IS '征信债务明细表（按类型一
 COMMENT ON COLUMN app_credit_debt_detail.reportNo IS '报告编号';
 COMMENT ON COLUMN app_credit_debt_detail.customerId IS '客户编号';
 COMMENT ON COLUMN app_credit_debt_detail.customerName IS '客户名称';
+COMMENT ON COLUMN app_credit_debt_detail.subjectType IS '主体类型（码值：借款人/担保人）';
+COMMENT ON COLUMN app_credit_debt_detail.guarantorId IS '担保人客户编号（subjectType=担保人时填写）';
+COMMENT ON COLUMN app_credit_debt_detail.guarantorName IS '担保人名称（subjectType=担保人时填写）';
 COMMENT ON COLUMN app_credit_debt_detail.queryTime IS '征信查询时间';
 COMMENT ON COLUMN app_credit_debt_detail.zxReportNo IS '征信报告记录号';
 COMMENT ON COLUMN app_credit_debt_detail.debtType IS '债务类型（中长期借款/短期借款/循环透支/贴现/银行承兑汇票/信用证/银行保函/其他担保交易）';
@@ -747,10 +777,10 @@ CREATE TABLE IF NOT EXISTS app_guarantor_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    guarantorId            VARCHAR(64),
     guarantorName          VARCHAR(128),
     guarantorType          VARCHAR(32),
     isStateOwned           VARCHAR(64),
-    isListedCompany        VARCHAR(64),
     education              VARCHAR(64),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
@@ -760,10 +790,10 @@ COMMENT ON TABLE app_guarantor_info IS '担保人信息表';
 COMMENT ON COLUMN app_guarantor_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_guarantor_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_guarantor_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_guarantor_info.guarantorId IS '担保人客户编号（行内接口字段）';
 COMMENT ON COLUMN app_guarantor_info.guarantorName IS '担保人';
 COMMENT ON COLUMN app_guarantor_info.guarantorType IS '担保人类型（法人/自然人）';
 COMMENT ON COLUMN app_guarantor_info.isStateOwned IS '是否国资/国有担保';
-COMMENT ON COLUMN app_guarantor_info.isListedCompany IS '担保人是否上市（码值：是/否）';
 COMMENT ON COLUMN app_guarantor_info.education IS '学历（征信基本信息，接口zxBiEDULVL）';
 COMMENT ON COLUMN app_guarantor_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_guarantor_info_reportNo ON app_guarantor_info (reportNo);
@@ -774,6 +804,7 @@ CREATE TABLE IF NOT EXISTS app_guarantor_credit_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    guarantorId            VARCHAR(64),
     guarantorName          VARCHAR(128),
     queryTime              VARCHAR(32),
     zxReportNo             VARCHAR(128),
@@ -802,16 +833,16 @@ CREATE TABLE IF NOT EXISTS app_guarantor_credit_info (
     cardAbnormalBal        DECIMAL(18,2),
     guaranteeHkAbnormalBal DECIMAL(18,2),
     creditUseRate          DECIMAL(12,4),
-    guaranteeNetAsset      DECIMAL(12,4),
-    guaranteeBalanceExBank DECIMAL(18,2),
+    nonBankLiabTotal       DECIMAL(18,2),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
-COMMENT ON TABLE app_guarantor_credit_info IS '担保人征信表';
+COMMENT ON TABLE app_guarantor_credit_info IS '担保人征信表（个人担保人）';
 COMMENT ON COLUMN app_guarantor_credit_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_guarantor_credit_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_guarantor_credit_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_guarantor_credit_info.guarantorId IS '担保人客户编号';
 COMMENT ON COLUMN app_guarantor_credit_info.guarantorName IS '担保人';
 COMMENT ON COLUMN app_guarantor_credit_info.queryTime IS '征信查询时间';
 COMMENT ON COLUMN app_guarantor_credit_info.zxReportNo IS '征信报告记录号';
@@ -840,8 +871,7 @@ COMMENT ON COLUMN app_guarantor_credit_info.acctAbnormalBal IS '未结清账户�
 COMMENT ON COLUMN app_guarantor_credit_info.cardAbnormalBal IS '未销户贷记卡账户状态非正常余额（万元）';
 COMMENT ON COLUMN app_guarantor_credit_info.guaranteeHkAbnormalBal IS '对外担保（相关还款责任）还款状态非正常余额（万元）';
 COMMENT ON COLUMN app_guarantor_credit_info.creditUseRate IS '信用卡使用率（%）';
-COMMENT ON COLUMN app_guarantor_credit_info.guaranteeNetAsset IS '对外担保/净资产（%）';
-COMMENT ON COLUMN app_guarantor_credit_info.guaranteeBalanceExBank IS '对外担保（相关还款责任）余额（剔除我行）（新增接口字段qy_dwdb_bal_exc_wx）';
+COMMENT ON COLUMN app_guarantor_credit_info.nonBankLiabTotal IS '在非银机构负债合计（万元，个人，上游直给：gr_fyjg_liab_tot）';
 COMMENT ON COLUMN app_guarantor_credit_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_guarantor_credit_info_reportNo ON app_guarantor_credit_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_guarantor_credit_info_customerId ON app_guarantor_credit_info (customerId);
@@ -852,6 +882,8 @@ CREATE TABLE IF NOT EXISTS app_credit_query_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    guarantorId            VARCHAR(64),
+    guarantorName          VARCHAR(128),
     queryTime              VARCHAR(32),
     zxReportNo             VARCHAR(128),
     loanQuery12m           INT,
@@ -869,6 +901,8 @@ COMMENT ON TABLE app_credit_query_info IS '征信查询次数表';
 COMMENT ON COLUMN app_credit_query_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_credit_query_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_credit_query_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_credit_query_info.guarantorId IS '担保人客户编号';
+COMMENT ON COLUMN app_credit_query_info.guarantorName IS '担保人名称';
 COMMENT ON COLUMN app_credit_query_info.queryTime IS '征信查询时间';
 COMMENT ON COLUMN app_credit_query_info.zxReportNo IS '征信报告记录号';
 COMMENT ON COLUMN app_credit_query_info.loanQuery12m IS '近一年贷款审批征信查询次数';
