@@ -552,6 +552,7 @@ CREATE TABLE IF NOT EXISTS app_finance_report_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    finReportNo            VARCHAR(64),
     accountMonth           VARCHAR(32),
     sheetNo                VARCHAR(64),
     reportScope            VARCHAR(64),
@@ -568,6 +569,7 @@ COMMENT ON TABLE app_finance_report_info IS '财报主档表（一期一行）';
 COMMENT ON COLUMN app_finance_report_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_finance_report_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_finance_report_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_finance_report_info.finReportNo IS '财报编号（财务报表明细标识，关联指标明细）';
 COMMENT ON COLUMN app_finance_report_info.accountMonth IS '会计月';
 COMMENT ON COLUMN app_finance_report_info.sheetNo IS '报表类型（码值：资产负债表/利润表/现金流量表等，码值待确认）';
 COMMENT ON COLUMN app_finance_report_info.reportScope IS '报表口径（码值：合并/本部）';
@@ -586,6 +588,7 @@ CREATE TABLE IF NOT EXISTS app_finance_index_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    finReportNo            VARCHAR(64),
     accountMonth           VARCHAR(32),
     reportScope            VARCHAR(64),
     sheetNo                VARCHAR(64),
@@ -604,6 +607,7 @@ COMMENT ON TABLE app_finance_index_info IS '财务指标值表（一期一行一
 COMMENT ON COLUMN app_finance_index_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_finance_index_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_finance_index_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_finance_index_info.finReportNo IS '财报编号（关联财报主档 app_finance_report_info.finReportNo）';
 COMMENT ON COLUMN app_finance_index_info.accountMonth IS '会计月';
 COMMENT ON COLUMN app_finance_index_info.reportScope IS '报表口径（码值：合并/本部）';
 COMMENT ON COLUMN app_finance_index_info.sheetNo IS '报表类型（码值：资产负债表/利润表/现金流量表等，码值待确认）';
