@@ -1,65 +1,65 @@
 -- =====================================================================
--- agent_gauss_ddl.sql 修复版：
---   1. 补建 schema bosz_test（原文件无 CREATE SCHEMA，212 处 SET search_path=bosz_test 会失败）
---   2. 补建 50 个自增序列（原文件 id 列 DEFAULT nextval('xxx_id_seq') 但无 CREATE SEQUENCE）
---   3. 开头 SET search_path = bosz_test, public，保证 agent_config（原文件首个 SET 之前）也能解析序列
--- 执行：直接跑本文件即可（一次性完成 schema+序列+全部表）。
+-- agent_gauss_ddl.sql 修复版（v2，兼容高斯DB/OpenGauss）
+--   1. schema bosz_test 已存在，不重建；
+--   2. 补建 50 个自增序列（高斯DB 不支持 CREATE SEQUENCE IF NOT EXISTS，已去掉该子句；
+--      若某序列已存在会报 already exists，可跳过该行或先 DROP）；
+--   3. 开头 SET search_path = bosz_test, public，保证全部表（含原文件首个 SET 前的 agent_config）建到 bosz_test。
+-- 执行：直接跑本文件（schema 已存在 + 序列 + 213 张表）。
 -- =====================================================================
 
-CREATE SCHEMA IF NOT EXISTS bosz_test;
 SET search_path = bosz_test, public;
 
 -- ---------- 自增序列（50） ----------
-CREATE SEQUENCE IF NOT EXISTS agent_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS agent_index_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS agent_rule_id_seq;
-CREATE SEQUENCE IF NOT EXISTS agent_search_memory_id_seq;
-CREATE SEQUENCE IF NOT EXISTS ai_component_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS amar_claw_memory_backups__id_seq;
-CREATE SEQUENCE IF NOT EXISTS app_space_config_space_id_seq;
-CREATE SEQUENCE IF NOT EXISTS app_space_inspiration_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS app_space_relate_account_id_seq;
-CREATE SEQUENCE IF NOT EXISTS app_space_relate_agent_id_seq;
-CREATE SEQUENCE IF NOT EXISTS app_space_relate_knowledge_id_seq;
-CREATE SEQUENCE IF NOT EXISTS bank_internal_indicators_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS bank_module_info__id_seq;
-CREATE SEQUENCE IF NOT EXISTS chat_session_msg_feedback_id_seq;
-CREATE SEQUENCE IF NOT EXISTS client_agent_index_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS coze_cache_industry_mapping_id_seq;
-CREATE SEQUENCE IF NOT EXISTS data_entname_indname_reference_records_id_seq;
-CREATE SEQUENCE IF NOT EXISTS data_relate_account_id_seq;
-CREATE SEQUENCE IF NOT EXISTS data_update_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS ent_rel_shortname_info_id_seq;
-CREATE SEQUENCE IF NOT EXISTS financial_transaction_records__id_seq;
-CREATE SEQUENCE IF NOT EXISTS finatial_records_task_id_seq;
-CREATE SEQUENCE IF NOT EXISTS finatial_upload_task_id_seq;
-CREATE SEQUENCE IF NOT EXISTS index_agent_rela_id_seq;
-CREATE SEQUENCE IF NOT EXISTS index_detail_code_library__id_seq;
-CREATE SEQUENCE IF NOT EXISTS index_detail_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS index_info_temp__id_seq;
-CREATE SEQUENCE IF NOT EXISTS index_params_temp__id_seq;
-CREATE SEQUENCE IF NOT EXISTS index_relate_info_id_seq;
-CREATE SEQUENCE IF NOT EXISTS jeecg_monthly_growth_analysis_id_seq;
-CREATE SEQUENCE IF NOT EXISTS jeecg_project_nature_income_id_seq;
-CREATE SEQUENCE IF NOT EXISTS knowledge_black_params_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS knowledge_black_params_config_version_id_seq;
-CREATE SEQUENCE IF NOT EXISTS knowledge_query_result_for_batch_id_seq;
-CREATE SEQUENCE IF NOT EXISTS knowledge_relate_index_id_seq;
-CREATE SEQUENCE IF NOT EXISTS knowledge_relate_index_version_id_seq;
-CREATE SEQUENCE IF NOT EXISTS large_model_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS message_push_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS message_relate_account_id_seq;
-CREATE SEQUENCE IF NOT EXISTS post_glm_records_id_seq;
-CREATE SEQUENCE IF NOT EXISTS qianxun_user_log_id_seq;
-CREATE SEQUENCE IF NOT EXISTS rasa_chat_detail_info_id_seq;
-CREATE SEQUENCE IF NOT EXISTS rela_index_config_id_seq;
-CREATE SEQUENCE IF NOT EXISTS scene_inflect_info__id_seq;
-CREATE SEQUENCE IF NOT EXISTS sence_relate_info__id_seq;
-CREATE SEQUENCE IF NOT EXISTS sync_knowledge_info_id_seq;
-CREATE SEQUENCE IF NOT EXISTS sys_announcement_send__id_seq;
-CREATE SEQUENCE IF NOT EXISTS sys_page_view_log_id_seq;
-CREATE SEQUENCE IF NOT EXISTS trace_query_result_id_seq;
-CREATE SEQUENCE IF NOT EXISTS workflow_return_records_id_seq;
+CREATE SEQUENCE agent_config_id_seq;
+CREATE SEQUENCE agent_index_config_id_seq;
+CREATE SEQUENCE agent_rule_id_seq;
+CREATE SEQUENCE agent_search_memory_id_seq;
+CREATE SEQUENCE ai_component_config_id_seq;
+CREATE SEQUENCE amar_claw_memory_backups__id_seq;
+CREATE SEQUENCE app_space_config_space_id_seq;
+CREATE SEQUENCE app_space_inspiration_config_id_seq;
+CREATE SEQUENCE app_space_relate_account_id_seq;
+CREATE SEQUENCE app_space_relate_agent_id_seq;
+CREATE SEQUENCE app_space_relate_knowledge_id_seq;
+CREATE SEQUENCE bank_internal_indicators_config_id_seq;
+CREATE SEQUENCE bank_module_info__id_seq;
+CREATE SEQUENCE chat_session_msg_feedback_id_seq;
+CREATE SEQUENCE client_agent_index_config_id_seq;
+CREATE SEQUENCE coze_cache_industry_mapping_id_seq;
+CREATE SEQUENCE data_entname_indname_reference_records_id_seq;
+CREATE SEQUENCE data_relate_account_id_seq;
+CREATE SEQUENCE data_update_config_id_seq;
+CREATE SEQUENCE ent_rel_shortname_info_id_seq;
+CREATE SEQUENCE financial_transaction_records__id_seq;
+CREATE SEQUENCE finatial_records_task_id_seq;
+CREATE SEQUENCE finatial_upload_task_id_seq;
+CREATE SEQUENCE index_agent_rela_id_seq;
+CREATE SEQUENCE index_detail_code_library__id_seq;
+CREATE SEQUENCE index_detail_config_id_seq;
+CREATE SEQUENCE index_info_temp__id_seq;
+CREATE SEQUENCE index_params_temp__id_seq;
+CREATE SEQUENCE index_relate_info_id_seq;
+CREATE SEQUENCE jeecg_monthly_growth_analysis_id_seq;
+CREATE SEQUENCE jeecg_project_nature_income_id_seq;
+CREATE SEQUENCE knowledge_black_params_config_id_seq;
+CREATE SEQUENCE knowledge_black_params_config_version_id_seq;
+CREATE SEQUENCE knowledge_query_result_for_batch_id_seq;
+CREATE SEQUENCE knowledge_relate_index_id_seq;
+CREATE SEQUENCE knowledge_relate_index_version_id_seq;
+CREATE SEQUENCE large_model_config_id_seq;
+CREATE SEQUENCE message_push_config_id_seq;
+CREATE SEQUENCE message_relate_account_id_seq;
+CREATE SEQUENCE post_glm_records_id_seq;
+CREATE SEQUENCE qianxun_user_log_id_seq;
+CREATE SEQUENCE rasa_chat_detail_info_id_seq;
+CREATE SEQUENCE rela_index_config_id_seq;
+CREATE SEQUENCE scene_inflect_info__id_seq;
+CREATE SEQUENCE sence_relate_info__id_seq;
+CREATE SEQUENCE sync_knowledge_info_id_seq;
+CREATE SEQUENCE sys_announcement_send__id_seq;
+CREATE SEQUENCE sys_page_view_log_id_seq;
+CREATE SEQUENCE trace_query_result_id_seq;
+CREATE SEQUENCE workflow_return_records_id_seq;
 
 -- ================= 原脚本内容 =================
 CREATE TABLE agent_config (
