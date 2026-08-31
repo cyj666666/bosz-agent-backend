@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS app_customer_info (
     dangerLevel            VARCHAR(64),
     warningLevel           VARCHAR(64),
     isStateOwned           VARCHAR(64),
-    isFakeStateOwned       VARCHAR(64),
     isListedCompany        VARCHAR(32),
     groupName              VARCHAR(128),
     isTechCompany          VARCHAR(64),
@@ -81,14 +80,13 @@ COMMENT ON COLUMN app_customer_info.legalPerson IS '法定代表人';
 COMMENT ON COLUMN app_customer_info.registerCapital IS '注册资本（万元）';
 COMMENT ON COLUMN app_customer_info.paidInCapital IS '实收资本（万元）';
 COMMENT ON COLUMN app_customer_info.industryType IS '行业分类（码值：GB/T 4754 行业代码，码值待确认）';
-COMMENT ON COLUMN app_customer_info.holdType IS '控股类型（码值：国有绝对控股/国有相对控股/集体绝对控股/集体相对控股（国营），其余为民营）';
+COMMENT ON COLUMN app_customer_info.holdType IS '控股类型（码值：国有绝对控股/国有相对控股/集体绝对控股/集体相对控股/民营/个人绝对控股，码值待确认）';
 COMMENT ON COLUMN app_customer_info.actualController IS '实际控制人';
 COMMENT ON COLUMN app_customer_info.officeAddress IS '办公地址';
 COMMENT ON COLUMN app_customer_info.businessScope IS '经营范围';
 COMMENT ON COLUMN app_customer_info.dangerLevel IS '十级分类（码值：银行十级分类（1-4正常/5-6关注/7-8次级可疑/9-10损失，具体码值待确认））';
-COMMENT ON COLUMN app_customer_info.warningLevel IS '预警等级（码值：高/中/低，码值待确认）';
+COMMENT ON COLUMN app_customer_info.warningLevel IS '预警等级（码值：高/中/低/黄色预警，码值待确认）';
 COMMENT ON COLUMN app_customer_info.isStateOwned IS '是否国资/国有担保（码值：是/否（由控股类型holdType判断））';
-COMMENT ON COLUMN app_customer_info.isFakeStateOwned IS '是否假冒国企（码值：是/否）';
 COMMENT ON COLUMN app_customer_info.isListedCompany IS '借款人是否上市公司（码值：是/否，中台接口）';
 COMMENT ON COLUMN app_customer_info.groupName IS '所属集团名称';
 COMMENT ON COLUMN app_customer_info.isTechCompany IS '是否科创企业（码值：是/否）';
@@ -101,12 +99,10 @@ CREATE TABLE IF NOT EXISTS app_ic_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
-    snapshot_type          VARCHAR(32),
     icLegalPerson          VARCHAR(128),
     icRegisterCapital      DECIMAL(18,2),
     icPaidInCapital        DECIMAL(18,2),
     icBeneficiaryName      VARCHAR(128),
-    systemActualController VARCHAR(128),
     icBeneficiaryPercent   DECIMAL(12,4),
     isStateOwned           VARCHAR(64),
     isFakeStateOwned       VARCHAR(64),
@@ -119,12 +115,10 @@ COMMENT ON TABLE app_ic_info IS '工商登记信息表（客户级）';
 COMMENT ON COLUMN app_ic_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_ic_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_ic_info.customerName IS '客户名称';
-COMMENT ON COLUMN app_ic_info.snapshot_type IS '快照类型（latest最新/atCredit授信时）';
 COMMENT ON COLUMN app_ic_info.icLegalPerson IS '工商法定代表人';
 COMMENT ON COLUMN app_ic_info.icRegisterCapital IS '工商注册资本（万元）';
 COMMENT ON COLUMN app_ic_info.icPaidInCapital IS '工商实缴资本（万元）';
 COMMENT ON COLUMN app_ic_info.icBeneficiaryName IS '工商受益人名称';
-COMMENT ON COLUMN app_ic_info.systemActualController IS '系统实际控制人（多时点快照，授信时/最新）';
 COMMENT ON COLUMN app_ic_info.icBeneficiaryPercent IS '工商受益人持股比例（%）';
 COMMENT ON COLUMN app_ic_info.isStateOwned IS '是否国有企业（工商口径）（码值：是/否（工商口径））';
 COMMENT ON COLUMN app_ic_info.isFakeStateOwned IS '是否假冒国企（工商口径）（码值：是/否（工商口径））';
@@ -399,6 +393,7 @@ CREATE TABLE IF NOT EXISTS app_collateral_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    clrId                  VARCHAR(64),
     owner                  VARCHAR(128),
     clrType                VARCHAR(64),
     clrName                VARCHAR(128),
@@ -417,6 +412,7 @@ COMMENT ON TABLE app_collateral_info IS '押品主档表';
 COMMENT ON COLUMN app_collateral_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_collateral_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_collateral_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_collateral_info.clrId IS '押品编号';
 COMMENT ON COLUMN app_collateral_info.owner IS '权属人';
 COMMENT ON COLUMN app_collateral_info.clrType IS '押品类型（码值：不动产/动产/权利类等，码值待确认）';
 COMMENT ON COLUMN app_collateral_info.clrName IS '押品名称';
@@ -430,12 +426,14 @@ COMMENT ON COLUMN app_collateral_info.confirmDate IS '认定日期';
 COMMENT ON COLUMN app_collateral_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_collateral_info_reportNo ON app_collateral_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_collateral_info_customerId ON app_collateral_info (customerId);
+CREATE INDEX IF NOT EXISTS idx_collateral_info_clrId ON app_collateral_info (clrId);
 
 CREATE TABLE IF NOT EXISTS app_collateral_mortgage_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    clrId                  VARCHAR(64),
     clrName                VARCHAR(128),
     pledgeSerialNo         VARCHAR(64),
     pledgeeName            VARCHAR(128),
@@ -452,6 +450,7 @@ COMMENT ON TABLE app_collateral_mortgage_info IS '押品他项权利/限制权�
 COMMENT ON COLUMN app_collateral_mortgage_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_collateral_mortgage_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_collateral_mortgage_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_collateral_mortgage_info.clrId IS '押品编号（关联 app_collateral_info.clrId）';
 COMMENT ON COLUMN app_collateral_mortgage_info.clrName IS '关联押品名称';
 COMMENT ON COLUMN app_collateral_mortgage_info.pledgeSerialNo IS '不动产登记编号';
 COMMENT ON COLUMN app_collateral_mortgage_info.pledgeeName IS '他项权姓名';
@@ -463,12 +462,14 @@ COMMENT ON COLUMN app_collateral_mortgage_info.registerTimestamp IS '设定日�
 COMMENT ON COLUMN app_collateral_mortgage_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_collateral_mortgage_info_reportNo ON app_collateral_mortgage_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_collateral_mortgage_info_customerId ON app_collateral_mortgage_info (customerId);
+CREATE INDEX IF NOT EXISTS idx_collateral_mortgage_info_clrId ON app_collateral_mortgage_info (clrId);
 
 CREATE TABLE IF NOT EXISTS app_collateral_restricted_right (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    clrId                  VARCHAR(64),
     attachmentOrg          VARCHAR(128),
     attachmentTypeName     VARCHAR(64),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -479,11 +480,13 @@ COMMENT ON TABLE app_collateral_restricted_right IS '押品限制权利表';
 COMMENT ON COLUMN app_collateral_restricted_right.reportNo IS '报告编号';
 COMMENT ON COLUMN app_collateral_restricted_right.customerId IS '客户编号';
 COMMENT ON COLUMN app_collateral_restricted_right.customerName IS '客户名称';
+COMMENT ON COLUMN app_collateral_restricted_right.clrId IS '押品编号（关联 app_collateral_info.clrId）';
 COMMENT ON COLUMN app_collateral_restricted_right.attachmentOrg IS '限制权人';
 COMMENT ON COLUMN app_collateral_restricted_right.attachmentTypeName IS '查封类型（码值：轮候查封/正式查封等，码值待确认）';
 COMMENT ON COLUMN app_collateral_restricted_right.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_collateral_restricted_right_reportNo ON app_collateral_restricted_right (reportNo);
 CREATE INDEX IF NOT EXISTS idx_collateral_restricted_right_customerId ON app_collateral_restricted_right (customerId);
+CREATE INDEX IF NOT EXISTS idx_collateral_restricted_right_clrId ON app_collateral_restricted_right (clrId);
 
 CREATE TABLE IF NOT EXISTS app_settle_account_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -1083,7 +1086,7 @@ COMMENT ON COLUMN app_check_opinion_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_check_opinion_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_check_opinion_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_check_opinion_info.conditionDesc IS '批复后续管理要求';
-COMMENT ON COLUMN app_check_opinion_info.completeStatus IS '完成情况（码值：已完成/未完成/部分完成（码值待确认））';
+COMMENT ON COLUMN app_check_opinion_info.completeStatus IS '完成情况（码值：已完成/未完成/部分完成/持续关注，码值待确认）';
 COMMENT ON COLUMN app_check_opinion_info.conditionInstruction IS '情况说明';
 COMMENT ON COLUMN app_check_opinion_info.realCompleteTime IS '实际完成日期';
 COMMENT ON COLUMN app_check_opinion_info.itemCategory IS '事项类别';
