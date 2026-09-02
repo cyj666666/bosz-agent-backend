@@ -7777,8 +7777,9 @@ CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_reportNo ON app_
 CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_customerId ON app_specific_loan_project_check_info (customerId);
 
 
-ALTER TABLE "agent_rule" ALTER COLUMN "rule_text" DROP DEFAULT, ALTER COLUMN "rule_text" TYPE text USING "rule_text"::text, ALTER COLUMN "rule_text" SET DEFAULT 'NULL::character varying';
-ALTER TABLE "agent_rule" ALTER COLUMN "parsed_expression" DROP DEFAULT, ALTER COLUMN "parsed_expression" TYPE text USING "parsed_expression"::text, ALTER COLUMN "parsed_expression" SET DEFAULT 'NULL::character varying';
+ALTER TABLE agent_rule ALTER COLUMN rule_text TYPE text;
+ALTER TABLE agent_rule ALTER COLUMN parsed_expression TYPE text;
+
 
 
 
