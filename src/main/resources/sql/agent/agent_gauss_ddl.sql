@@ -7558,6 +7558,225 @@ COMMENT ON COLUMN workflow_return_records."date" IS '时间';
 COMMENT ON COLUMN workflow_return_records.data_source IS '数据来源';
 ALTER TABLE workflow_return_records ADD CONSTRAINT workflow_return_records_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
+
+-- ============================================================
+-- 特定贷款检查表（openGauss B 模式 / GaussDB 兼容 MySQL 版）
+-- 适配说明：本库编码 SQL_ASCII + C collation，openGauss B 模式
+--           隐式建 VARCHAR 会报 "varchar cannot be set to binary
+--           collation"，因此所有 VARCHAR/CHAR 列显式加
+--           COLLATE pg_catalog."C"（与迁移工具生成一致）
+-- 适用库：bosz_test（localhost:5432 / 172.20.2.19:8000）
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 1. 特定贷款检查表-经营收入类
+--    （经营性物业贷款/厂房通贷款：租金经营收入/租户/出租预期/抵押物/监管）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS app_specific_loan_operate_check_info (
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo               VARCHAR(64)  COLLATE pg_catalog."C" NOT NULL,
+    customerId             VARCHAR(64)  COLLATE pg_catalog."C",
+    customerName           VARCHAR(128) COLLATE pg_catalog."C",
+    objectName             VARCHAR(64)  COLLATE pg_catalog."C",
+    balance                DECIMAL(18,2),
+    businessSum            DECIMAL(18,2),
+    contractNo             VARCHAR(64)  COLLATE pg_catalog."C",
+    duebillTotalBusinessSum DECIMAL(18,2),
+    expectation            VARCHAR(64)  COLLATE pg_catalog."C",
+    expectation2           VARCHAR(64)  COLLATE pg_catalog."C",
+    ifChange               VARCHAR(32)  COLLATE pg_catalog."C",
+    ifDown                 VARCHAR(32)  COLLATE pg_catalog."C",
+    ifDownExplain          TEXT,
+    ifOpenAccount          VARCHAR(32)  COLLATE pg_catalog."C",
+    ifPledge               VARCHAR(32)  COLLATE pg_catalog."C",
+    ifPledgeExplain        TEXT,
+    ifSign                 VARCHAR(32)  COLLATE pg_catalog."C",
+    ifSupervise            VARCHAR(32)  COLLATE pg_catalog."C",
+    income                 DECIMAL(18,2),
+    incomeCompare          VARCHAR(64)  COLLATE pg_catalog."C",
+    indexYear              INT,
+    indexYearCompare       INT,
+    lastIncome             DECIMAL(18,2),
+    lastIncomeCompare      VARCHAR(64)  COLLATE pg_catalog."C",
+    lastLesseeCount        INT,
+    lastLesseeCountCompare VARCHAR(64)  COLLATE pg_catalog."C",
+    lastOperateCDIncomeCondition TEXT,
+    lastOperateIncomeCondition   TEXT,
+    lesseeCount            INT,
+    lesseeCountCompare     VARCHAR(64)  COLLATE pg_catalog."C",
+    nominalBalanceSum      DECIMAL(18,2),
+    operateCDIncomeCondition     TEXT,
+    operateIncomeCondition  TEXT,
+    productBelongName      VARCHAR(128) COLLATE pg_catalog."C",
+    productName            VARCHAR(128) COLLATE pg_catalog."C",
+    purpose                VARCHAR(128) COLLATE pg_catalog."C",
+    repaySum               DECIMAL(18,2),
+    signExplain            TEXT,
+    superviseExplain       TEXT,
+    vouchType              VARCHAR(32)  COLLATE pg_catalog."C",
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_specific_loan_operate_check_info IS '特定贷款检查表-经营收入类（经营性物业贷款/厂房通贷款，检查租金经营收入/租户/出租预期/抵押物/监管）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.objectName IS '对象名称（码值：经营性物业贷款/厂房通贷款）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.balance IS '用信余额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.businessSum IS '授信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.contractNo IS '业务合同编号';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.duebillTotalBusinessSum IS '用信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.expectation IS '出租情况是否符合预期（码值：是/否，文本结论）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.expectation2 IS '物业收入是否符合预期（码值：是/否，接口字段名保留）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifChange IS '出租情况或物业使用情况是否较授信时发生变化（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifDown IS '抵押物价值是否有显著下降（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifDownExplain IS '抵押物价值显著下降说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifOpenAccount IS '是否开立监管账户（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifPledge IS '抵押物是否存在查封或其他抵押的情况（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifPledgeExplain IS '抵押物查封或其他抵押情况说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifSign IS '租金监管协议是否已签署（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifSupervise IS '物业经营收入是否需要监管（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.income IS '承贷物业的经营收入（本次检查，万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.incomeCompare IS '承贷物业的经营收入与业务申报方案相比（结论文本）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.indexYear IS '年份（本次检查年度，如2026）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.indexYearCompare IS '比较年份（如2025）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastIncome IS '经营收入（上年/前次，万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastIncomeCompare IS '经营收入与业务申报方案相比（上年/前次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastLesseeCount IS '租户租数（前次/上年）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastLesseeCountCompare IS '租户租数与业务申报方案相比（前次/上年）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastOperateCDIncomeCondition IS '承贷物业的经营收入前次检查情况';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastOperateIncomeCondition IS '前次物业收入及还款来源分析';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lesseeCount IS '租户租数（本次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lesseeCountCompare IS '租户租数与业务申报方案相比（本次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.nominalBalanceSum IS '用信敞口余额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.operateCDIncomeCondition IS '承贷物业的经营收入本次检查情况';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.operateIncomeCondition IS '物业收入及还款来源分析（本次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.productBelongName IS '产品归属';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.productName IS '基础产品';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.purpose IS '用途';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.repaySum IS '已还本金（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.signExplain IS '租金监管协议签署说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.superviseExplain IS '开立监管账户说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.vouchType IS '担保方式';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_specific_loan_operate_check_info_reportNo ON app_specific_loan_operate_check_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_specific_loan_operate_check_info_customerId ON app_specific_loan_operate_check_info (customerId);
+
+-- ------------------------------------------------------------
+-- 2. 特定贷款检查表-项目类
+--    （固定资产贷款/房地产开发贷款：项目资本金/建设进度/资金开票使用/超投/预售）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS app_specific_loan_project_check_info (
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo               VARCHAR(64)  COLLATE pg_catalog."C" NOT NULL,
+    customerId             VARCHAR(64)  COLLATE pg_catalog."C",
+    customerName           VARCHAR(128) COLLATE pg_catalog."C",
+    objectName             VARCHAR(64)  COLLATE pg_catalog."C",
+    balance                DECIMAL(18,2),
+    businessSum            DECIMAL(18,2),
+    capitalCheckCondition  TEXT,
+    capitalFundInvoiced    DECIMAL(18,2),
+    capitalFundUnInvoiced  DECIMAL(18,2),
+    capitalFundUsed        DECIMAL(18,2),
+    contractNo             VARCHAR(64)  COLLATE pg_catalog."C",
+    duebillTotalBusinessSum DECIMAL(18,2),
+    explain                TEXT,
+    ifBuild                VARCHAR(32)  COLLATE pg_catalog."C",
+    ifConstructionExpect   VARCHAR(32)  COLLATE pg_catalog."C",
+    ifGetPermission        VARCHAR(32)  COLLATE pg_catalog."C",
+    ifMatch                VARCHAR(32)  COLLATE pg_catalog."C",
+    ifOpenAccount          VARCHAR(32)  COLLATE pg_catalog."C",
+    ifOperate              VARCHAR(32)  COLLATE pg_catalog."C",
+    ifOverInvest           VARCHAR(32)  COLLATE pg_catalog."C",
+    ifRunExpect            VARCHAR(32)  COLLATE pg_catalog."C",
+    ifSign                 VARCHAR(32)  COLLATE pg_catalog."C",
+    lastCapitalCheckCondition  TEXT,
+    lastPurchaseCheckCondition TEXT,
+    lastRunCheckCondition     TEXT,
+    lastScheduleCheckCondition TEXT,
+    lastSuperviseCheckCondition TEXT,
+    loanFundInvoiced       DECIMAL(18,2),
+    loanFundUnInvoiced     DECIMAL(18,2),
+    loanFundUsed           DECIMAL(18,2),
+    nominalBalanceSum      DECIMAL(18,2),
+    otherFundInvoiced      DECIMAL(18,2),
+    otherFundUnInvoiced    DECIMAL(18,2),
+    otherFundUsed          DECIMAL(18,2),
+    overInvest             TEXT,
+    productBelongName      VARCHAR(128) COLLATE pg_catalog."C",
+    productName            VARCHAR(128) COLLATE pg_catalog."C",
+    projectBeginDate       VARCHAR(32)  COLLATE pg_catalog."C",
+    projectFinishDate      VARCHAR(32)  COLLATE pg_catalog."C",
+    purchaseCheckCondition TEXT,
+    purpose                VARCHAR(128) COLLATE pg_catalog."C",
+    repaySum               DECIMAL(18,2),
+    runCheckCondition      TEXT,
+    scheduleCheckCondition TEXT,
+    superviseCheckCondition TEXT,
+    totalInvestInvoiced    DECIMAL(18,2),
+    totalInvestUnInvoiced  DECIMAL(18,2),
+    totalInvestUsed        DECIMAL(18,2),
+    vouchType              VARCHAR(32)  COLLATE pg_catalog."C",
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_specific_loan_project_check_info IS '特定贷款检查表-项目类（固定资产贷款/房地产开发贷款，检查项目资本金/建设进度/资金开票使用/超投/预售）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_specific_loan_project_check_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_specific_loan_project_check_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_specific_loan_project_check_info.objectName IS '对象名称（码值：固定资产/房地产开发贷款）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.balance IS '用信余额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.businessSum IS '授信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalCheckCondition IS '项目资本金情况本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalFundInvoiced IS '资本金已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalFundUnInvoiced IS '资本金未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalFundUsed IS '资本金已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.contractNo IS '业务合同编号';
+COMMENT ON COLUMN app_specific_loan_project_check_info.duebillTotalBusinessSum IS '用信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.explain IS '说明（项目情况说明）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifBuild IS '是否建设期（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifConstructionExpect IS '建设期进度是否符合预期（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifGetPermission IS '是否取得预售证（码值：是/否/不涉及）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifMatch IS '资金使用是否与项目进度匹配（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifOpenAccount IS '是否开立监管账户（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifOperate IS '是否运营期（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifOverInvest IS '是否存在超投情况（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifRunExpect IS '运营是否符合预期（码值：是/否/不涉及）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifSign IS '资金监管协议是否已签署（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastCapitalCheckCondition IS '项目资本金情况前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastPurchaseCheckCondition IS '建安工程或设备采购支出情况前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastRunCheckCondition IS '运营检查前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastScheduleCheckCondition IS '项目建设进度前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastSuperviseCheckCondition IS '资金监管情况前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.loanFundInvoiced IS '贷款资金已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.loanFundUnInvoiced IS '贷款资金未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.loanFundUsed IS '贷款资金已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.nominalBalanceSum IS '用信敞口余额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.otherFundInvoiced IS '其他资金已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.otherFundUnInvoiced IS '其他资金未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.otherFundUsed IS '其他资金已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.overInvest IS '超投情况说明';
+COMMENT ON COLUMN app_specific_loan_project_check_info.productBelongName IS '产品归属';
+COMMENT ON COLUMN app_specific_loan_project_check_info.productName IS '基础产品';
+COMMENT ON COLUMN app_specific_loan_project_check_info.projectBeginDate IS '项目启动年月';
+COMMENT ON COLUMN app_specific_loan_project_check_info.projectFinishDate IS '（预计）项目完工年月';
+COMMENT ON COLUMN app_specific_loan_project_check_info.purchaseCheckCondition IS '建安工程或设备采购支出情况本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.purpose IS '用途';
+COMMENT ON COLUMN app_specific_loan_project_check_info.repaySum IS '已还本金（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.runCheckCondition IS '运营检查本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.scheduleCheckCondition IS '项目建设进度本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.superviseCheckCondition IS '资金监管情况本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.totalInvestInvoiced IS '总投资已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.totalInvestUnInvoiced IS '总投资未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.totalInvestUsed IS '总投资已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.vouchType IS '担保方式';
+COMMENT ON COLUMN app_specific_loan_project_check_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_reportNo ON app_specific_loan_project_check_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_customerId ON app_specific_loan_project_check_info (customerId);
+
+
 ALTER TABLE "agent_rule" ALTER COLUMN "rule_text" DROP DEFAULT, ALTER COLUMN "rule_text" TYPE text USING "rule_text"::text, ALTER COLUMN "rule_text" SET DEFAULT 'NULL::character varying';
 ALTER TABLE "agent_rule" ALTER COLUMN "parsed_expression" DROP DEFAULT, ALTER COLUMN "parsed_expression" TYPE text USING "parsed_expression"::text, ALTER COLUMN "parsed_expression" SET DEFAULT 'NULL::character varying';
 
