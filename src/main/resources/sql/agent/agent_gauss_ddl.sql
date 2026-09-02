@@ -7558,3 +7558,8 @@ COMMENT ON COLUMN workflow_return_records."date" IS '时间';
 COMMENT ON COLUMN workflow_return_records.data_source IS '数据来源';
 ALTER TABLE workflow_return_records ADD CONSTRAINT workflow_return_records_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
+ALTER TABLE "agent_rule" ALTER COLUMN "rule_text" DROP DEFAULT, ALTER COLUMN "rule_text" TYPE text USING "rule_text"::text, ALTER COLUMN "rule_text" SET DEFAULT 'NULL::character varying';
+ALTER TABLE "agent_rule" ALTER COLUMN "parsed_expression" DROP DEFAULT, ALTER COLUMN "parsed_expression" TYPE text USING "parsed_expression"::text, ALTER COLUMN "parsed_expression" SET DEFAULT 'NULL::character varying';
+
+
+
