@@ -1202,112 +1202,203 @@ COMMENT ON COLUMN app_loan_plan_info.compoundInterest IS '下次还款复利（�
 COMMENT ON COLUMN app_loan_plan_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_loan_plan_info_reportNo ON app_loan_plan_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_loan_plan_info_customerId ON app_loan_plan_info (customerId);
-
-CREATE TABLE IF NOT EXISTS app_specific_loan_check_info (
+CREATE TABLE IF NOT EXISTS app_specific_loan_operate_check_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
     objectName             VARCHAR(64),
-    productName            VARCHAR(128),
-    productBelongName      VARCHAR(128),
-    contractNo             VARCHAR(64),
-    businessSum            DECIMAL(18,2),
     balance                DECIMAL(18,2),
+    businessSum            DECIMAL(18,2),
+    contractNo             VARCHAR(64),
     duebillTotalBusinessSum DECIMAL(18,2),
-    nominalBalanceSum      DECIMAL(18,2),
-    repaySum               DECIMAL(18,2),
-    purpose                VARCHAR(128),
-    vouchType              VARCHAR(32),
-    projectBeginDate       VARCHAR(32),
-    projectFinishDate      VARCHAR(32),
-    ifBulid                VARCHAR(32),
-    ifConstructionExpect   VARCHAR(32),
-    ifGetPermission        VARCHAR(32),
-    ifMatch                VARCHAR(32),
+    expectation            VARCHAR(64),
+    expectation2           VARCHAR(64),
+    ifChange               VARCHAR(32),
+    ifDown                 VARCHAR(32),
+    ifDownExplain          TEXT,
     ifOpenAccount          VARCHAR(32),
+    ifPledge               VARCHAR(32),
+    ifPledgeExplain        TEXT,
     ifSign                 VARCHAR(32),
-    ifOverInvest           VARCHAR(32),
-    overInvest             TEXT,
-    ifOperate              VARCHAR(32),
-    ifRunExpect            VARCHAR(32),
-    scheduleCheckCondition TEXT,
-    lastScheduleCheckCondition TEXT,
-    capitalCheckCondition  TEXT,
-    lastCapitalCheckCondition TEXT,
-    purchaseCheckCondition TEXT,
-    lastPurchaseCheckCondition TEXT,
-    runCheckCondition      TEXT,
-    lastRunCheckCondition  TEXT,
-    superviseCheckCondition TEXT,
-    lastSuperviseCheckCondition TEXT,
-    capitalFundInvoiced    DECIMAL(18,2),
-    capitalFundUnInvoiced  DECIMAL(18,2),
-    capitalFundUsed        DECIMAL(18,2),
-    loanFundInvoiced       DECIMAL(18,2),
-    loanFundUnInvoiced     DECIMAL(18,2),
-    loanFundUsed           DECIMAL(18,2),
-    otherFundInvoiced      DECIMAL(18,2),
-    otherFundUnInvoiced    DECIMAL(18,2),
-    otherFundUsed          DECIMAL(18,2),
-    totalInvestInvoiced    DECIMAL(18,2),
-    totalInvestUnInvoiced  DECIMAL(18,2),
-    totalInvestUsed        DECIMAL(18,2),
-    explain                TEXT,
+    ifSupervise            VARCHAR(32),
+    income                 DECIMAL(18,2),
+    incomeCompare          VARCHAR(64),
+    indexYear              INT,
+    indexYearCompare       INT,
+    lastIncome             DECIMAL(18,2),
+    lastIncomeCompare      VARCHAR(64),
+    lastLesseeCount        INT,
+    lastLesseeCountCompare VARCHAR(64),
+    lastOperateCDIncomeCondition TEXT,
+    lastOperateIncomeCondition   TEXT,
+    lesseeCount            INT,
+    lesseeCountCompare     VARCHAR(64),
+    nominalBalanceSum      DECIMAL(18,2),
+    operateCDIncomeCondition     TEXT,
+    operateIncomeCondition  TEXT,
+    productBelongName      VARCHAR(128),
+    productName            VARCHAR(128),
+    purpose                VARCHAR(128),
+    repaySum               DECIMAL(18,2),
+    signExplain            TEXT,
+    superviseExplain       TEXT,
+    vouchType              VARCHAR(32),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
-COMMENT ON TABLE app_specific_loan_check_info IS '特定贷款检查表';
-COMMENT ON COLUMN app_specific_loan_check_info.reportNo IS '报告编号';
-COMMENT ON COLUMN app_specific_loan_check_info.customerId IS '客户编号';
-COMMENT ON COLUMN app_specific_loan_check_info.customerName IS '客户名称';
-COMMENT ON COLUMN app_specific_loan_check_info.objectName IS '对象名称（码值：固定资产/房地产开发贷款/经营性物业贷款/厂房通贷款）';
-COMMENT ON COLUMN app_specific_loan_check_info.productName IS '基础产品';
-COMMENT ON COLUMN app_specific_loan_check_info.productBelongName IS '产品归属';
-COMMENT ON COLUMN app_specific_loan_check_info.contractNo IS '业务合同编号';
-COMMENT ON COLUMN app_specific_loan_check_info.businessSum IS '授信金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.balance IS '用信余额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.duebillTotalBusinessSum IS '用信金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.nominalBalanceSum IS '用信敞口余额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.repaySum IS '已还本金（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.purpose IS '用途';
-COMMENT ON COLUMN app_specific_loan_check_info.vouchType IS '担保方式';
-COMMENT ON COLUMN app_specific_loan_check_info.projectBeginDate IS '项目启动年月';
-COMMENT ON COLUMN app_specific_loan_check_info.projectFinishDate IS '（预计）项目完工年月';
-COMMENT ON COLUMN app_specific_loan_check_info.ifBulid IS '是否建设期（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifConstructionExpect IS '建设期进度是否符合预期（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifGetPermission IS '是否取得预售证（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifMatch IS '资金使用是否与项目进度匹配（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifOpenAccount IS '是否开立监管账户（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifSign IS '资金监管协议是否已签署（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifOverInvest IS '是否存在超投情况（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.overInvest IS '超投情况说明';
-COMMENT ON COLUMN app_specific_loan_check_info.ifOperate IS '是否运营期（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.ifRunExpect IS '运营是否符合预期（码值：是/否）';
-COMMENT ON COLUMN app_specific_loan_check_info.scheduleCheckCondition IS '项目建设进度本次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.lastScheduleCheckCondition IS '项目建设进度前次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.capitalCheckCondition IS '项目资本金情况本次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.lastCapitalCheckCondition IS '项目资本金情况前次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.purchaseCheckCondition IS '建安工程或设备采购支出情况本次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.lastPurchaseCheckCondition IS '建安工程或设备采购支出情况前次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.runCheckCondition IS '运营检查本次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.lastRunCheckCondition IS '运营检查前次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.superviseCheckCondition IS '资金监管情况本次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.lastSuperviseCheckCondition IS '资金监管情况前次检查情况';
-COMMENT ON COLUMN app_specific_loan_check_info.capitalFundInvoiced IS '资本金已开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.capitalFundUnInvoiced IS '资本金未开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.capitalFundUsed IS '资本金已使用金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.loanFundInvoiced IS '贷款资金已开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.loanFundUnInvoiced IS '贷款资金未开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.loanFundUsed IS '贷款资金已使用金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.otherFundInvoiced IS '其他资金已开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.otherFundUnInvoiced IS '其他资金未开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.otherFundUsed IS '其他资金已使用金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.totalInvestInvoiced IS '总投资已开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.totalInvestUnInvoiced IS '总投资未开票金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.totalInvestUsed IS '总投资已使用金额（万元）';
-COMMENT ON COLUMN app_specific_loan_check_info.explain IS '说明';
-COMMENT ON COLUMN app_specific_loan_check_info.inputtime IS '入库时间';
-CREATE INDEX IF NOT EXISTS idx_specific_loan_check_info_reportNo ON app_specific_loan_check_info (reportNo);
-CREATE INDEX IF NOT EXISTS idx_specific_loan_check_info_customerId ON app_specific_loan_check_info (customerId);
+COMMENT ON TABLE app_specific_loan_operate_check_info IS '特定贷款检查表-经营收入类（经营性物业贷款/厂房通贷款，检查租金经营收入/租户/出租预期/抵押物/监管）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.objectName IS '对象名称（码值：经营性物业贷款/厂房通贷款）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.balance IS '用信余额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.businessSum IS '授信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.contractNo IS '业务合同编号';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.duebillTotalBusinessSum IS '用信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.expectation IS '出租情况是否符合预期（码值：是/否，文本结论）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.expectation2 IS '物业收入是否符合预期（码值：是/否，接口字段名保留）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifChange IS '出租情况或物业使用情况是否较授信时发生变化（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifDown IS '抵押物价值是否有显著下降（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifDownExplain IS '抵押物价值显著下降说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifOpenAccount IS '是否开立监管账户（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifPledge IS '抵押物是否存在查封或其他抵押的情况（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifPledgeExplain IS '抵押物查封或其他抵押情况说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifSign IS '租金监管协议是否已签署（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.ifSupervise IS '物业经营收入是否需要监管（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.income IS '承贷物业的经营收入（本次检查，万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.incomeCompare IS '承贷物业的经营收入与业务申报方案相比（结论文本）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.indexYear IS '年份（本次检查年度，如2026）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.indexYearCompare IS '比较年份（如2025）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastIncome IS '经营收入（上年/前次，万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastIncomeCompare IS '经营收入与业务申报方案相比（上年/前次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastLesseeCount IS '租户租数（前次/上年）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastLesseeCountCompare IS '租户租数与业务申报方案相比（前次/上年）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastOperateCDIncomeCondition IS '承贷物业的经营收入前次检查情况';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lastOperateIncomeCondition IS '前次物业收入及还款来源分析';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lesseeCount IS '租户租数（本次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.lesseeCountCompare IS '租户租数与业务申报方案相比（本次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.nominalBalanceSum IS '用信敞口余额（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.operateCDIncomeCondition IS '承贷物业的经营收入本次检查情况';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.operateIncomeCondition IS '物业收入及还款来源分析（本次）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.productBelongName IS '产品归属';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.productName IS '基础产品';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.purpose IS '用途';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.repaySum IS '已还本金（万元）';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.signExplain IS '租金监管协议签署说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.superviseExplain IS '开立监管账户说明';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.vouchType IS '担保方式';
+COMMENT ON COLUMN app_specific_loan_operate_check_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_specific_loan_operate_check_info_reportNo ON app_specific_loan_operate_check_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_specific_loan_operate_check_info_customerId ON app_specific_loan_operate_check_info (customerId);
+
+CREATE TABLE IF NOT EXISTS app_specific_loan_project_check_info (
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo               VARCHAR(64) NOT NULL,
+    customerId             VARCHAR(64),
+    customerName           VARCHAR(128),
+    objectName             VARCHAR(64),
+    balance                DECIMAL(18,2),
+    businessSum            DECIMAL(18,2),
+    capitalCheckCondition  TEXT,
+    capitalFundInvoiced    DECIMAL(18,2),
+    capitalFundUnInvoiced  DECIMAL(18,2),
+    capitalFundUsed        DECIMAL(18,2),
+    contractNo             VARCHAR(64),
+    duebillTotalBusinessSum DECIMAL(18,2),
+    explain                TEXT,
+    ifBuild                VARCHAR(32),
+    ifConstructionExpect   VARCHAR(32),
+    ifGetPermission        VARCHAR(32),
+    ifMatch                VARCHAR(32),
+    ifOpenAccount          VARCHAR(32),
+    ifOperate              VARCHAR(32),
+    ifOverInvest           VARCHAR(32),
+    ifRunExpect            VARCHAR(32),
+    ifSign                 VARCHAR(32),
+    lastCapitalCheckCondition  TEXT,
+    lastPurchaseCheckCondition TEXT,
+    lastRunCheckCondition     TEXT,
+    lastScheduleCheckCondition TEXT,
+    lastSuperviseCheckCondition TEXT,
+    loanFundInvoiced       DECIMAL(18,2),
+    loanFundUnInvoiced     DECIMAL(18,2),
+    loanFundUsed           DECIMAL(18,2),
+    nominalBalanceSum      DECIMAL(18,2),
+    otherFundInvoiced      DECIMAL(18,2),
+    otherFundUnInvoiced    DECIMAL(18,2),
+    otherFundUsed          DECIMAL(18,2),
+    overInvest             TEXT,
+    productBelongName      VARCHAR(128),
+    productName            VARCHAR(128),
+    projectBeginDate       VARCHAR(32),
+    projectFinishDate      VARCHAR(32),
+    purchaseCheckCondition TEXT,
+    purpose                VARCHAR(128),
+    repaySum               DECIMAL(18,2),
+    runCheckCondition      TEXT,
+    scheduleCheckCondition TEXT,
+    superviseCheckCondition TEXT,
+    totalInvestInvoiced    DECIMAL(18,2),
+    totalInvestUnInvoiced  DECIMAL(18,2),
+    totalInvestUsed        DECIMAL(18,2),
+    vouchType              VARCHAR(32),
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_specific_loan_project_check_info IS '特定贷款检查表-项目类（固定资产贷款/房地产开发贷款，检查项目资本金/建设进度/资金开票使用/超投/预售）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_specific_loan_project_check_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_specific_loan_project_check_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_specific_loan_project_check_info.objectName IS '对象名称（码值：固定资产/房地产开发贷款）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.balance IS '用信余额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.businessSum IS '授信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalCheckCondition IS '项目资本金情况本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalFundInvoiced IS '资本金已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalFundUnInvoiced IS '资本金未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.capitalFundUsed IS '资本金已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.contractNo IS '业务合同编号';
+COMMENT ON COLUMN app_specific_loan_project_check_info.duebillTotalBusinessSum IS '用信金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.explain IS '说明（项目情况说明）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifBuild IS '是否建设期（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifConstructionExpect IS '建设期进度是否符合预期（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifGetPermission IS '是否取得预售证（码值：是/否/不涉及）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifMatch IS '资金使用是否与项目进度匹配（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifOpenAccount IS '是否开立监管账户（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifOperate IS '是否运营期（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifOverInvest IS '是否存在超投情况（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifRunExpect IS '运营是否符合预期（码值：是/否/不涉及）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.ifSign IS '资金监管协议是否已签署（码值：是/否）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastCapitalCheckCondition IS '项目资本金情况前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastPurchaseCheckCondition IS '建安工程或设备采购支出情况前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastRunCheckCondition IS '运营检查前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastScheduleCheckCondition IS '项目建设进度前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.lastSuperviseCheckCondition IS '资金监管情况前次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.loanFundInvoiced IS '贷款资金已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.loanFundUnInvoiced IS '贷款资金未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.loanFundUsed IS '贷款资金已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.nominalBalanceSum IS '用信敞口余额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.otherFundInvoiced IS '其他资金已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.otherFundUnInvoiced IS '其他资金未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.otherFundUsed IS '其他资金已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.overInvest IS '超投情况说明';
+COMMENT ON COLUMN app_specific_loan_project_check_info.productBelongName IS '产品归属';
+COMMENT ON COLUMN app_specific_loan_project_check_info.productName IS '基础产品';
+COMMENT ON COLUMN app_specific_loan_project_check_info.projectBeginDate IS '项目启动年月';
+COMMENT ON COLUMN app_specific_loan_project_check_info.projectFinishDate IS '（预计）项目完工年月';
+COMMENT ON COLUMN app_specific_loan_project_check_info.purchaseCheckCondition IS '建安工程或设备采购支出情况本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.purpose IS '用途';
+COMMENT ON COLUMN app_specific_loan_project_check_info.repaySum IS '已还本金（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.runCheckCondition IS '运营检查本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.scheduleCheckCondition IS '项目建设进度本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.superviseCheckCondition IS '资金监管情况本次检查情况';
+COMMENT ON COLUMN app_specific_loan_project_check_info.totalInvestInvoiced IS '总投资已开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.totalInvestUnInvoiced IS '总投资未开票金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.totalInvestUsed IS '总投资已使用金额（万元）';
+COMMENT ON COLUMN app_specific_loan_project_check_info.vouchType IS '担保方式';
+COMMENT ON COLUMN app_specific_loan_project_check_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_reportNo ON app_specific_loan_project_check_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_customerId ON app_specific_loan_project_check_info (customerId);
+
