@@ -697,6 +697,22 @@ CREATE TABLE IF NOT EXISTS app_credit_report_info (
     workingCapitalLoan1yBal DECIMAL(18,2),
     loanBankOrgCount       INT,
     guaranteeBankOrgCount  INT,
+    shortTermLoanOrgCount      INT,
+    midLongTermLoanOrgCount    INT,
+    revolvingOverdraftOrgCount INT,
+    discountOrgCount           INT,
+    bankAcceptanceBillOrgCount INT,
+    letterOfCreditOrgCount     INT,
+    bankGuaranteeOrgCount      INT,
+    otherGuaranteeTradeOrgCount INT,
+    shortTermLoanBal           DECIMAL(18,2),
+    midLongTermLoanBal         DECIMAL(18,2),
+    revolvingOverdraftBal      DECIMAL(18,2),
+    discountBal                DECIMAL(18,2),
+    bankAcceptanceBillBal      DECIMAL(18,2),
+    letterOfCreditBal          DECIMAL(18,2),
+    bankGuaranteeBal           DECIMAL(18,2),
+    otherGuaranteeTradeBal     DECIMAL(18,2),
     creditShortTermDiff    DECIMAL(18,2),
     creditLongTermDiff     DECIMAL(18,2),
     creditDebtDeviation    DECIMAL(12,4),
@@ -736,6 +752,22 @@ COMMENT ON COLUMN app_credit_report_info.workingCapitalLoanBal IS '流动资金�
 COMMENT ON COLUMN app_credit_report_info.workingCapitalLoan1yBal IS '一年期以下的流动资金贷款余额（万元，上游直给：qy_zhint_wjq_xyldk_1year_bal）';
 COMMENT ON COLUMN app_credit_report_info.loanBankOrgCount IS '企业借贷交易合作银行及融资租赁机构数（上游直给：qy_jiedai_hzyh_org_cnt）';
 COMMENT ON COLUMN app_credit_report_info.guaranteeBankOrgCount IS '企业担保交易合作银行及融资租赁机构数（上游直给：qy_danbao_hzyh_org_cnt）';
+COMMENT ON COLUMN app_credit_report_info.shortTermLoanOrgCount IS '短期借款未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.midLongTermLoanOrgCount IS '中长期借款未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.revolvingOverdraftOrgCount IS '循环透支未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.discountOrgCount IS '贴现未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.bankAcceptanceBillOrgCount IS '银行承兑汇票未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.letterOfCreditOrgCount IS '信用证未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.bankGuaranteeOrgCount IS '银行保函未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.otherGuaranteeTradeOrgCount IS '其他担保交易未结清机构数合计（2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.shortTermLoanBal IS '短期借款未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.midLongTermLoanBal IS '中长期借款未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.revolvingOverdraftBal IS '循环透支未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.discountBal IS '贴现未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.bankAcceptanceBillBal IS '银行承兑汇票未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.letterOfCreditBal IS '信用证未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.bankGuaranteeBal IS '银行保函未结清余额合计（万元，2026-09-03 新增）';
+COMMENT ON COLUMN app_credit_report_info.otherGuaranteeTradeBal IS '其他担保交易未结清余额合计（万元，2026-09-03 新增）';
 COMMENT ON COLUMN app_credit_report_info.creditShortTermDiff IS '征信短期借款未结清余额与财报短期借款相差（万元，加工结果默认已有）';
 COMMENT ON COLUMN app_credit_report_info.creditLongTermDiff IS '征信中长期借款未结清余额与财报长期借款（含一年内到期的长期借款）相差（万元，加工结果默认已有）';
 COMMENT ON COLUMN app_credit_report_info.creditDebtDeviation IS '征信债务与财报债务偏离度（%，加工结果默认已有）';
@@ -793,6 +825,7 @@ CREATE TABLE IF NOT EXISTS app_guarantor_info (
     zxReportNoZX           VARCHAR(128),
     zxReportNosq           VARCHAR(128),
     zxReportNoSX           VARCHAR(128),
+    creditSum              DECIMAL(18,2),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -810,6 +843,7 @@ COMMENT ON COLUMN app_guarantor_info.subjectType IS '主体类型（码值：借
 COMMENT ON COLUMN app_guarantor_info.zxReportNoZX IS '征信报告记录号-最新（2026-09-03 新增，文件字段名 zxReportNoZX）';
 COMMENT ON COLUMN app_guarantor_info.zxReportNosq IS '征信报告记录号-上期（2026-09-03 新增，文件字段名 zxReportNosq）';
 COMMENT ON COLUMN app_guarantor_info.zxReportNoSX IS '征信报告记录号-授信（2026-09-03 新增，文件字段名 zxReportNoSX）';
+COMMENT ON COLUMN app_guarantor_info.creditSum IS '授信金额（万元，2026-09-03 新增）';
 COMMENT ON COLUMN app_guarantor_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_guarantor_info_reportNo ON app_guarantor_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_guarantor_info_customerId ON app_guarantor_info (customerId);
@@ -849,6 +883,13 @@ CREATE TABLE IF NOT EXISTS app_guarantor_credit_info (
     guaranteeHkAbnormalBal DECIMAL(18,2),
     creditUseRate          DECIMAL(12,4),
     nonBankLiabTotal       DECIMAL(18,2),
+    loanQuery12m              INT,
+    loanQuery6m               INT,
+    loanQuery3m               INT,
+    cardQuery12m              INT,
+    cardQuery6m               INT,
+    cardQuery3m               INT,
+    selfQuery1m               INT,
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -887,6 +928,13 @@ COMMENT ON COLUMN app_guarantor_credit_info.cardAbnormalBal IS '未销户贷记�
 COMMENT ON COLUMN app_guarantor_credit_info.guaranteeHkAbnormalBal IS '对外担保（相关还款责任）还款状态非正常余额（万元）';
 COMMENT ON COLUMN app_guarantor_credit_info.creditUseRate IS '信用卡使用率（%）';
 COMMENT ON COLUMN app_guarantor_credit_info.nonBankLiabTotal IS '在非银机构负债合计（万元，个人，上游直给：gr_fyjg_liab_tot）';
+COMMENT ON COLUMN app_guarantor_credit_info.loanQuery12m IS '近一年贷款审批征信查询次数（2026-09-03 新增）';
+COMMENT ON COLUMN app_guarantor_credit_info.loanQuery6m IS '近6个月贷款审批征信查询次数（2026-09-03 新增）';
+COMMENT ON COLUMN app_guarantor_credit_info.loanQuery3m IS '近3个月贷款审批征信查询次数（2026-09-03 新增）';
+COMMENT ON COLUMN app_guarantor_credit_info.cardQuery12m IS '近一年信用卡审批征信查询次数（2026-09-03 新增）';
+COMMENT ON COLUMN app_guarantor_credit_info.cardQuery6m IS '近6个月信用卡审批征信查询次数（2026-09-03 新增）';
+COMMENT ON COLUMN app_guarantor_credit_info.cardQuery3m IS '近3个月信用卡审批征信查询次数（2026-09-03 新增）';
+COMMENT ON COLUMN app_guarantor_credit_info.selfQuery1m IS '近1个月本人查询征信查询次数（2026-09-03 新增）';
 COMMENT ON COLUMN app_guarantor_credit_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_guarantor_credit_info_reportNo ON app_guarantor_credit_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_guarantor_credit_info_customerId ON app_guarantor_credit_info (customerId);
@@ -1409,4 +1457,3 @@ COMMENT ON COLUMN app_specific_loan_project_check_info.vouchType IS '担保方�
 COMMENT ON COLUMN app_specific_loan_project_check_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_reportNo ON app_specific_loan_project_check_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_customerId ON app_specific_loan_project_check_info (customerId);
-

@@ -7779,6 +7779,8 @@ CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_customerId ON ap
 
 ALTER TABLE agent_rule ALTER COLUMN rule_text TYPE text;
 ALTER TABLE agent_rule ALTER COLUMN parsed_expression TYPE text;
+ALTER TABLE index_params ALTER COLUMN columncomment TYPE varchar(1000);
+
 
 
 
