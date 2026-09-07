@@ -825,7 +825,6 @@ CREATE TABLE IF NOT EXISTS app_guarantor_info (
     zxReportNoZX           VARCHAR(128),
     zxReportNosq           VARCHAR(128),
     zxReportNoSX           VARCHAR(128),
-    creditSum              DECIMAL(18,2),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -843,7 +842,6 @@ COMMENT ON COLUMN app_guarantor_info.subjectType IS '主体类型（码值：借
 COMMENT ON COLUMN app_guarantor_info.zxReportNoZX IS '征信报告记录号-最新（2026-09-03 新增，文件字段名 zxReportNoZX）';
 COMMENT ON COLUMN app_guarantor_info.zxReportNosq IS '征信报告记录号-上期（2026-09-03 新增，文件字段名 zxReportNosq）';
 COMMENT ON COLUMN app_guarantor_info.zxReportNoSX IS '征信报告记录号-授信（2026-09-03 新增，文件字段名 zxReportNoSX）';
-COMMENT ON COLUMN app_guarantor_info.creditSum IS '授信金额（万元，2026-09-03 新增）';
 COMMENT ON COLUMN app_guarantor_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_guarantor_info_reportNo ON app_guarantor_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_guarantor_info_customerId ON app_guarantor_info (customerId);
