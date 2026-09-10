@@ -45,23 +45,27 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 -- ============================================================
 -- 二、报告正文内容表
 --    每个目录（catalogCode）下挂 N 个内容块，前端按 sortNo 顺序渲染。
+--    catalogCode 为 NULL 表示报告级内容块（如报告头，不进目录树，渲染在正文顶部）。
 --    fillType 填充类型枚举：
---        TITLE       - 标题（整块仅为兼容固定标题展示，只有一个标题）
+--        TITLE       - 标题（整块仅为兼容固定标题展示，只有一个标题；级别见 titleLevel）
 --        TEXT        - 文本（analysisType / agentCode 仅在该类型下有值）
 --        TABLE       - 表格
 --        SOURCE_LINK - 溯源链接
 --    analysisType 分析文本类型枚举（仅 fillType = TEXT 时有值）：
---        RULE        - 经验规则类
+--        RULE        - 经验规则类（内容体不在内容实例表，为 AI 风险实例明细，支持前端编辑）
 --        ANALYSIS    - 文本分析类
+--    emptyStrategy 空数据策略：实例内容为空时，HIDE-整块隐藏 / PLACEHOLDER-显示暂无数据占位
 -- ============================================================
 
 CREATE TABLE app_report_content_block (
     id             BIGINT NOT NULL AUTO_INCREMENT,
     blockCode      VARCHAR(64) NOT NULL,
-    catalogCode    VARCHAR(64) NOT NULL,
+    catalogCode    VARCHAR(64),
     fillType       VARCHAR(16) NOT NULL,
     analysisType   VARCHAR(16),
     agentCode      VARCHAR(64),
+    titleLevel     SMALLINT,
+    emptyStrategy  VARCHAR(16) DEFAULT 'HIDE',
     sortNo         INT DEFAULT 0,
     isEnabled      SMALLINT DEFAULT 1,
     inputtime      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -71,10 +75,12 @@ CREATE TABLE app_report_content_block (
 COMMENT ON TABLE app_report_content_block IS '报告详情-正文内容块配置表（模板层·内容块）';
 COMMENT ON COLUMN app_report_content_block.id IS '主键（自增）';
 COMMENT ON COLUMN app_report_content_block.blockCode IS '内容块编号（全局唯一）';
-COMMENT ON COLUMN app_report_content_block.catalogCode IS '所属目录编号（关联 app_report_catalog.catalogCode）';
+COMMENT ON COLUMN app_report_content_block.catalogCode IS '所属目录编号（关联 app_report_catalog.catalogCode；报告级内容块（如报告头）为NULL，不进目录树）';
 COMMENT ON COLUMN app_report_content_block.fillType IS '填充类型：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源链接';
-COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT 时有值，否则为NULL）';
-COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT 时有值，否则为NULL）';
+COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT 时有值，否则为NULL；RULE 类的内容体为 AI 风险实例明细）';
+COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT 时有值，否则为NULL；与 AI 风险实例的关联键）';
+COMMENT ON COLUMN app_report_content_block.titleLevel IS '标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值，否则为NULL）';
+COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略：HIDE-整块隐藏 PLACEHOLDER-显示暂无数据占位（实例内容为空时生效）';
 COMMENT ON COLUMN app_report_content_block.sortNo IS '排序（同一目录内内容块顺序）';
 COMMENT ON COLUMN app_report_content_block.isEnabled IS '是否可用：1-可用 0-停用';
 COMMENT ON COLUMN app_report_content_block.inputtime IS '入库时间';
