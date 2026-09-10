@@ -17,7 +17,9 @@
 -- 设计要点 ：
 --    ① 实例表结构性字段（fillType/analysisType/agentCode/ruleName/titleLevel/sortNo/catalogCode）
 --       是生成时从模板快照过来的，目的是渲染一次查询、不 join 模板，且模板改版不污染历史报告。
---    ② 跳转锚点是单向的：只存"本块 → 目标锚点"，不存反向关系。
+--    ② 块间跳转锚点是单向的：只存"本块 → 目标块锚点"，不存反向关系；
+--       与填充类型无关，任何填充类型的块配置了 jumpAnchorCode 即可跳转。
+--       外链跳转是另一回事：SOURCE_LINK 块把链接存在自己的 content 里。
 --    ③ AI 风险与正文的关联：agentCode 为关联键（两侧同值，且已含经验规则编号），
 --       blockCode 为落地定位键（唯一键依据）。
 --    ④ 正文 content 为准、列表 riskDesc 为副本：内容可编辑时两处必须同事务同步更新，
@@ -36,7 +38,11 @@
 --        TITLE       - 标题文案（报告头公司名等；titleLevel 区分主/章/节标题）
 --        TEXT        - 分析文本；analysisType=RULE 时即经验规则类的正文内容体
 --        TABLE       - 表格成品内容
---        SOURCE_LINK - 溯源面板内容（被正文块的 jumpAnchorCode 单向指向）
+--        SOURCE_LINK - 溯源按钮（块本身就是按钮，content 存外部跳转链接，点击新开浏览器标签页）
+--    两类"跳转"互相独立，不要混：
+--        ① 外链：SOURCE_LINK 填充类型的块，链接在其 content 中；
+--        ② 块间定位：anchorCode / jumpAnchorCode，与填充类型无关，
+--           任何填充类型的块只要配了 jumpAnchorCode 即可点击跳到目标块。
 -- ============================================================
 
 CREATE TABLE app_report_content_instance (
@@ -66,15 +72,15 @@ COMMENT ON COLUMN app_report_content_instance.customerId IS '客户编号';
 COMMENT ON COLUMN app_report_content_instance.customerName IS '客户名称';
 COMMENT ON COLUMN app_report_content_instance.blockCode IS '内容块编号（关联 app_report_content_block.blockCode）';
 COMMENT ON COLUMN app_report_content_instance.catalogCode IS '所属目录编号（报告级内容块（如报告头）为NULL）';
-COMMENT ON COLUMN app_report_content_instance.fillType IS '填充类型（生成时自模板快照）：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源链接';
+COMMENT ON COLUMN app_report_content_instance.fillType IS '填充类型（生成时自模板快照）：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源按钮（content 为外部跳转链接）';
 COMMENT ON COLUMN app_report_content_instance.analysisType IS '分析文本类型（自模板快照）：RULE-经验规则类 ANALYSIS-文本分析类';
 COMMENT ON COLUMN app_report_content_instance.agentCode IS '智能体编码（自模板快照，已含经验规则编号；与 AI 风险实例的关联键）';
 COMMENT ON COLUMN app_report_content_instance.ruleName IS '经验规则名称（自模板快照，仅 analysisType=RULE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_instance.titleLevel IS '标题级别（自模板快照）：1-报告主标题 2-章节标题 3-小节标题';
 COMMENT ON COLUMN app_report_content_instance.sortNo IS '排序（自模板快照，同一目录内）';
-COMMENT ON COLUMN app_report_content_instance.anchorCode IS '锚点编码：本块在报告内的定位锚点（默认取 blockCode），供跳转定位使用';
-COMMENT ON COLUMN app_report_content_instance.jumpAnchorCode IS '跳转锚点（单向）：点击本块时跳转到的目标块 anchorCode；无跳转则为NULL';
-COMMENT ON COLUMN app_report_content_instance.content IS '内容（大文本）：TITLE-标题文案 TEXT-分析文本（analysisType=RULE 时为经验规则类内容体）TABLE-表格内容 SOURCE_LINK-溯源内容';
+COMMENT ON COLUMN app_report_content_instance.anchorCode IS '锚点编码：本块在报告内的定位锚点（默认取 blockCode），作为其它块跳转的目标标识；与填充类型无关';
+COMMENT ON COLUMN app_report_content_instance.jumpAnchorCode IS '块间跳转锚点（单向，仅用于内容块之间的点击快速定位）：点击本块时跳转到的目标块 anchorCode；非外部跳转链接；与填充类型无关，任何块配置了本值即可跳转；无跳转则为NULL';
+COMMENT ON COLUMN app_report_content_instance.content IS '内容（大文本）：TITLE-标题文案 TEXT-分析文本（analysisType=RULE 时为经验规则类内容体）TABLE-表格内容 SOURCE_LINK-外部跳转链接（块本身即按钮，点击新开浏览器标签页）';
 COMMENT ON COLUMN app_report_content_instance.inputtime IS '入库时间';
 
 CREATE UNIQUE INDEX uk_report_ci_report_block ON app_report_content_instance (reportNo, blockCode);
@@ -125,7 +131,7 @@ COMMENT ON COLUMN app_report_ai_risk.agentCode IS '智能体编码（已含经�
 COMMENT ON COLUMN app_report_ai_risk.ruleName IS '经验规则名称（列表展示）';
 COMMENT ON COLUMN app_report_ai_risk.riskDesc IS '风险描述（列表展示文案；与内容实例 content 同一份文案，编辑正文时同事务同步更新）';
 COMMENT ON COLUMN app_report_ai_risk.status IS '处置状态：PENDING-待处理 ADOPTED-已采纳 INVALID-已无效';
-COMMENT ON COLUMN app_report_ai_risk.jumpAnchorCode IS '跳转锚点（单向）：点击该风险行时跳转到的正文锚点（内容实例 anchorCode）';
+COMMENT ON COLUMN app_report_ai_risk.jumpAnchorCode IS '跳转锚点（单向，仅用于点击快速定位）：点击该风险行时跳转到的正文锚点（内容实例 anchorCode）；非外部跳转链接';
 COMMENT ON COLUMN app_report_ai_risk.sortNo IS '排序（风险列表内顺序）';
 COMMENT ON COLUMN app_report_ai_risk.inputtime IS '入库时间';
 

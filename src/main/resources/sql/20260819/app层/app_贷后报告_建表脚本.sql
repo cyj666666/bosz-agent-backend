@@ -42,7 +42,7 @@ COMMENT ON COLUMN app_report_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_report_info.reportTitle IS '报告标题';
 COMMENT ON COLUMN app_report_info.checkTaskNo IS '日检任务编号';
 COMMENT ON COLUMN app_report_info.reportDate IS '报告日期（贷后检查日）';
-COMMENT ON COLUMN app_report_info.reportStatus IS '报告状态（生成中/已生成/已审批）';
+COMMENT ON COLUMN app_report_info.reportStatus IS '报告状态（码值：111-待开始 000-进行中 888-已完成 999-失败）';
 COMMENT ON COLUMN app_report_info.generatorName IS '生成人';
 COMMENT ON COLUMN app_report_info.generateTime IS '生成时间';
 COMMENT ON COLUMN app_report_info.approveStatus IS '审批状态（码值：待审批/审批通过/审批驳回（码值待确认））';

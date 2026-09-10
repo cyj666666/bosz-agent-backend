@@ -2,6 +2,10 @@ package com.suzhou.bank.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.common.Result;
 import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.report.ReportGenerateException;
+import com.suzhou.bank.report.model.ReportDetailVO;
+import com.suzhou.bank.report.model.ReportGenerateResult;
+import com.suzhou.bank.report.service.ReportGenerateService;
 import com.suzhou.bank.service.report.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +27,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ReportController {
     private final ReportService service;
+
+    /** 模板驱动的新报告生成服务（与既有 ReportService 完全独立） */
+    private final ReportGenerateService generateService;
 
     /**
      * 一键生成报告：采集最新数据 → Know-Kit 分析 → 生成 HTML 报告
@@ -96,5 +103,64 @@ public class ReportController {
     @GetMapping("/data/{customerId}")
     public Result<Map<String, Object>> getReportData(@PathVariable Long customerId) {
         return Result.ok(service.getReportData(customerId));
+    }
+
+    /* ==================================================================================
+     * 以下为"模板驱动的报告实例生成"接口（新增，独立命名空间 /api/report/instance/**）
+     * 生成逻辑只处理模板表 + 实例表：模板层（目录 + 内容块）→ 实例层（内容实例 + AI 风险）。
+     * 报告记录（app_report_info）由上游预生成，本接口不负责发起报告。
+     * 与上面既有的报告生成逻辑互不影响。
+     * ================================================================================== */
+
+    /**
+     * 生成报告实例（含状态流转，定时任务调用本接口）
+     * <p>报告记录须已存在：置 000-进行中 → 按模板加工内容实例与 AI 风险明细
+     * → 置 888-已完成；加工抛异常则置 999-失败，且实例数据整体回滚。</p>
+     * <p>本方法只是 HTTP 入口，定时任务也可直接调用 {@code ReportGenerateService.generate(reportNo)}。</p>
+     *
+     * @param reportNo 报告编号（对应 app_report_info.reportNo）
+     * @return 生成结果（内容块/实例/空内容/风险各项统计）
+     */
+    @PostMapping("/instance/generate")
+    public Result<ReportGenerateResult> generateInstance(@RequestParam String reportNo) {
+        try {
+            return Result.ok(generateService.generate(reportNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 纯加工报告实例（不改状态，便于联调与失败重跑）
+     * <p>只执行"模板表 → 实例表"的落地，报告状态由调用方自行维护。
+     * 可重复执行：会先清理该报告下已有实例，不会触发唯一键冲突。</p>
+     *
+     * @param reportNo 报告编号
+     * @return 加工结果
+     */
+    @PostMapping("/instance/process")
+    public Result<ReportGenerateResult> processInstance(@RequestParam String reportNo) {
+        try {
+            return Result.ok(generateService.process(reportNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 查询模板化报告详情（三栏式渲染数据源）
+     * <p>返回报告头内容块、目录树（含各目录内容块与空数据策略）、AI 风险列表与风险统计，
+     * 前端按 block.emptyStrategy 决定整块隐藏或显示占位。</p>
+     *
+     * @param reportNo 报告编号
+     * @return 报告详情
+     */
+    @GetMapping("/instance/{reportNo}")
+    public Result<ReportDetailVO> getInstanceDetail(@PathVariable String reportNo) {
+        try {
+            return Result.ok(generateService.detail(reportNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 }

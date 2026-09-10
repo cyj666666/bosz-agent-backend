@@ -50,7 +50,7 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 --        TITLE       - 标题（整块仅为兼容固定标题展示，只有一个标题；级别见 titleLevel）
 --        TEXT        - 文本（analysisType / agentCode 仅在该类型下有值）
 --        TABLE       - 表格
---        SOURCE_LINK - 溯源链接
+--        SOURCE_LINK - 溯源按钮（块本身即按钮，其实例 content 存外部跳转链接，点击新开浏览器标签页）
 --    analysisType 分析文本类型枚举（仅 fillType = TEXT 时有值）：
 --        RULE        - 经验规则类（含 ruleName；agentCode 已含经验规则编号）
 --        ANALYSIS    - 文本分析类
