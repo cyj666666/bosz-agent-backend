@@ -1,8 +1,11 @@
 -- =====================================================================
--- 苏州银行 对公客户日常定期检查（贷后）报告 数据表结构 V1.0
+-- 苏州银行 对公客户日常定期检查（贷后）报告 数据表结构 V1.10
+-- 版本日期：2026-09-10
+-- 上一版本：V1.9（2026-09-10，app_check_index_info 增加字段 isAbnormal/indexObject）
+-- V1.10 变更：新建 app_check_object_info 对象指标检查明细表（13 字段，加 contractNo 业务合同编号；5 个字段名按"见名知意"推断：indexNo/indexName/indexType/indexResult/redTextRequire）
 -- 数据库：高斯DB（GaussDB）
 -- 设计依据：《数据映射细化V4.xlsx》
--- 共34张表（报告主表1 + 公共基础表13 + 模块明细表20）
+-- 共38张表（报告主表1 + 公共基础表13 + 模块明细表24）
 -- 设计原则：公共+模块两层、一期一行、沿用J列字段名+驼峰；经验库规则所需源数据见正文模块表
 -- 公共列：id / reportNo / customerId / customerName / inputtime
 -- =====================================================================
@@ -292,6 +295,15 @@ CREATE TABLE IF NOT EXISTS app_loan_receipt_info (
     loanChangeRptBalance   DECIMAL(18,2),
     occurType              VARCHAR(32),
     isExtend               VARCHAR(32),
+    fixedAssetLoan         VARCHAR(32),
+    realEstateDevLoan      VARCHAR(32),
+    nextPayDate            VARCHAR(32),
+    payPrinciPalamt        DECIMAL(18,2),
+    payInterestamt         DECIMAL(18,2),
+    payFineAmt             DECIMAL(18,2),
+    compoundinterest       DECIMAL(18,2),
+    businessRate           DECIMAL(12,4),
+    RepaymentPeriod        VARCHAR(32),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -318,6 +330,15 @@ COMMENT ON COLUMN app_loan_receipt_info.loanChangeRptCounts IS '还款方式变�
 COMMENT ON COLUMN app_loan_receipt_info.loanChangeRptBalance IS '还款方式变更贷款余额（万元）';
 COMMENT ON COLUMN app_loan_receipt_info.occurType IS '发生类型';
 COMMENT ON COLUMN app_loan_receipt_info.isExtend IS '是否展期（码值：是/否）';
+COMMENT ON COLUMN app_loan_receipt_info.fixedAssetLoan IS '是否固贷产品（码值：是/否）';
+COMMENT ON COLUMN app_loan_receipt_info.realEstateDevLoan IS '是否房地产开发产品（码值：是/否）';
+COMMENT ON COLUMN app_loan_receipt_info.nextPayDate IS '下次还款日（格式：YYYYMMDD）';
+COMMENT ON COLUMN app_loan_receipt_info.payPrinciPalamt IS '下次还款本金（万元）';
+COMMENT ON COLUMN app_loan_receipt_info.payInterestamt IS '下次还款利息（万元）';
+COMMENT ON COLUMN app_loan_receipt_info.payFineAmt IS '下次还款罚息（万元）';
+COMMENT ON COLUMN app_loan_receipt_info.compoundinterest IS '下次还款复利（万元）';
+COMMENT ON COLUMN app_loan_receipt_info.businessRate IS '执行年利率（%）';
+COMMENT ON COLUMN app_loan_receipt_info.RepaymentPeriod IS '付息频率';
 COMMENT ON COLUMN app_loan_receipt_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_loan_receipt_info_reportNo ON app_loan_receipt_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_loan_receipt_info_customerId ON app_loan_receipt_info (customerId);
@@ -1148,6 +1169,63 @@ COMMENT ON COLUMN app_check_opinion_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_check_opinion_info_reportNo ON app_check_opinion_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_check_opinion_info_customerId ON app_check_opinion_info (customerId);
 
+CREATE TABLE IF NOT EXISTS app_single_check_task_info (
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo               VARCHAR(64) NOT NULL,
+    customerId             VARCHAR(64),
+    customerName           VARCHAR(128),
+    itemCategory           VARCHAR(64),
+    serialNo               VARCHAR(64),
+    creditNo               VARCHAR(64),
+    approveTextNo          VARCHAR(64),
+    startDate              VARCHAR(32),
+    maturity               VARCHAR(32),
+    groupName              VARCHAR(128),
+    productName            VARCHAR(128),
+    checkDate              VARCHAR(32),
+    balance                DECIMAL(18,2),
+    condition              TEXT,
+    implementStatus        VARCHAR(64),
+    extendDate             VARCHAR(32),
+    opinion                TEXT,
+    conditioninStruction   TEXT,
+    creditApproveUserName  VARCHAR(64),
+    approveAuthor          VARCHAR(64),
+    operateBelongOrgName   VARCHAR(128),
+    operateOrgName         VARCHAR(128),
+    operateUserName        VARCHAR(64),
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_single_check_task_info IS '单项检查任务表';
+COMMENT ON COLUMN app_single_check_task_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_single_check_task_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_single_check_task_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_single_check_task_info.itemCategory IS '事项类别';
+COMMENT ON COLUMN app_single_check_task_info.serialNo IS '单项检查任务流水号';
+COMMENT ON COLUMN app_single_check_task_info.creditNo IS '授信编号';
+COMMENT ON COLUMN app_single_check_task_info.approveTextNo IS '批复编号';
+COMMENT ON COLUMN app_single_check_task_info.startDate IS '批复生效日期';
+COMMENT ON COLUMN app_single_check_task_info.maturity IS '批复到期日';
+COMMENT ON COLUMN app_single_check_task_info.groupName IS '集团名称';
+COMMENT ON COLUMN app_single_check_task_info.productName IS '对象';
+COMMENT ON COLUMN app_single_check_task_info.checkDate IS '检查时间';
+COMMENT ON COLUMN app_single_check_task_info.balance IS '对象项下借据余额（万元）';
+COMMENT ON COLUMN app_single_check_task_info.condition IS '批复后续管理要求';
+COMMENT ON COLUMN app_single_check_task_info.implementStatus IS '落实情况';
+COMMENT ON COLUMN app_single_check_task_info.extendDate IS '延期日期';
+COMMENT ON COLUMN app_single_check_task_info.opinion IS '签署意见';
+COMMENT ON COLUMN app_single_check_task_info.conditioninStruction IS '情况说明';
+COMMENT ON COLUMN app_single_check_task_info.creditApproveUserName IS '授信审查人';
+COMMENT ON COLUMN app_single_check_task_info.approveAuthor IS '审批权限';
+COMMENT ON COLUMN app_single_check_task_info.operateBelongOrgName IS '分行';
+COMMENT ON COLUMN app_single_check_task_info.operateOrgName IS '支行';
+COMMENT ON COLUMN app_single_check_task_info.operateUserName IS '经办客户经理';
+COMMENT ON COLUMN app_single_check_task_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_single_check_task_info_reportNo ON app_single_check_task_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_single_check_task_info_customerId ON app_single_check_task_info (customerId);
+
 CREATE TABLE IF NOT EXISTS app_check_index_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
     reportNo               VARCHAR(64) NOT NULL,
@@ -1155,7 +1233,9 @@ CREATE TABLE IF NOT EXISTS app_check_index_info (
     customerName           VARCHAR(128),
     chineseId              VARCHAR(64),
     chineseName            VARCHAR(128),
+    indexObject            VARCHAR(128),
     yesNo                  VARCHAR(32),
+    isAbnormal             VARCHAR(32),
     remark                 TEXT,
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
@@ -1167,11 +1247,47 @@ COMMENT ON COLUMN app_check_index_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_check_index_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_check_index_info.chineseId IS '指标编号';
 COMMENT ON COLUMN app_check_index_info.chineseName IS '指标名称';
+COMMENT ON COLUMN app_check_index_info.indexObject IS '指标对象';
 COMMENT ON COLUMN app_check_index_info.yesNo IS '检查结论（是/否）';
+COMMENT ON COLUMN app_check_index_info.isAbnormal IS '是否异常（码值：是/否）';
 COMMENT ON COLUMN app_check_index_info.remark IS '说明';
 COMMENT ON COLUMN app_check_index_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_check_index_info_reportNo ON app_check_index_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_check_index_info_customerId ON app_check_index_info (customerId);
+
+CREATE TABLE IF NOT EXISTS app_check_object_info (
+    id               BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo         VARCHAR(64) NOT NULL,
+    customerId       VARCHAR(64),
+    customerName     VARCHAR(128),
+    objectName       VARCHAR(128),
+    contractNo       VARCHAR(64),
+    indexNo          VARCHAR(64),
+    indexName        VARCHAR(128),
+    indexType        VARCHAR(64),
+    indexResult      VARCHAR(256),
+    isAbnormal       VARCHAR(32),
+    redTextRequire   TEXT,
+    inputtime        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_check_object_info IS '对象指标检查明细表';
+COMMENT ON COLUMN app_check_object_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_check_object_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_check_object_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_check_object_info.objectName IS '对象名称';
+COMMENT ON COLUMN app_check_object_info.contractNo IS '业务合同编号';
+COMMENT ON COLUMN app_check_object_info.indexNo IS '指标编号';
+COMMENT ON COLUMN app_check_object_info.indexName IS '指标名称';
+COMMENT ON COLUMN app_check_object_info.indexType IS '指标类型';
+COMMENT ON COLUMN app_check_object_info.indexResult IS '指标结果';
+COMMENT ON COLUMN app_check_object_info.isAbnormal IS '是否异常（码值：是/否/提示）';
+COMMENT ON COLUMN app_check_object_info.redTextRequire IS '红字要求';
+COMMENT ON COLUMN app_check_object_info.inputtime IS '入库时间';
+
+CREATE INDEX IF NOT EXISTS idx_check_object_info_reportNo ON app_check_object_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_check_object_info_customerId ON app_check_object_info (customerId);
 
 CREATE TABLE IF NOT EXISTS app_reputation_event_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -1455,3 +1571,125 @@ COMMENT ON COLUMN app_specific_loan_project_check_info.vouchType IS '担保方�
 COMMENT ON COLUMN app_specific_loan_project_check_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_reportNo ON app_specific_loan_project_check_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_specific_loan_project_check_info_customerId ON app_specific_loan_project_check_info (customerId);
+
+-- ============================================================
+-- 二、新增模块：财务指标预定义表（自动译 + 另起共存，按用户确认）
+-- 设计依据：《新增财务指标表表结构.xlsx》
+-- 行级属性已自带：同比/较年初变动/增幅由查询层加工或上游直给；本期值字段为落表主体
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS app_finance_indicator_info (
+    id                              BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo                        VARCHAR(64) NOT NULL,
+    customerId                      VARCHAR(64),
+    customerName                    VARCHAR(128),
+    finReportNo                     VARCHAR(64),
+    accountMonth                    VARCHAR(32),
+    reportScope                     VARCHAR(64),
+    reportPeriod                    VARCHAR(64),
+    auditFlag                       VARCHAR(32),
+    currency                        VARCHAR(32),
+    monetaryUnit                    VARCHAR(32),
+    reportStatusName                VARCHAR(64),
+    reportStatus                    VARCHAR(64),
+    inputtime                       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reportTypeNo                    VARCHAR(64),
+    reportTypeName                  VARCHAR(128),
+    sheetNo                         VARCHAR(64),
+    revenue                         DECIMAL(18,2),
+    revenueYoy                      DECIMAL(12,4),
+    netProfit                       DECIMAL(18,2),
+    netProfitYoy                    DECIMAL(12,4),
+    paidInCapital                   DECIMAL(18,2),
+    totalEquity                     DECIMAL(18,2),
+    accountsReceivable              DECIMAL(18,2),
+    arChangeFromYearStart           DECIMAL(18,2),
+    arChangeFromYearStartRate       DECIMAL(12,4),
+    otherReceivable                 DECIMAL(18,2),
+    orChangeFromYearStart           DECIMAL(18,2),
+    orChangeFromYearStartRate       DECIMAL(12,4),
+    arOrTotalAssetRatio             DECIMAL(12,4),
+    shortLoan                       DECIMAL(18,2),
+    shortLoanChangeFromYearStart    DECIMAL(18,2),
+    shortLoanChangeFromYearStartRate DECIMAL(12,4),
+    longLoan                        DECIMAL(18,2),
+    longLoanChangeFromYearStart     DECIMAL(18,2),
+    longLoanChangeFromYearStartRate DECIMAL(12,4),
+    longLoanDueWithin1Y             DECIMAL(18,2),
+    salesLoanRatio                 DECIMAL(12,4),
+    notesPayable                     DECIMAL(18,2),
+    notesPayableChangeFromYearStart  DECIMAL(18,2),
+    notesPayableChangeFromYearStartRate DECIMAL(12,4),
+    otherPayable                    DECIMAL(18,2),
+    otherPayableChangeFromYearStart DECIMAL(18,2),
+    otherPayableChangeFromYearStartRate DECIMAL(12,4),
+    slTotalLoanYoy                  DECIMAL(12,4),
+    arYoy                           DECIMAL(12,4),
+    arTurnoverDays                  INT,
+    inventoryTurnoverDays           INT,
+    inventoryYoy                    DECIMAL(12,4),
+    accountsPayable                 DECIMAL(18,2),
+    inventory                       DECIMAL(18,2),
+    debtRatio                       DECIMAL(12,4),
+    salesProfitRatio                DECIMAL(12,4),
+    netProfitRatio                  DECIMAL(12,4),
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_finance_indicator_info IS '财务指标预定义表（宽表纵表，一期一行一指标口径，与 app_finance_index_info EAV 宽表并存；数据来源：附件《新增财务指标表表结构.xlsx》按"见名知意"自动译）';
+COMMENT ON COLUMN app_finance_indicator_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_finance_indicator_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_finance_indicator_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_finance_indicator_info.finReportNo IS '财报编号';
+COMMENT ON COLUMN app_finance_indicator_info.accountMonth IS '会计月';
+COMMENT ON COLUMN app_finance_indicator_info.reportScope IS '报表口径（码值：合并/本部）';
+COMMENT ON COLUMN app_finance_indicator_info.reportPeriod IS '报表周期（码值：年报/半年报/季报/月报）';
+COMMENT ON COLUMN app_finance_indicator_info.auditFlag IS '是否审计（码值：是/否）';
+COMMENT ON COLUMN app_finance_indicator_info.currency IS '报表币种';
+COMMENT ON COLUMN app_finance_indicator_info.monetaryUnit IS '货币单位（码值：元/千/万，样例为万）';
+COMMENT ON COLUMN app_finance_indicator_info.reportStatusName IS '报表状态中文';
+COMMENT ON COLUMN app_finance_indicator_info.reportStatus IS '报表状态码值';
+COMMENT ON COLUMN app_finance_indicator_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_finance_indicator_info.reportTypeNo IS '报表类型';
+COMMENT ON COLUMN app_finance_indicator_info.reportTypeName IS '报表类型名称';
+COMMENT ON COLUMN app_finance_indicator_info.sheetNo IS '科目所在财报类型';
+COMMENT ON COLUMN app_finance_indicator_info.revenue IS '营业收入（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.revenueYoy IS '营业收入同比（%）';
+COMMENT ON COLUMN app_finance_indicator_info.netProfit IS '净利润（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.netProfitYoy IS '净利润同比（%）';
+COMMENT ON COLUMN app_finance_indicator_info.paidInCapital IS '实收资本（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.totalEquity IS '所有者权益合计（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.accountsReceivable IS '应收账款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.arChangeFromYearStart IS '应收账款较年初变动（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.arChangeFromYearStartRate IS '应收账款较年初增幅（%）';
+COMMENT ON COLUMN app_finance_indicator_info.otherReceivable IS '其他应收款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.orChangeFromYearStart IS '其他应收款较年初变动（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.orChangeFromYearStartRate IS '其他应收款较年初增幅（%）';
+COMMENT ON COLUMN app_finance_indicator_info.arOrTotalAssetRatio IS '应收账款和其他应收款合计占总资产比例（%）';
+COMMENT ON COLUMN app_finance_indicator_info.shortLoan IS '短期借款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.shortLoanChangeFromYearStart IS '短期借款较年初变动（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.shortLoanChangeFromYearStartRate IS '短期借款较年初增幅（%）';
+COMMENT ON COLUMN app_finance_indicator_info.longLoan IS '长期借款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.longLoanChangeFromYearStart IS '长期借款较年初变动（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.longLoanChangeFromYearStartRate IS '长期借款较年初增幅（%）';
+COMMENT ON COLUMN app_finance_indicator_info.longLoanDueWithin1Y IS '一年内到期的长期借款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.salesLoanRatio IS '销贷比';
+COMMENT ON COLUMN app_finance_indicator_info.notesPayable IS '应付票据（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.notesPayableChangeFromYearStart IS '应付票据较年初变动（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.notesPayableChangeFromYearStartRate IS '应付票据较年初增幅（%）';
+COMMENT ON COLUMN app_finance_indicator_info.otherPayable IS '其他应付款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.otherPayableChangeFromYearStart IS '其他应付款较年初变动（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.otherPayableChangeFromYearStartRate IS '其他应付款较年初增幅（%）';
+COMMENT ON COLUMN app_finance_indicator_info.slTotalLoanYoy IS '短期借款和长期借款合计同比（%）';
+COMMENT ON COLUMN app_finance_indicator_info.arYoy IS '应收账款同比（%）';
+COMMENT ON COLUMN app_finance_indicator_info.arTurnoverDays IS '应收账款周转天数';
+COMMENT ON COLUMN app_finance_indicator_info.inventoryTurnoverDays IS '存货周转天数';
+COMMENT ON COLUMN app_finance_indicator_info.inventoryYoy IS '存货同比（%）';
+COMMENT ON COLUMN app_finance_indicator_info.accountsPayable IS '应付账款（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.inventory IS '存货（万元）';
+COMMENT ON COLUMN app_finance_indicator_info.debtRatio IS '资产负债率（%）';
+COMMENT ON COLUMN app_finance_indicator_info.salesProfitRatio IS '销售利率（%）';
+COMMENT ON COLUMN app_finance_indicator_info.netProfitRatio IS '净利率（%）';
+CREATE INDEX IF NOT EXISTS idx_finance_indicator_info_reportNo ON app_finance_indicator_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_finance_indicator_info_customerId ON app_finance_indicator_info (customerId);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_finance_indicator_info_biz ON app_finance_indicator_info (reportNo, customerId, finReportNo, accountMonth, reportScope, reportPeriod, reportTypeNo);
