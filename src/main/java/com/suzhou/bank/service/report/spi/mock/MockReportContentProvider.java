@@ -20,7 +20,9 @@ import java.util.Map;
 /**
  * 报告内容提供者 · 模拟实现（演示走通用）
  * <p>用前端报告详情页 demo 的内容模拟"前置加工"产物，使报告生成流程可以完整跑通：
- * 内容取自 classpath:{@value #RESOURCE_PATH}，按内容块编号（blockCode）提供内容与块间跳转目标。</p>
+ * 内容取自 classpath:{@value #RESOURCE_PATH}，按内容块编号（blockCode）提供内容成品。</p>
+ * <p>只负责提供内容，<b>不涉及块间跳转锚点</b>——跳转关系属报告结构、在模板层配置，
+ * 由生成器直接快照到实例层。</p>
  * <p><b>接入真实加工逻辑时</b>：在配置中设置 {@code report.mock-content.enabled: false}
  * （或直接删除本类），容器会自动回退到 {@code DefaultReportContentProvider}（空内容）。</p>
  * <p>内容中的 {@code ${customerName}} 占位符会被替换为当次报告的客户名称
@@ -43,9 +45,6 @@ public class MockReportContentProvider implements ReportContentProvider {
     /** blockCode → 内容成品（懒加载后只读） */
     private volatile Map<String, String> contentMap;
 
-    /** blockCode → 块间跳转目标锚点（懒加载后只读） */
-    private volatile Map<String, String> jumpAnchorMap;
-
     @Override
     public ContentPayload provide(ReportGenerateContext context) {
         ensureLoaded();
@@ -59,7 +58,7 @@ public class MockReportContentProvider implements ReportContentProvider {
             return null;
         }
         String customerName = StringUtils.hasText(context.getCustomerName()) ? context.getCustomerName() : "";
-        return new ContentPayload(content.replace(CUSTOMER_NAME_TOKEN, customerName), jumpAnchorMap.get(blockCode));
+        return new ContentPayload(content.replace(CUSTOMER_NAME_TOKEN, customerName));
     }
 
     /** 首次调用时加载模拟内容，失败则按空内容处理（不影响生成流程） */
@@ -72,24 +71,18 @@ public class MockReportContentProvider implements ReportContentProvider {
                 return;
             }
             Map<String, String> contents = new HashMap<>();
-            Map<String, String> jumpAnchors = new HashMap<>();
             try (InputStream in = new ClassPathResource(RESOURCE_PATH).getInputStream()) {
                 JSONObject root = JSON.parseObject(StreamUtils.copyToString(in, StandardCharsets.UTF_8));
                 JSONObject contentNode = root.getJSONObject("content");
                 if (contentNode != null) {
                     contentNode.forEach((k, v) -> contents.put(k, v == null ? null : String.valueOf(v)));
                 }
-                JSONObject jumpNode = root.getJSONObject("jumpAnchor");
-                if (jumpNode != null) {
-                    jumpNode.forEach((k, v) -> jumpAnchors.put(k, v == null ? null : String.valueOf(v)));
-                }
-                log.warn("已加载报告模拟内容（演示用）：{} 个内容块、{} 条块间跳转；"
-                        + "接入真实加工逻辑时请配置 report.mock-content.enabled=false", contents.size(), jumpAnchors.size());
+                log.warn("已加载报告模拟内容（演示用）：{} 个内容块；"
+                        + "接入真实加工逻辑时请配置 report.mock-content.enabled=false", contents.size());
             } catch (Exception e) {
                 log.warn("报告模拟内容加载失败（{}），本次将按空内容处理：{}", RESOURCE_PATH, e.getMessage());
             }
             contentMap = contents;
-            jumpAnchorMap = jumpAnchors;
         }
     }
 }

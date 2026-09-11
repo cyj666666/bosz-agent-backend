@@ -55,6 +55,14 @@ public class AppReportContentBlock {
     @TableField("emptyStrategy")
     private String emptyStrategy;
 
+    /**
+     * 块间跳转目标锚点（单向）：点击本块时滚动定位到的目标块 anchorCode（=目标块 blockCode）。
+     * <p>跳转关系属报告结构、在模板层配置，生成时快照到实例层；与填充类型无关，
+     * 任何填充类型的块配置了本值即可点击跳转；无跳转则为 NULL。</p>
+     */
+    @TableField("jumpAnchorCode")
+    private String jumpAnchorCode;
+
     /** 排序（同一目录内内容块顺序） */
     @TableField("sortNo")
     private Integer sortNo;

@@ -56,6 +56,9 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 --        ANALYSIS    - 文本分析类
 --    blockName 内容块名称（必填）：模板层与实例层同名同值；analysisType=RULE 时其业务含义即规则名称
 --    emptyStrategy 空数据策略：实例内容为空时，PLACEHOLDER-显示暂无数据占位（默认）/ HIDE-整块隐藏
+--    jumpAnchorCode 块间跳转目标锚点（单向）：值 = 目标块的 anchorCode（即目标块 blockCode）。
+--        跳转关系属于报告结构、在模板层配置，生成时快照到实例层；与填充类型无关，
+--        任何填充类型的块配置了本值即可点击跳转（前端滚动定位，不新开页面）；无跳转则为 NULL。
 -- ============================================================
 
 CREATE TABLE app_report_content_block (
@@ -68,6 +71,7 @@ CREATE TABLE app_report_content_block (
     blockName      VARCHAR(128) NOT NULL,
     titleLevel     SMALLINT,
     emptyStrategy  VARCHAR(16) DEFAULT 'PLACEHOLDER',
+    jumpAnchorCode VARCHAR(64),
     sortNo         INT DEFAULT 0,
     isEnabled      SMALLINT DEFAULT 1,
     inputtime      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -84,6 +88,7 @@ COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 f
 COMMENT ON COLUMN app_report_content_block.blockName IS '内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值）';
 COMMENT ON COLUMN app_report_content_block.titleLevel IS '标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略（实例内容为空时生效）：PLACEHOLDER-显示暂无数据占位（默认） HIDE-整块隐藏';
+COMMENT ON COLUMN app_report_content_block.jumpAnchorCode IS '块间跳转目标锚点（单向）：点击本块时滚动定位到的目标块 anchorCode（=目标块 blockCode）；跳转关系属报告结构、在模板层配置，生成时快照到实例层；与填充类型无关，无跳转则为NULL';
 COMMENT ON COLUMN app_report_content_block.sortNo IS '排序（同一目录内内容块顺序）';
 COMMENT ON COLUMN app_report_content_block.isEnabled IS '是否可用：1-可用 0-停用';
 COMMENT ON COLUMN app_report_content_block.inputtime IS '入库时间';

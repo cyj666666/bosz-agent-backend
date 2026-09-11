@@ -30,7 +30,7 @@
 -- 块间锚点（已按此原则拆分）：demo 中一个块内出现多个内部跳转链接时，必须拆成多个内容块，
 --       因为一个块只有 1 个 jumpAnchorCode。已拆：总体概览"（一）风险要点"→ BLK_SUM_04/05/06
 --       三个文本块，分别对应"一是净利润异常""二是报表真实性""三是抵押物多次抵押"。
---       跳转目标不在模板层配置，由前置加工在实例层写入 jumpAnchorCode（建议目标见各章节注释）。
+--       跳转目标在模板层配置（jumpAnchorCode 列），生成时快照到实例层；见文件末尾的 UPDATE。
 -- 日期：2026-09-11
 -- =====================================================================
 
@@ -69,7 +69,7 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 --    块间锚点拆分：demo 中"（一）风险要点"是一个列表，其中"一是净利润异常""二是报表真实性"
 --    "三是抵押物多次抵押"三项带内部跳转链接（href="#finance"、href="#guarantee"）。
 --    因一个内容块只有 1 个 jumpAnchorCode，此处已拆为 3 个独立文本块（BLK_SUM_04/05/06），
---    由前置加工在实例层分别写入跳转目标（建议：BLK_SUM_04→BLK_FIN_R02 净利润风险、
+--    跳转目标在模板层配置（见文件末尾 UPDATE）：BLK_SUM_04→BLK_FIN_R02 净利润风险、
 --    BLK_SUM_05→BLK_FIN_10 报表真实性段、BLK_SUM_06→BLK_GUAR_R01 抵押物风险）。
 -- ============================================================
 INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysisType, agentCode, blockName, titleLevel, emptyStrategy, sortNo, isEnabled) VALUES
@@ -248,3 +248,14 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('BLK_GUAR_R02', 'CAT_12_GUARANTEE', 'TEXT',        'RULE',     'AGT_RULE_0022_GUAR',  '担保人债务异常',             NULL, 'PLACEHOLDER', 70,  1),
 ('BLK_GUAR_06',  'CAT_12_GUARANTEE', 'TEXT',        'ANALYSIS', 'AGT_TXT_GUAR_03',     '保证人债务情况',             NULL, 'PLACEHOLDER', 80,  1),
 ('BLK_GUAR_90',  'CAT_12_GUARANTEE', 'SOURCE_LINK', NULL,       NULL,                  '查看溯源信息',               NULL, 'PLACEHOLDER', 900, 1);
+
+
+-- ============================================================
+-- 十五、块间跳转锚点（模板层配置，生成时快照到实例层）
+--    jumpAnchorCode 的值 = 目标块的 anchorCode（即目标块 blockCode）。
+--    单向：点击本块 → 前端滚动定位到目标块（同页面定位，不新开页面）。
+--    跳转关系属报告结构、配在模板层；前置加工只负责内容，不涉及跳转。
+-- ============================================================
+UPDATE app_report_content_block SET jumpAnchorCode = 'BLK_FIN_R02'  WHERE blockCode = 'BLK_SUM_04';
+UPDATE app_report_content_block SET jumpAnchorCode = 'BLK_FIN_10'   WHERE blockCode = 'BLK_SUM_05';
+UPDATE app_report_content_block SET jumpAnchorCode = 'BLK_GUAR_R01' WHERE blockCode = 'BLK_SUM_06';

@@ -393,9 +393,10 @@ public class ReportServiceImpl implements ReportService {
         instance.setContent(trimToNull(content));
         // ③ 本块位置锚点：其它块要跳过来时用它定位（默认取内容块编号）
         instance.setAnchorCode(block.getBlockCode());
-        // ④ 块间跳转锚点（单向、仅用于块内位置跳转）：指向目标块的 anchorCode，
-        //    完全由前置加工产物提供，生成器不做任何推断。溯源类的外部跳转链接不在此处，随 content 写入。
-        instance.setJumpAnchorCode(payload == null ? null : trimToNull(payload.getJumpAnchorCode()));
+        // ④ 块间跳转锚点（单向、仅用于块内位置跳转）：指向目标块的 anchorCode。
+        //    跳转关系属报告结构、在模板层配置（block.jumpAnchorCode），此处直接快照到实例层。
+        //    溯源类的外部跳转链接不在此处，随 content 写入。
+        instance.setJumpAnchorCode(trimToNull(block.getJumpAnchorCode()));
         return instance;
     }
 
