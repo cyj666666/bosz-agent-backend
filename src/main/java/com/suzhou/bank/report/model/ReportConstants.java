@@ -44,10 +44,10 @@ public final class ReportConstants {
     /** 标题级别：小节标题 */
     public static final int TITLE_LEVEL_SECTION = 3;
 
-    /** 空数据策略：整块隐藏 */
+    /** 空数据策略：整块隐藏（非默认，需显式配置） */
     public static final String EMPTY_HIDE = "HIDE";
 
-    /** 空数据策略：显示"暂无数据"占位 */
+    /** 空数据策略：显示"暂无数据"占位（默认策略） */
     public static final String EMPTY_PLACEHOLDER = "PLACEHOLDER";
 
     /** 风险处置状态：待处理 */

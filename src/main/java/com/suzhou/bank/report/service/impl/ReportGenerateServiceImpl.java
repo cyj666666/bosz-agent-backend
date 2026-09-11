@@ -184,11 +184,11 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
             }
         }
 
-        // 空数据策略属于渲染策略，取自模板
+        // 空数据策略属于渲染策略，取自模板；未配置时默认 PLACEHOLDER（保留结构、显示占位）
         Map<String, String> emptyStrategyMap = new HashMap<>();
         for (AppReportContentBlock block : loadEnabledBlocks()) {
             emptyStrategyMap.put(block.getBlockCode(),
-                    StringUtils.hasText(block.getEmptyStrategy()) ? block.getEmptyStrategy() : EMPTY_HIDE);
+                    StringUtils.hasText(block.getEmptyStrategy()) ? block.getEmptyStrategy() : EMPTY_PLACEHOLDER);
         }
 
         List<AppReportContentInstance> instances = instanceMapper.selectList(

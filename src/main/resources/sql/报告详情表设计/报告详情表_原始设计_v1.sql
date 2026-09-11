@@ -54,7 +54,7 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 --    analysisType 分析文本类型枚举（仅 fillType = TEXT 时有值）：
 --        RULE        - 经验规则类（含 ruleName；agentCode 已含经验规则编号）
 --        ANALYSIS    - 文本分析类
---    emptyStrategy 空数据策略：实例内容为空时，HIDE-整块隐藏 / PLACEHOLDER-显示暂无数据占位
+--    emptyStrategy 空数据策略：实例内容为空时，PLACEHOLDER-显示暂无数据占位（默认）/ HIDE-整块隐藏
 -- ============================================================
 
 CREATE TABLE app_report_content_block (
@@ -66,7 +66,7 @@ CREATE TABLE app_report_content_block (
     agentCode      VARCHAR(64),
     ruleName       VARCHAR(128),
     titleLevel     SMALLINT,
-    emptyStrategy  VARCHAR(16) DEFAULT 'HIDE',
+    emptyStrategy  VARCHAR(16) DEFAULT 'PLACEHOLDER',
     sortNo         INT DEFAULT 0,
     isEnabled      SMALLINT DEFAULT 1,
     inputtime      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -82,7 +82,7 @@ COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型�
 COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT 时有值，否则为NULL；已含经验规则编号；为与内容实例、AI 风险实例的关联键）';
 COMMENT ON COLUMN app_report_content_block.ruleName IS '经验规则名称（仅 analysisType=RULE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.titleLevel IS '标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值，否则为NULL）';
-COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略：HIDE-整块隐藏 PLACEHOLDER-显示暂无数据占位（实例内容为空时生效）';
+COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略（实例内容为空时生效）：PLACEHOLDER-显示暂无数据占位（默认） HIDE-整块隐藏';
 COMMENT ON COLUMN app_report_content_block.sortNo IS '排序（同一目录内内容块顺序）';
 COMMENT ON COLUMN app_report_content_block.isEnabled IS '是否可用：1-可用 0-停用';
 COMMENT ON COLUMN app_report_content_block.inputtime IS '入库时间';
