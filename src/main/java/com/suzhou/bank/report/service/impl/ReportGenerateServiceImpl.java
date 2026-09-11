@@ -1,6 +1,7 @@
 package com.suzhou.bank.report.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.report.AppReportAiRisk;
 import com.suzhou.bank.entity.report.AppReportCatalog;
 import com.suzhou.bank.entity.report.AppReportContentBlock;
@@ -258,6 +259,14 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         detail.setRiskAdopted(adopted);
         detail.setRiskInvalid(invalid);
         return detail;
+    }
+
+    @Override
+    public Page<AppReportInfo> page(int page, int size, String customerId) {
+        Page<AppReportInfo> pager = new Page<>(page, size);
+        return reportInfoMapper.selectPage(pager, Wrappers.<AppReportInfo>lambdaQuery()
+                .eq(StringUtils.hasText(customerId), AppReportInfo::getCustomerId, customerId)
+                .orderByDesc(AppReportInfo::getInputtime));
     }
 
     /* ==================== 单块实例化 ==================== */

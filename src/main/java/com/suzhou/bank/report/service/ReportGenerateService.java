@@ -1,5 +1,7 @@
 package com.suzhou.bank.report.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.suzhou.bank.entity.report.AppReportInfo;
 import com.suzhou.bank.report.model.ReportDetailVO;
 import com.suzhou.bank.report.model.ReportGenerateResult;
 
@@ -46,4 +48,15 @@ public interface ReportGenerateService {
      * @return 报告详情
      */
     ReportDetailVO detail(String reportNo);
+
+    /**
+     * 报告记录分页查询（报告列表页用）
+     * <p>直接查 app_report_info，供列表页展示并跳转到详情。</p>
+     *
+     * @param page       页码
+     * @param size       每页条数
+     * @param customerId 按客户编号筛选，可选
+     * @return 报告记录分页数据
+     */
+    Page<AppReportInfo> page(int page, int size, String customerId);
 }

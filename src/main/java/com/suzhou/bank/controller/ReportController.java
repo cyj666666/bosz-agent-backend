@@ -2,6 +2,7 @@ package com.suzhou.bank.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.common.Result;
 import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.entity.report.AppReportInfo;
 import com.suzhou.bank.report.ReportGenerateException;
 import com.suzhou.bank.report.model.ReportDetailVO;
 import com.suzhou.bank.report.model.ReportGenerateResult;
@@ -115,7 +116,7 @@ public class ReportController {
     /**
      * 生成报告实例（含状态流转，定时任务调用本接口）
      * <p>报告记录须已存在：置 000-进行中 → 按模板加工内容实例与 AI 风险明细
-     * → 置 888-已完成；加工抛异常则置 999-失败，且实例数据整体回滚。</p>
+     * → 置 888-已完成；加工抛异常则置 999-失败。</p>
      * <p>本方法只是 HTTP 入口，定时任务也可直接调用 {@code ReportGenerateService.generate(reportNo)}。</p>
      *
      * @param reportNo 报告编号（对应 app_report_info.reportNo）
@@ -131,9 +132,9 @@ public class ReportController {
     }
 
     /**
-     * 纯加工报告实例（不改状态，便于联调与失败重跑）
+     * 纯加工报告实例（不改状态，便于联调）
      * <p>只执行"模板表 → 实例表"的落地，报告状态由调用方自行维护。
-     * 可重复执行：会先清理该报告下已有实例，不会触发唯一键冲突。</p>
+     * 不做重跑清理：同一 reportNo 重复加工会触发实例表唯一键冲突。</p>
      *
      * @param reportNo 报告编号
      * @return 加工结果
@@ -145,6 +146,22 @@ public class ReportController {
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    /**
+     * 报告记录分页查询（报告列表页）
+     * <p>查 app_report_info，返回的 reportNo 即详情接口的入参。</p>
+     *
+     * @param page       页码
+     * @param size       每页条数
+     * @param customerId 按客户编号筛选，可选
+     * @return 报告记录分页数据
+     */
+    @GetMapping("/instance/page")
+    public Result<Page<AppReportInfo>> instancePage(@RequestParam(defaultValue = "1") int page,
+                                                    @RequestParam(defaultValue = "10") int size,
+                                                    @RequestParam(required = false) String customerId) {
+        return Result.ok(generateService.page(page, size, customerId));
     }
 
     /**
