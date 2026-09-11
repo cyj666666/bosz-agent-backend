@@ -52,8 +52,9 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 --        TABLE       - 表格
 --        SOURCE_LINK - 溯源按钮（块本身即按钮，其实例 content 存外部跳转链接，点击新开浏览器标签页）
 --    analysisType 分析文本类型枚举（仅 fillType = TEXT 时有值）：
---        RULE        - 经验规则类（含 ruleName；agentCode 已含经验规则编号）
+--        RULE        - 经验规则类（此时 blockName 即规则名称；agentCode 已含经验规则编号）
 --        ANALYSIS    - 文本分析类
+--    blockName 内容块名称（必填）：模板层与实例层同名同值；analysisType=RULE 时其业务含义即规则名称
 --    emptyStrategy 空数据策略：实例内容为空时，PLACEHOLDER-显示暂无数据占位（默认）/ HIDE-整块隐藏
 -- ============================================================
 
@@ -64,7 +65,7 @@ CREATE TABLE app_report_content_block (
     fillType       VARCHAR(16) NOT NULL,
     analysisType   VARCHAR(16),
     agentCode      VARCHAR(64),
-    ruleName       VARCHAR(128),
+    blockName      VARCHAR(128) NOT NULL,
     titleLevel     SMALLINT,
     emptyStrategy  VARCHAR(16) DEFAULT 'PLACEHOLDER',
     sortNo         INT DEFAULT 0,
@@ -80,7 +81,7 @@ COMMENT ON COLUMN app_report_content_block.catalogCode IS '所属目录编号（
 COMMENT ON COLUMN app_report_content_block.fillType IS '填充类型：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源链接';
 COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT 时有值，否则为NULL；已含经验规则编号；为与内容实例、AI 风险实例的关联键）';
-COMMENT ON COLUMN app_report_content_block.ruleName IS '经验规则名称（仅 analysisType=RULE 时有值，否则为NULL）';
+COMMENT ON COLUMN app_report_content_block.blockName IS '内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值）';
 COMMENT ON COLUMN app_report_content_block.titleLevel IS '标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略（实例内容为空时生效）：PLACEHOLDER-显示暂无数据占位（默认） HIDE-整块隐藏';
 COMMENT ON COLUMN app_report_content_block.sortNo IS '排序（同一目录内内容块顺序）';

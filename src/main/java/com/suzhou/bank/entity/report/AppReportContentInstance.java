@@ -52,8 +52,9 @@ public class AppReportContentInstance {
     @TableField("agentCode")
     private String agentCode;
 
-    @TableField("ruleName")
-    private String ruleName;
+    /** 内容块名称（自模板快照；analysisType=RULE 时即规则名称） */
+    @TableField("blockName")
+    private String blockName;
 
     @TableField("titleLevel")
     private Integer titleLevel;

@@ -43,9 +43,9 @@ public class AppReportContentBlock {
     @TableField("agentCode")
     private String agentCode;
 
-    /** 经验规则名称（仅 analysisType=RULE 时有值） */
-    @TableField("ruleName")
-    private String ruleName;
+    /** 内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值） */
+    @TableField("blockName")
+    private String blockName;
 
     /** 标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值） */
     @TableField("titleLevel")

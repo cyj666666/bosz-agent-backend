@@ -15,8 +15,9 @@
 -- 说明     ：目录不单独建实例表 —— 前端按内容实例的 catalogCode 聚合 + 模板目录属性渲染目录树；
 --            某目录下内容块全部为空且 emptyStrategy=HIDE 时，该目录自然不出现。
 -- 设计要点 ：
---    ① 实例表结构性字段（fillType/analysisType/agentCode/ruleName/titleLevel/sortNo/catalogCode）
+--    ① 实例表结构性字段（fillType/analysisType/agentCode/blockName/titleLevel/sortNo/catalogCode）
 --       是生成时从模板快照过来的，目的是渲染一次查询、不 join 模板，且模板改版不污染历史报告。
+--       blockName 与模板层同名同值；analysisType=RULE 时即规则名称（对应 AI 风险表的 ruleName）。
 --    ② 块间跳转锚点是单向的：只存"本块 → 目标块锚点"，不存反向关系；
 --       与填充类型无关，任何填充类型的块配置了 jumpAnchorCode 即可跳转。
 --       前端行为：点击后滚动定位到目标块（同页面定位，不新开页面）。
@@ -56,7 +57,7 @@ CREATE TABLE app_report_content_instance (
     fillType        VARCHAR(16) NOT NULL,
     analysisType    VARCHAR(16),
     agentCode       VARCHAR(64),
-    ruleName        VARCHAR(128),
+    blockName       VARCHAR(128) NOT NULL,
     titleLevel      SMALLINT,
     sortNo          INT DEFAULT 0,
     anchorCode      VARCHAR(64),
@@ -76,7 +77,7 @@ COMMENT ON COLUMN app_report_content_instance.catalogCode IS '所属目录编号
 COMMENT ON COLUMN app_report_content_instance.fillType IS '填充类型（生成时自模板快照）：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源按钮（content 为外部跳转链接）';
 COMMENT ON COLUMN app_report_content_instance.analysisType IS '分析文本类型（自模板快照）：RULE-经验规则类 ANALYSIS-文本分析类';
 COMMENT ON COLUMN app_report_content_instance.agentCode IS '智能体编码（自模板快照，已含经验规则编号；与 AI 风险实例的关联键）';
-COMMENT ON COLUMN app_report_content_instance.ruleName IS '经验规则名称（自模板快照，仅 analysisType=RULE 时有值，否则为NULL）';
+COMMENT ON COLUMN app_report_content_instance.blockName IS '内容块名称（自模板快照，与模板层同名同值；analysisType=RULE 时即规则名称）';
 COMMENT ON COLUMN app_report_content_instance.titleLevel IS '标题级别（自模板快照）：1-报告主标题 2-章节标题 3-小节标题';
 COMMENT ON COLUMN app_report_content_instance.sortNo IS '排序（自模板快照，同一目录内）';
 COMMENT ON COLUMN app_report_content_instance.anchorCode IS '锚点编码：本块在报告内的定位锚点（默认取 blockCode），作为其它块跳转的目标标识；与填充类型无关';
@@ -129,7 +130,7 @@ COMMENT ON COLUMN app_report_ai_risk.customerId IS '客户编号';
 COMMENT ON COLUMN app_report_ai_risk.customerName IS '客户名称';
 COMMENT ON COLUMN app_report_ai_risk.blockCode IS '内容块编号（关联 app_report_content_instance.blockCode，唯一键依据与落地定位键）';
 COMMENT ON COLUMN app_report_ai_risk.agentCode IS '智能体编码（已含经验规则编号；与正文内容实例的关联键，两侧同值）';
-COMMENT ON COLUMN app_report_ai_risk.ruleName IS '经验规则名称（列表展示）';
+COMMENT ON COLUMN app_report_ai_risk.ruleName IS '经验规则名称（列表展示；取值 = 对应内容实例的 blockName，两者同文）';
 COMMENT ON COLUMN app_report_ai_risk.riskDesc IS '风险描述（列表展示文案；与内容实例 content 同一份文案，编辑正文时同事务同步更新）';
 COMMENT ON COLUMN app_report_ai_risk.status IS '处置状态：PENDING-待处理 ADOPTED-已采纳 INVALID-已无效';
 COMMENT ON COLUMN app_report_ai_risk.jumpAnchorCode IS '块间跳转锚点（单向）：点击该风险行时滚动定位到的正文块 anchorCode；非外部跳转链接';

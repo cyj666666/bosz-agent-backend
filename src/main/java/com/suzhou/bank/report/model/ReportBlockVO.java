@@ -26,7 +26,8 @@ public class ReportBlockVO {
 
     private String agentCode;
 
-    private String ruleName;
+    /** 内容块名称（analysisType=RULE 时即规则名称） */
+    private String blockName;
 
     private Integer titleLevel;
 

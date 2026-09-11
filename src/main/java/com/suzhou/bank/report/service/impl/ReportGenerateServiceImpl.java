@@ -352,7 +352,7 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         instance.setFillType(block.getFillType());
         instance.setAnalysisType(block.getAnalysisType());
         instance.setAgentCode(block.getAgentCode());
-        instance.setRuleName(block.getRuleName());
+        instance.setBlockName(block.getBlockName());
         instance.setTitleLevel(block.getTitleLevel());
         instance.setSortNo(block.getSortNo());
         instance.setContent(trimToNull(content));
@@ -393,7 +393,7 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         risk.setCustomerName(instance.getCustomerName());
         risk.setBlockCode(block.getBlockCode());
         risk.setAgentCode(block.getAgentCode());
-        risk.setRuleName(block.getRuleName());
+        risk.setRuleName(block.getBlockName());
         risk.setRiskDesc(instance.getContent());
         risk.setStatus(RISK_PENDING);
         // 单向：风险行 → 正文块位置锚点（同样属于块间位置跳转）
@@ -432,6 +432,9 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
             }
             if (StringUtils.hasText(block.getAnalysisType()) && !FILL_TEXT.equalsIgnoreCase(block.getFillType())) {
                 throw new ReportGenerateException("分析文本类型仅文本类内容块可配置：block=" + block.getBlockCode());
+            }
+            if (!StringUtils.hasText(block.getBlockName())) {
+                throw new ReportGenerateException("内容块缺少名称（blockName）：" + block.getBlockCode());
             }
             if (!isRuleBlock(block)) {
                 continue;
@@ -517,7 +520,7 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         vo.setFillType(instance.getFillType());
         vo.setAnalysisType(instance.getAnalysisType());
         vo.setAgentCode(instance.getAgentCode());
-        vo.setRuleName(instance.getRuleName());
+        vo.setBlockName(instance.getBlockName());
         vo.setTitleLevel(instance.getTitleLevel());
         vo.setSortNo(instance.getSortNo());
         vo.setEmptyStrategy(emptyStrategy);
