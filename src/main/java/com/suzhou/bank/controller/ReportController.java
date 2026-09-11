@@ -115,26 +115,29 @@ public class ReportController {
 
     /**
      * 生成报告实例（含状态流转，定时任务调用本接口）
-     * <p>报告记录须已存在：置 000-进行中 → 按模板加工内容实例与 AI 风险明细
-     * → 置 888-已完成；加工抛异常则置 999-失败。</p>
+     * <p>报告记录须已存在：置 000-进行中 → 按模板加工内容实例与 AI 风险明细 → 置 888-已完成。
+     * 生成过程不会抛异常：任何技术类/业务类异常都会被捕获、记日志、置 999-失败并落 failReason，
+     * 结果通过 {@code success=false + failReason} 返回给调用方。</p>
      * <p>本方法只是 HTTP 入口，定时任务也可直接调用 {@code ReportGenerateService.generate(reportNo)}。</p>
      *
      * @param reportNo 报告编号（对应 app_report_info.reportNo）
-     * @return 生成结果（内容块/实例/空内容/风险各项统计）
+     * @return 生成结果（success 标志 + failReason + 各项统计）
      */
     @PostMapping("/instance/generate")
     public Result<ReportGenerateResult> generateInstance(@RequestParam String reportNo) {
         try {
             return Result.ok(generateService.generate(reportNo));
-        } catch (ReportGenerateException e) {
-            return Result.fail(e.getMessage());
+        } catch (Throwable e) {
+            // 兜底：生成服务已保证不抛异常，此分支仅防御极端情况
+            return Result.fail(e.getMessage() == null ? "报告生成异常" : e.getMessage());
         }
     }
 
     /**
      * 纯加工报告实例（不改状态，便于联调）
      * <p>只执行"模板表 → 实例表"的落地，报告状态由调用方自行维护。
-     * 不做重跑清理：同一 reportNo 重复加工会触发实例表唯一键冲突。</p>
+     * 不做重跑清理：同一 reportNo 重复加工会触发实例表唯一键冲突。
+     * 同样不抛异常：失败通过 success=false + failReason 返回。</p>
      *
      * @param reportNo 报告编号
      * @return 加工结果
@@ -143,8 +146,8 @@ public class ReportController {
     public Result<ReportGenerateResult> processInstance(@RequestParam String reportNo) {
         try {
             return Result.ok(generateService.process(reportNo));
-        } catch (ReportGenerateException e) {
-            return Result.fail(e.getMessage());
+        } catch (Throwable e) {
+            return Result.fail(e.getMessage() == null ? "报告加工异常" : e.getMessage());
         }
     }
 

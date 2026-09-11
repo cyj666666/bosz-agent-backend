@@ -34,6 +34,7 @@ public interface ReportGenerateService {
      * <p>以模板表为唯一驱动：读模板目录与内容块 → 逐块落实例（结构性字段快照、位置锚点）
      * → analysisType=RULE 的内容块一对一生成风险明细。</p>
      * <p>不声明事务、不做重跑清理：报告编号每次唯一，重复加工由实例表唯一键拦截。</p>
+     * <p>不抛异常：失败时记录日志并返回 success=false + failReason。</p>
      *
      * @param reportNo 报告编号
      * @return 加工结果

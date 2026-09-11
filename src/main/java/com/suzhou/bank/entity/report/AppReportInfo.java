@@ -69,6 +69,10 @@ public class AppReportInfo {
     @TableField("reportUrl")
     private String reportUrl;
 
+    /** 失败原因：生成过程发生异常（技术类或业务类）时记录详细信息，成功时为空 */
+    @TableField("failReason")
+    private String failReason;
+
     /** 入库时间（数据库默认值，插入时留空即可） */
     @TableField("inputtime")
     private Date inputtime;

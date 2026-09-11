@@ -63,38 +63,75 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
 
     @Override
     public ReportGenerateResult generate(String reportNo) {
-        assertReportNoPresent(reportNo);
-        AppReportInfo reportInfo = loadReportInfo(reportNo);
+        long start = System.currentTimeMillis();
+        ReportGenerateResult result = new ReportGenerateResult();
+        result.setReportNo(reportNo);
+        result.setSuccess(false);
 
-        // 已完成的报告不做重复加工
-        if (REPORT_STATUS_DONE.equals(reportInfo.getReportStatus())) {
-            throw new ReportGenerateException("报告已完成（888），无需重复生成：" + reportNo);
+        if (!StringUtils.hasText(reportNo)) {
+            return failResult(result, start, "报告编号（reportNo）不能为空");
         }
 
-        // 置 000-进行中
-        markStatus(reportNo, REPORT_STATUS_RUNNING);
         try {
-            ReportGenerateResult result = process(reportNo);
-            // 置 888-已完成
-            markStatus(reportNo, REPORT_STATUS_DONE);
-            result.setReportStatus(REPORT_STATUS_DONE);
-            log.info("报告生成成功 reportNo={} 内容实例={} AI风险={} 耗时={}ms",
-                    reportNo, result.getContentTotal(), result.getRiskTotal(), result.getCostMs());
-            return result;
-        } catch (Exception e) {
-            // 置 999-失败
-            markStatus(reportNo, REPORT_STATUS_FAILED);
-            log.error("报告生成失败，已置为 999 reportNo={}", reportNo, e);
-            if (e instanceof ReportGenerateException) {
-                throw (ReportGenerateException) e;
+            AppReportInfo reportInfo = loadReportInfo(reportNo);
+            result.setCustomerId(reportInfo.getCustomerId());
+            result.setCustomerName(reportInfo.getCustomerName());
+            result.setReportTitle(reportInfo.getReportTitle());
+
+            // 已完成的报告不做重复加工
+            if (REPORT_STATUS_DONE.equals(reportInfo.getReportStatus())) {
+                return failResult(result, start, "报告已完成（888），无需重复生成：" + reportNo);
             }
-            throw new ReportGenerateException("报告生成失败：" + e.getMessage());
+
+            // 置 000-进行中
+            markStatus(reportNo, REPORT_STATUS_RUNNING);
+            ReportGenerateResult processed = process(reportNo);
+            // 加工失败（process 已捕获异常，success=false）：置 999 + 落失败原因
+            if (!processed.isSuccess()) {
+                markStatus(reportNo, REPORT_STATUS_FAILED);
+                markFailReason(reportNo, processed.getFailReason());
+                processed.setReportStatus(REPORT_STATUS_FAILED);
+                return processed;
+            }
+            // 置 888-已完成，并清空历史失败原因
+            markStatus(reportNo, REPORT_STATUS_DONE);
+            markFailReason(reportNo, null);
+            processed.setReportStatus(REPORT_STATUS_DONE);
+            processed.setSuccess(true);
+            log.info("报告生成成功 reportNo={} 内容实例={} AI风险={} 耗时={}ms",
+                    reportNo, processed.getContentTotal(), processed.getRiskTotal(), processed.getCostMs());
+            return processed;
+        } catch (Throwable e) {
+            // 任何异常（技术类/业务类）都不向外抛：记录日志、置 999 失败、落失败原因
+            log.error("报告生成失败，已置为 999 reportNo={}", reportNo, e);
+            String reason = buildFailReason(e);
+            markStatus(reportNo, REPORT_STATUS_FAILED);
+            markFailReason(reportNo, reason);
+            result.setReportStatus(REPORT_STATUS_FAILED);
+            return failResult(result, start, reason);
         }
     }
 
     @Override
     public ReportGenerateResult process(String reportNo) {
-        assertReportNoPresent(reportNo);
+        long start = System.currentTimeMillis();
+        ReportGenerateResult result = new ReportGenerateResult();
+        result.setReportNo(reportNo);
+        result.setSuccess(false);
+        if (!StringUtils.hasText(reportNo)) {
+            return failResult(result, start, "报告编号（reportNo）不能为空");
+        }
+        try {
+            return doProcess(reportNo);
+        } catch (Throwable e) {
+            // 纯加工同样不抛异常：记录日志并返回失败结果
+            log.error("报告实例加工失败 reportNo={}", reportNo, e);
+            return failResult(result, start, buildFailReason(e));
+        }
+    }
+
+    /** 加工内核：模板 → 实例的落地；失败时抛异常，由 process 统一捕获 */
+    private ReportGenerateResult doProcess(String reportNo) {
         long start = System.currentTimeMillis();
 
         // ===== 1. 报告记录（上游预生成，此处只读抬头信息） =====
@@ -123,19 +160,25 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         int hiddenCount = 0;
 
         for (AppReportContentBlock block : blocks) {
-            AppReportContentInstance instance = buildInstance(
-                    reportNo, customerId, customerName, reportDate, reportTitle, block, catalogMap);
-            instances.add(instance);
+            try {
+                AppReportContentInstance instance = buildInstance(
+                        reportNo, customerId, customerName, reportDate, reportTitle, block, catalogMap);
+                instances.add(instance);
 
-            if (!StringUtils.hasText(instance.getContent())) {
-                emptyCount++;
-                if (EMPTY_HIDE.equalsIgnoreCase(block.getEmptyStrategy())) {
-                    hiddenCount++;
+                if (!StringUtils.hasText(instance.getContent())) {
+                    emptyCount++;
+                    if (EMPTY_HIDE.equalsIgnoreCase(block.getEmptyStrategy())) {
+                        hiddenCount++;
+                    }
                 }
-            }
-            // 经验规则类内容块 → 一对一生成 AI 风险明细
-            if (isRuleBlock(block)) {
-                risks.add(buildRisk(instance, block, agentCodes));
+                // 经验规则类内容块 → 一对一生成 AI 风险明细
+                if (isRuleBlock(block)) {
+                    risks.add(buildRisk(instance, block, agentCodes));
+                }
+            } catch (Exception e) {
+                // 单环节异常：记录日志后转成带定位信息的业务异常，交由上层统一置失败
+                log.error("报告加工失败，内容块={} reportNo={}", block.getBlockCode(), reportNo, e);
+                throw new ReportGenerateException("内容块加工失败（" + block.getBlockCode() + "）：" + e.getMessage(), e);
             }
         }
 
@@ -161,6 +204,7 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         result.setContentEmpty(emptyCount);
         result.setContentHidden(hiddenCount);
         result.setRiskTotal(risks.size());
+        result.setSuccess(true);
         result.setCostMs(System.currentTimeMillis() - start);
         return result;
     }
@@ -412,6 +456,39 @@ public class ReportGenerateServiceImpl implements ReportGenerateService {
         reportInfoMapper.update(null, Wrappers.<AppReportInfo>lambdaUpdate()
                 .eq(AppReportInfo::getReportNo, reportNo)
                 .set(AppReportInfo::getReportStatus, status));
+    }
+
+    /** 写入/清空失败原因（成功时传 null 清空历史失败原因） */
+    private void markFailReason(String reportNo, String failReason) {
+        reportInfoMapper.update(null, Wrappers.<AppReportInfo>lambdaUpdate()
+                .eq(AppReportInfo::getReportNo, reportNo)
+                .set(AppReportInfo::getFailReason, failReason));
+    }
+
+    /** 组装失败原因：技术类异常带异常类名与堆栈首因，业务类异常带业务描述 */
+    private String buildFailReason(Throwable e) {
+        String message = e.getMessage();
+        if (message == null || message.trim().isEmpty()) {
+            message = e.getClass().getSimpleName();
+        }
+        if (e instanceof ReportGenerateException) {
+            return "业务异常：" + message;
+        }
+        StringBuilder sb = new StringBuilder("技术异常[").append(e.getClass().getSimpleName()).append("]：").append(message);
+        Throwable cause = e.getCause();
+        if (cause != null && cause.getMessage() != null) {
+            sb.append("（根因：").append(cause.getMessage()).append("）");
+        }
+        String full = sb.toString();
+        return full.length() > 1000 ? full.substring(0, 1000) : full;
+    }
+
+    /** 构造失败结果（不抛异常，success=false） */
+    private ReportGenerateResult failResult(ReportGenerateResult result, long start, String reason) {
+        result.setSuccess(false);
+        result.setFailReason(reason);
+        result.setCostMs(System.currentTimeMillis() - start);
+        return result;
     }
 
     private AppReportInfo loadReportInfo(String reportNo) {

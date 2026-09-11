@@ -40,6 +40,12 @@ public class ReportGenerateResult {
     /** 生成的 AI 风险明细数（= analysisType=RULE 的内容块数） */
     private int riskTotal;
 
+    /** 是否成功（false 时配合 failReason 查看失败详情） */
+    private boolean success;
+
+    /** 失败原因：技术类或业务类异常详情，成功时为空 */
+    private String failReason;
+
     /** 生成耗时（毫秒） */
     private long costMs;
 }

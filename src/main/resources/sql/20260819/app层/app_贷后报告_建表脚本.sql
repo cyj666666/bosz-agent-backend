@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS app_report_info (
     approveOpinion         TEXT,
     approveTime            TIMESTAMP,
     reportUrl              VARCHAR(256),
+    failReason             VARCHAR(2000),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -49,6 +50,7 @@ COMMENT ON COLUMN app_report_info.approveStatus IS '审批状态（码值：待�
 COMMENT ON COLUMN app_report_info.approveOpinion IS '审批意见';
 COMMENT ON COLUMN app_report_info.approveTime IS '审批时间';
 COMMENT ON COLUMN app_report_info.reportUrl IS '报告链接';
+COMMENT ON COLUMN app_report_info.failReason IS '失败原因（生成过程发生技术类/业务类异常时记录详细信息，成功时为空）';
 COMMENT ON COLUMN app_report_info.inputtime IS '入库时间';
 CREATE UNIQUE INDEX IF NOT EXISTS uk_report_no ON app_report_info (reportNo);
 
