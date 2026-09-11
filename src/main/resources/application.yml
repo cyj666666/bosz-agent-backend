@@ -28,3 +28,9 @@ know-kit:
 jwt:
   secret: bSzAgent2026SuzhouBankLoanManagementSecretKey
   expiration: 7200000
+
+#报告详情是否使用模拟数据
+report:
+  mock-content:
+    enabled: true
+
