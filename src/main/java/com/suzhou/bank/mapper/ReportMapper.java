@@ -5,7 +5,7 @@ import com.suzhou.bank.entity.Report;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 报告主表 Mapper
+ * 报告主表 Mapper（report）
  *
  * @author cyj666666
  * @since 1.0.0

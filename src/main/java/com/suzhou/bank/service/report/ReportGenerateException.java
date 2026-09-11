@@ -1,4 +1,4 @@
-package com.suzhou.bank.report;
+package com.suzhou.bank.service.report;
 
 /**
  * 报告生成业务异常

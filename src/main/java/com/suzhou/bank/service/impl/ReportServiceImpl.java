@@ -1,26 +1,51 @@
 package com.suzhou.bank.service.impl;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.suzhou.bank.entity.*;
-import com.suzhou.bank.mapper.*;
+import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.entity.report.AppReportAiRisk;
+import com.suzhou.bank.entity.report.AppReportCatalog;
+import com.suzhou.bank.entity.report.AppReportContentBlock;
+import com.suzhou.bank.entity.report.AppReportContentInstance;
+import com.suzhou.bank.mapper.ReportMapper;
+import com.suzhou.bank.mapper.report.AppReportAiRiskMapper;
+import com.suzhou.bank.mapper.report.AppReportCatalogMapper;
+import com.suzhou.bank.mapper.report.AppReportContentBlockMapper;
+import com.suzhou.bank.mapper.report.AppReportContentInstanceMapper;
+import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
-import com.suzhou.bank.service.data.DataCollectService;
-import com.suzhou.bank.service.knowkit.KnowKitService;
+import com.suzhou.bank.service.report.model.ReportBlockVO;
+import com.suzhou.bank.service.report.model.ReportCatalogNode;
+import com.suzhou.bank.service.report.model.ReportDetailVO;
+import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportRiskItem;
+import com.suzhou.bank.service.report.spi.ContentPayload;
+import com.suzhou.bank.service.report.spi.ReportContentProvider;
+import com.suzhou.bank.service.report.spi.ReportGenerateContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.suzhou.bank.service.report.model.ReportConstants.*;
+
 /**
- * 报告服务实现
- * <p>基于 Know-Kit 分析结果和客户指标数据，生成 H5 交互式贷后管理报告。
- * 报告生成时拍摄数据快照，保证历史报告内容不可变。</p>
+ * 报告服务实现（模板驱动的报告实例生成）
+ * <p>只负责"模板表 + 实例表"的逻辑，不负责报告记录的发起（{@code report}
+ * 由上游预生成，初始状态 111-待开始）。</p>
+ * <p><b>并发与事务约定</b>：本服务<b>不声明事务</b>，也不做"重跑清理"。
+ * 互斥由上游统一加分布式锁保证；每次生成的报告编号唯一，
+ * 因此重复加工会被实例表的唯一键拦住，不会产生数据错乱。</p>
  *
  * @author cyj666666
  * @since 1.0.0
@@ -31,594 +56,502 @@ import java.util.stream.Collectors;
 public class ReportServiceImpl implements ReportService {
 
     private final ReportMapper reportMapper;
-    private final CustomerMapper customerMapper;
-    private final IndicatorDataMapper indicatorMapper;
-    private final KnowledgeRuleMapper knowledgeRuleMapper;
-    private final RuleConditionMapper ruleConditionMapper;
-    private final KnowKitTaskMapper taskMapper;
-    private final CollectorConfigMapper collectorConfigMapper;
-    private final DataCollectService dataCollectService;
-    private final KnowKitService knowKitService;
-
-    /**
-     * 一键生成报告：采集 → 分析 → 生成
-     * <p>TODO: 对接行内接口后，取消注释采集器和 KnowKit 调用，恢复完整链路。</p>
-     */
-    @Override
-    public Report create(Long customerId) {
-        log.info("一键生成报告开始（模拟模式）, customerId={}", customerId);
-
-        /* --- 采集器 + KnowKit 暂不可用，注释保留 ---
-        // 1. 遍历所有启用的采集器，按客户采集最新数据
-        List<CollectorConfig> enabledCollectors = collectorConfigMapper.selectList(
-                new LambdaQueryWrapper<CollectorConfig>().eq(CollectorConfig::getEnabled, 1));
-        log.info("启用的采集器数量: {}", enabledCollectors.size());
-
-        int successCount = 0;
-        int failCount = 0;
-        for (CollectorConfig collector : enabledCollectors) {
-            try {
-                dataCollectService.collect(collector.getId(), customerId);
-                successCount++;
-            } catch (Exception e) {
-                log.warn("采集器[{}]执行失败(跳过继续): {}", collector.getConfigName(), e.getMessage());
-                failCount++;
-            }
-        }
-        log.info("采集完成, customerId={}, 成功={}, 失败={}", customerId, successCount, failCount);
-
-        // 2. 提交 Know-Kit 分析
-        KnowKitTask task = knowKitService.submitAnalysis(customerId);
-
-        // 3. 生成报告（正式链路）
-        Report report = generate(customerId, task.getId());
-        log.info("一键生成报告完成, reportId={}, customerId={}", report.getId(), customerId);
-        return report;
-        --- 采集器 + KnowKit 暂不可用 END --- */
-
-        // 模拟模式：基于已有指标数据和规则条件生成报告
-        return createMock(customerId);
-    }
-
-    /**
-     * 模拟生成报告（暂代正式链路，对接行内接口后删除）
-     * <p>基于已有指标数据和规则条件判定生成简单 HTML 报告，用于验证报告展示效果。</p>
-     */
-    private Report createMock(Long customerId) {
-        Customer customer = customerMapper.selectById(customerId);
-        if (customer == null) {
-            throw new RuntimeException("客户不存在: " + customerId);
-        }
-
-        Map<String, Object> data = getReportData(customerId);
-
-        // 生成简单 HTML
-        String html = buildReportHtml(customer,
-                indicatorMapper.selectList(new LambdaQueryWrapper<IndicatorData>()
-                        .eq(IndicatorData::getCustomerId, customerId)
-                        .orderByAsc(IndicatorData::getSortOrder)),
-                null);
-
-        Report report = new Report();
-        report.setCustomerId(customerId);
-        report.setReportTitle(customer.getCompanyName() + " - 贷后管理报告");
-        report.setReportType("贷后管理报告");
-        report.setStatus("GENERATED");
-        report.setDataSnapshot(JSON.toJSONString(data));
-        report.setContentHtml(html);
-        report.setCreatedAt(new Date());
-        report.setUpdatedAt(new Date());
-        reportMapper.insert(report);
-
-        Map<?, ?> summary = (Map<?, ?>) data.get("summary");
-        log.info("模拟报告已生成, reportId={}, indicators={}, rules={}, hits={}",
-                report.getId(), summary.get("totalIndicators"),
-                summary.get("totalRules"), summary.get("hitRules"));
-        return report;
-    }
-
-    /** 基于 Know-Kit 分析结果生成报告 */
-    @Override
-    public Report generate(Long customerId, Long knowKitTaskId) {
-        Customer customer = customerMapper.selectById(customerId);
-        if (customer == null) {
-            throw new RuntimeException("客户不存在: " + customerId);
-        }
-
-        KnowKitTask task = taskMapper.selectById(knowKitTaskId);
-        List<IndicatorData> indicators = indicatorMapper.selectList(
-                new LambdaQueryWrapper<IndicatorData>().eq(IndicatorData::getCustomerId, customerId));
-
-        // 解析 Know-Kit 分析结果
-        JSONObject analysis = null;
-        if (task != null && task.getResponseJson() != null && !task.getResponseJson().equals("{}")) {
-            try {
-                analysis = JSON.parseObject(task.getResponseJson());
-            } catch (Exception e) {
-                log.warn("Know-Kit 响应JSON解析失败, taskId={}", knowKitTaskId);
-            }
-        }
-
-        // 生成报告 HTML
-        String html = buildReportHtml(customer, indicators, analysis);
-
-        Report report = new Report();
-        report.setCustomerId(customerId);
-        report.setReportTitle(customer.getCompanyName() + " - 贷后管理报告");
-        report.setReportType("贷后管理报告");
-        report.setStatus("GENERATED");
-        report.setKnowKitTaskId(knowKitTaskId);
-        report.setDataSnapshot(JSON.toJSONString(indicators));
-        report.setContentHtml(html);
-        report.setCreatedAt(new Date());
-        report.setUpdatedAt(new Date());
-        reportMapper.insert(report);
-
-        log.info("报告已生成, reportId={}, customerId={}, title={}, htmlSize={}",
-                report.getId(), customerId, report.getReportTitle(), html.length());
-        return report;
-    }
+    private final AppReportCatalogMapper catalogMapper;
+    private final AppReportContentBlockMapper blockMapper;
+    private final AppReportContentInstanceMapper instanceMapper;
+    private final AppReportAiRiskMapper riskMapper;
+    private final ReportContentProvider contentProvider;
 
     @Override
-    public Report getById(Long id) {
-        return reportMapper.selectById(id);
-    }
+    public ReportGenerateResult generate(String reportNo) {
+        long start = System.currentTimeMillis();
+        ReportGenerateResult result = new ReportGenerateResult();
+        result.setReportNo(reportNo);
+        result.setSuccess(false);
 
-    @Override
-    public Page<Report> page(int page, int size, Long customerId) {
-        LambdaQueryWrapper<Report> w = new LambdaQueryWrapper<>();
-        if (customerId != null) w.eq(Report::getCustomerId, customerId);
-        w.orderByDesc(Report::getCreatedAt);
-        Page<Report> result = reportMapper.selectPage(new Page<>(page, size), w);
-
-        // 填充 companyName，避免 N+1 查询：一次查出所有涉及的客户
-        List<Long> customerIds = result.getRecords().stream()
-                .map(Report::getCustomerId)
-                .distinct()
-                .collect(Collectors.toList());
-        if (!customerIds.isEmpty()) {
-            Map<Long, String> nameMap = customerMapper.selectBatchIds(customerIds).stream()
-                    .collect(Collectors.toMap(Customer::getId, Customer::getCompanyName));
-            result.getRecords().forEach(r -> r.setCompanyName(nameMap.getOrDefault(r.getCustomerId(), "")));
-        }
-        return result;
-    }
-
-    @Override
-    public String getReportHtml(Long id) {
-        Report r = reportMapper.selectById(id);
-        return r != null && r.getContentHtml() != null ? r.getContentHtml() : "";
-    }
-
-    @Override
-    public void delete(Long id) {
-        reportMapper.deleteById(id);
-        log.info("报告已删除, reportId={}", id);
-    }
-
-    // ==================== 报告结构化数据 ====================
-
-    /**
-     * 构建报告结构化数据
-     * <p>客户基本信息 + 按数据域分组的指标列表 + 规则命中判定结果 + 汇总统计，
-     * 供前端渲染三栏式交互报告页。</p>
-     */
-    @Override
-    public Map<String, Object> getReportData(Long customerId) {
-        Customer c = customerMapper.selectById(customerId);
-        if (c == null) throw new RuntimeException("客户不存在: " + customerId);
-
-        List<IndicatorData> indicators = indicatorMapper.selectList(
-                new LambdaQueryWrapper<IndicatorData>()
-                        .eq(IndicatorData::getCustomerId, customerId)
-                        .orderByAsc(IndicatorData::getSortOrder));
-        List<KnowledgeRule> rules = knowledgeRuleMapper.selectList(
-                new LambdaQueryWrapper<KnowledgeRule>()
-                        .eq(KnowledgeRule::getEnabled, 1)
-                        .orderByAsc(KnowledgeRule::getSortOrder));
-        List<RuleCondition> allConds = ruleConditionMapper.selectList(null);
-        Map<Long, List<RuleCondition>> condMap = allConds.stream()
-                .collect(Collectors.groupingBy(RuleCondition::getRuleId));
-
-        Map<String, IndicatorData> indMap = indicators.stream()
-                .collect(Collectors.toMap(IndicatorData::getIndicatorKey, i -> i, (a, b) -> a));
-        Map<String, String> nameMap = indicators.stream()
-                .collect(Collectors.toMap(IndicatorData::getIndicatorKey, IndicatorData::getIndicatorName, (a, b) -> a));
-
-        // 逐规则判定
-        List<Map<String, Object>> ruleList = new ArrayList<>();
-        for (KnowledgeRule rule : rules) {
-            List<RuleCondition> conds = condMap.getOrDefault(rule.getId(), Collections.emptyList());
-            conds.sort(Comparator.comparingInt(x -> x.getLogicOrder() != null ? x.getLogicOrder() : 1));
-            boolean hit = evalRule(conds, indMap);
-            List<Map<String, Object>> condObjs = new ArrayList<>();
-            for (RuleCondition rc : conds) {
-                Map<String, Object> cm = new LinkedHashMap<>();
-                cm.put("indicatorKey", rc.getIndicatorKey());
-                cm.put("indicatorName", nameMap.getOrDefault(rc.getIndicatorKey(), ""));
-                cm.put("operator", rc.getOperator());
-                cm.put("threshold", rc.getThreshold());
-                cm.put("logicOrder", rc.getLogicOrder());
-                cm.put("logicConnector", rc.getLogicConnector());
-                condObjs.add(cm);
-            }
-            Map<String, Object> rm = new LinkedHashMap<>();
-            rm.put("ruleCode", rule.getRuleCode());
-            rm.put("ruleName", rule.getRuleName());
-            rm.put("ruleType", rule.getRuleType());
-            rm.put("description", rule.getDescription());
-            rm.put("hit", hit);
-            rm.put("conditions", condObjs);
-            ruleList.add(rm);
+        if (!StringUtils.hasText(reportNo)) {
+            return failResult(result, start, "报告编号（reportNo）不能为空");
         }
 
-        // 指标按域分组
-        Map<String, List<Map<String, Object>>> domainMap = new LinkedHashMap<>();
-        String[] domainOrder = {"FINANCE","CREDIT","TAX","JUDICIAL","SETTLEMENT",
-                "INDUSTRY_COMMERCE","SOCIAL_SECURITY","CUSTOMS","UTILITY","PROPERTY","GRAPH","MANAGEMENT"};
-        for (String d : domainOrder) domainMap.put(d, new ArrayList<>());
-        for (IndicatorData i : indicators) {
-            String d = i.getDomain() != null ? i.getDomain() : "OTHER";
-            domainMap.computeIfAbsent(d, k -> new ArrayList<>()).add(toIndicatorMap(i));
-        }
-        domainMap.entrySet().removeIf(e -> e.getValue().isEmpty());
-
-        long hitCount = ruleList.stream().filter(r -> Boolean.TRUE.equals(r.get("hit"))).count();
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("totalIndicators", indicators.size());
-        summary.put("totalRules", rules.size());
-        summary.put("hitRules", hitCount);
-        summary.put("domainCount", domainMap.size());
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("customer", toCustomerMap(c));
-        result.put("domains", domainMap);
-        result.put("rules", ruleList);
-        result.put("summary", summary);
-        return result;
-    }
-
-    // ==================== 规则命中判定 ====================
-
-    private boolean evalRule(List<RuleCondition> conds, Map<String, IndicatorData> indMap) {
-        if (conds.isEmpty()) return false;
-        List<Boolean> res = new ArrayList<>();
-        List<String> link = new ArrayList<>();
-        for (RuleCondition c : conds) {
-            IndicatorData ind = indMap.get(c.getIndicatorKey());
-            res.add(evalCond(c, ind));
-            link.add(c.getLogicConnector() != null ? c.getLogicConnector() : "AND");
-        }
-        boolean v = res.get(0);
-        for (int i = 1; i < res.size(); i++)
-            v = "OR".equals(link.get(i - 1)) ? (v || res.get(i)) : (v && res.get(i));
-        return v;
-    }
-
-    private boolean evalCond(RuleCondition c, IndicatorData ind) {
-        if (ind == null) return "NOT_EXISTS".equals(c.getOperator());
-        String op = c.getOperator(), cv = ind.getCurrentValue(), th = c.getThreshold();
-        if (op == null) return false;
-        switch (op) {
-            case "EXISTS": return cv != null && !"否".equals(cv) && !"无".equals(cv);
-            case "NOT_EXISTS": return cv == null || "否".equals(cv) || "无".equals(cv);
-            case "CONTAINS": return cv != null && th != null && cv.contains(th);
-            case "EQ": return cv != null && cv.equals(th);
-            case "NEQ": return cv != null && !cv.equals(th);
-            case "GT": case "GTE": case "LT": case "LTE":
-                return numCmp(cv, th, op);
-            default: return false;
-        }
-    }
-
-    private boolean numCmp(String cv, String th, String op) {
-        if (cv == null || th == null) return false;
         try {
-            double v = parseNum(cv), t = Double.parseDouble(th);
-            switch (op) { case "GT": return v > t; case "GTE": return v >= t; case "LT": return v < t; case "LTE": return v <= t; default: return false; }
-        } catch (NumberFormatException e) { return false; }
+            Report reportInfo = loadReportInfo(reportNo);
+            result.setCustomerId(reportInfo.getCustomerId());
+            result.setCustomerName(reportInfo.getCustomerName());
+            result.setReportTitle(reportInfo.getReportTitle());
+
+            // 已完成的报告不做重复加工
+            if (REPORT_STATUS_DONE.equals(reportInfo.getStatus())) {
+                return failResult(result, start, "报告已完成（888），无需重复生成：" + reportNo);
+            }
+
+            // 置 000-进行中
+            markStatus(reportNo, REPORT_STATUS_RUNNING);
+            ReportGenerateResult processed = process(reportNo);
+            // 加工失败（process 已捕获异常，success=false）：置 999 + 落失败原因
+            if (!processed.isSuccess()) {
+                markStatus(reportNo, REPORT_STATUS_FAILED);
+                markFailReason(reportNo, processed.getFailReason());
+                processed.setReportStatus(REPORT_STATUS_FAILED);
+                return processed;
+            }
+            // 置 888-已完成，并清空历史失败原因
+            markStatus(reportNo, REPORT_STATUS_DONE);
+            markFailReason(reportNo, null);
+            processed.setReportStatus(REPORT_STATUS_DONE);
+            processed.setSuccess(true);
+            log.info("报告生成成功 reportNo={} 内容实例={} AI风险={} 耗时={}ms",
+                    reportNo, processed.getContentTotal(), processed.getRiskTotal(), processed.getCostMs());
+            return processed;
+        } catch (Throwable e) {
+            // 任何异常（技术类/业务类）都不向外抛：记录日志、置 999 失败、落失败原因
+            log.error("报告生成失败，已置为 999 reportNo={}", reportNo, e);
+            String reason = buildFailReason(e);
+            markStatus(reportNo, REPORT_STATUS_FAILED);
+            markFailReason(reportNo, reason);
+            result.setReportStatus(REPORT_STATUS_FAILED);
+            return failResult(result, start, reason);
+        }
     }
 
-    private double parseNum(String s) {
-        String c = s.replaceAll("[↑↓%ppt￥$，,]", "").trim();
-        if (c.startsWith("+")) c = c.substring(1);
-        return Double.parseDouble(c);
+    @Override
+    public ReportGenerateResult process(String reportNo) {
+        long start = System.currentTimeMillis();
+        ReportGenerateResult result = new ReportGenerateResult();
+        result.setReportNo(reportNo);
+        result.setSuccess(false);
+        if (!StringUtils.hasText(reportNo)) {
+            return failResult(result, start, "报告编号（reportNo）不能为空");
+        }
+        try {
+            return doProcess(reportNo);
+        } catch (Throwable e) {
+            // 纯加工同样不抛异常：记录日志并返回失败结果
+            log.error("报告实例加工失败 reportNo={}", reportNo, e);
+            return failResult(result, start, buildFailReason(e));
+        }
     }
 
-    private Map<String, Object> toCustomerMap(Customer c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("companyName", c.getCompanyName()); m.put("creditCode", c.getCreditCode());
-        m.put("legalPerson", c.getLegalPerson()); m.put("actualController", c.getActualController());
-        m.put("registeredCapital", c.getRegisteredCapital()); m.put("paidCapital", c.getPaidCapital());
-        m.put("establishDate", c.getEstablishDate()); m.put("industry", c.getIndustry());
-        m.put("bizScope", c.getBizScope()); m.put("registerAddress", c.getRegisterAddress());
-        m.put("holdingType", c.getHoldingType()); m.put("shareholder", c.getShareholder());
-        m.put("groupName", c.getGroupName()); m.put("customerType", c.getCustomerType());
-        m.put("firstLoanDate", c.getFirstLoanDate()); m.put("lastApprovalDate", c.getLastApprovalDate());
-        m.put("mainBank", c.getMainBank()); m.put("settlementBank", c.getSettlementBank());
-        m.put("status", c.getStatus());
-        return m;
+    /** 加工内核：模板 → 实例的落地；失败时抛异常，由 process 统一捕获 */
+    private ReportGenerateResult doProcess(String reportNo) {
+        long start = System.currentTimeMillis();
+
+        // ===== 1. 报告记录（上游预生成，此处只读抬头信息） =====
+        Report reportInfo = loadReportInfo(reportNo);
+        String customerId = reportInfo.getCustomerId();
+        String customerName = StringUtils.hasText(reportInfo.getCustomerName())
+                ? reportInfo.getCustomerName() : "客户" + customerId;
+        String reportTitle = StringUtils.hasText(reportInfo.getReportTitle())
+                ? reportInfo.getReportTitle() : customerName + "贷后管理定期检查报告";
+
+        // ===== 2. 载入模板（生成依据） =====
+        Map<String, AppReportCatalog> catalogMap = loadEnabledCatalogs().stream()
+                .collect(Collectors.toMap(AppReportCatalog::getCatalogCode, c -> c, (a, b) -> a, LinkedHashMap::new));
+        List<AppReportContentBlock> blocks = loadEnabledBlocks();
+        if (blocks.isEmpty()) {
+            throw new ReportGenerateException("报告模板未配置内容块，请先维护 app_report_content_block");
+        }
+        validateTemplate(blocks, catalogMap);
+
+        // ===== 3. 逐块实例化（模板驱动） =====
+        Set<String> agentCodes = new HashSet<>();
+        List<AppReportContentInstance> instances = new ArrayList<>(blocks.size());
+        List<AppReportAiRisk> risks = new ArrayList<>();
+        int emptyCount = 0;
+        int hiddenCount = 0;
+
+        for (AppReportContentBlock block : blocks) {
+            try {
+                AppReportContentInstance instance = buildInstance(
+                        reportNo, customerId, customerName, reportTitle, block, catalogMap);
+                instances.add(instance);
+
+                if (!StringUtils.hasText(instance.getContent())) {
+                    emptyCount++;
+                    if (EMPTY_HIDE.equalsIgnoreCase(block.getEmptyStrategy())) {
+                        hiddenCount++;
+                    }
+                }
+                // 经验规则类内容块 → 一对一生成 AI 风险明细
+                if (isRuleBlock(block)) {
+                    risks.add(buildRisk(instance, block, agentCodes));
+                }
+            } catch (Exception e) {
+                // 单环节异常：记录日志后转成带定位信息的业务异常，交由上层统一置失败
+                log.error("报告加工失败，内容块={} reportNo={}", block.getBlockCode(), reportNo, e);
+                throw new ReportGenerateException("内容块加工失败（" + block.getBlockCode() + "）：" + e.getMessage(), e);
+            }
+        }
+
+        // ===== 4. 落库 =====
+        for (AppReportContentInstance instance : instances) {
+            instanceMapper.insert(instance);
+        }
+        for (AppReportAiRisk risk : risks) {
+            riskMapper.insert(risk);
+        }
+
+        log.info("报告实例加工完成 reportNo={} 内容块={} 实例={} 空内容={} 隐藏={} AI风险={} 耗时={}ms",
+                reportNo, blocks.size(), instances.size(), emptyCount, hiddenCount, risks.size(),
+                System.currentTimeMillis() - start);
+
+        ReportGenerateResult result = new ReportGenerateResult();
+        result.setReportNo(reportNo);
+        result.setCustomerId(customerId);
+        result.setCustomerName(customerName);
+        result.setReportTitle(reportTitle);
+        result.setBlockTotal(blocks.size());
+        result.setContentTotal(instances.size());
+        result.setContentEmpty(emptyCount);
+        result.setContentHidden(hiddenCount);
+        result.setRiskTotal(risks.size());
+        result.setSuccess(true);
+        result.setCostMs(System.currentTimeMillis() - start);
+        return result;
     }
 
-    private Map<String, Object> toIndicatorMap(IndicatorData i) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("indicatorKey", i.getIndicatorKey()); m.put("indicatorName", i.getIndicatorName());
-        m.put("currentValue", i.getCurrentValue()); m.put("previousValue", i.getPreviousValue());
-        m.put("changeDesc", i.getChangeDesc()); m.put("dataUnit", i.getDataUnit()); m.put("period", i.getPeriod());
-        return m;
+    @Override
+    public ReportDetailVO detail(String reportNo) {
+        assertReportNoPresent(reportNo);
+        Report reportInfo = loadReportInfo(reportNo);
+
+        // 目录树来自模板层（目录不建实例表）
+        Map<String, ReportCatalogNode> nodeMap = new LinkedHashMap<>();
+        for (AppReportCatalog catalog : loadEnabledCatalogs()) {
+            nodeMap.put(catalog.getCatalogCode(), toCatalogNode(catalog));
+        }
+        List<ReportCatalogNode> roots = new ArrayList<>();
+        for (ReportCatalogNode node : nodeMap.values()) {
+            ReportCatalogNode parent = StringUtils.hasText(node.getParentCode()) ? nodeMap.get(node.getParentCode()) : null;
+            if (parent == null) {
+                roots.add(node);
+            } else {
+                parent.getChildren().add(node);
+            }
+        }
+
+        // 空数据策略属于渲染策略，取自模板；未配置时默认 PLACEHOLDER（保留结构、显示占位）
+        Map<String, String> emptyStrategyMap = new HashMap<>();
+        for (AppReportContentBlock block : loadEnabledBlocks()) {
+            emptyStrategyMap.put(block.getBlockCode(),
+                    StringUtils.hasText(block.getEmptyStrategy()) ? block.getEmptyStrategy() : EMPTY_PLACEHOLDER);
+        }
+
+        List<AppReportContentInstance> instances = instanceMapper.selectList(
+                Wrappers.<AppReportContentInstance>lambdaQuery()
+                        .eq(AppReportContentInstance::getReportNo, reportNo)
+                        .orderByAsc(AppReportContentInstance::getSortNo)
+                        .orderByAsc(AppReportContentInstance::getBlockCode));
+
+        List<ReportBlockVO> headBlocks = new ArrayList<>();
+        Map<String, String> catalogOfBlock = new HashMap<>();
+        for (AppReportContentInstance instance : instances) {
+            catalogOfBlock.put(instance.getBlockCode(), instance.getCatalogCode());
+            ReportBlockVO vo = toBlockVO(instance, emptyStrategyMap.get(instance.getBlockCode()));
+            ReportCatalogNode node = StringUtils.hasText(instance.getCatalogCode())
+                    ? nodeMap.get(instance.getCatalogCode()) : null;
+            if (node == null) {
+                // 报告级内容块（如报告头），或目录已停用：一律渲染在正文顶部，避免内容丢失
+                headBlocks.add(vo);
+            } else {
+                node.getBlocks().add(vo);
+            }
+        }
+        roots.forEach(this::sortCatalogBlocks);
+
+        List<AppReportAiRisk> riskRows = riskMapper.selectList(
+                Wrappers.<AppReportAiRisk>lambdaQuery()
+                        .eq(AppReportAiRisk::getReportNo, reportNo)
+                        .orderByAsc(AppReportAiRisk::getSortNo)
+                        .orderByAsc(AppReportAiRisk::getBlockCode));
+        List<ReportRiskItem> risks = new ArrayList<>(riskRows.size());
+        int pending = 0;
+        int adopted = 0;
+        int invalid = 0;
+        for (AppReportAiRisk row : riskRows) {
+            ReportRiskItem item = new ReportRiskItem();
+            item.setBlockCode(row.getBlockCode());
+            item.setAgentCode(row.getAgentCode());
+            item.setRuleName(row.getRuleName());
+            item.setRiskDesc(row.getRiskDesc());
+            item.setStatus(row.getStatus());
+            item.setJumpAnchorCode(row.getJumpAnchorCode());
+            item.setSortNo(row.getSortNo());
+            item.setCatalogCode(catalogOfBlock.get(row.getBlockCode()));
+            risks.add(item);
+
+            if (RISK_ADOPTED.equalsIgnoreCase(row.getStatus())) {
+                adopted++;
+            } else if (RISK_INVALID.equalsIgnoreCase(row.getStatus())) {
+                invalid++;
+            } else {
+                pending++;
+            }
+        }
+
+        ReportDetailVO detail = new ReportDetailVO();
+        detail.setReportNo(reportInfo.getReportNo());
+        detail.setCustomerId(reportInfo.getCustomerId());
+        detail.setCustomerName(reportInfo.getCustomerName());
+        detail.setReportTitle(reportInfo.getReportTitle());
+        detail.setStatus(reportInfo.getStatus());
+        detail.setUpdatedAt(reportInfo.getUpdatedAt());
+        detail.setHeadBlocks(headBlocks);
+        detail.setCatalogs(roots);
+        detail.setRisks(risks);
+        detail.setRiskPending(pending);
+        detail.setRiskAdopted(adopted);
+        detail.setRiskInvalid(invalid);
+        return detail;
     }
 
-    // ==================== HTML 渲染引擎 ====================
+    @Override
+    public Page<Report> page(int page, int size, String customerId) {
+        Page<Report> pager = new Page<>(page, size);
+        return reportMapper.selectPage(pager, Wrappers.<Report>lambdaQuery()
+                .eq(StringUtils.hasText(customerId), Report::getCustomerId, customerId)
+                .orderByDesc(Report::getUpdatedAt));
+    }
+
+    /* ==================== 单块实例化 ==================== */
 
     /**
-     * 构建完整的报告 HTML（三栏式布局）
+     * 实例化一个内容块：取加工产物 → 标题兜底 → 建锚点与跳转 → 快照模板结构性字段
      */
-    private String buildReportHtml(Customer customer, List<IndicatorData> indicators, JSONObject analysis) {
-        StringBuilder html = new StringBuilder();
-        String companyName = escapeHtml(customer.getCompanyName());
-        String riskLevel = analysis != null ? analysis.getString("overallRiskLevel") : "未分析";
-        String riskColor = getRiskColor(riskLevel);
-        String summary = analysis != null ? analysis.getString("summary") : "暂无分析结论，请先提交 Know-Kit 分析任务。";
+    private AppReportContentInstance buildInstance(String reportNo, String customerId, String customerName,
+                                                   String reportTitle,
+                                                   AppReportContentBlock block,
+                                                   Map<String, AppReportCatalog> catalogMap) {
+        AppReportCatalog catalog = StringUtils.hasText(block.getCatalogCode())
+                ? catalogMap.get(block.getCatalogCode()) : null;
+        String catalogName = catalog == null ? null : catalog.getCatalogName();
 
-        html.append("<!DOCTYPE html><html lang=\"zh-CN\"><head>")
-            .append("<meta charset=\"UTF-8\">")
-            .append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
-            .append("<title>").append(companyName).append(" - 贷后管理报告</title>")
-            .append(buildStyles())
-            .append("</head><body>")
-            .append("<div class=\"report-shell\">")
+        // ① 前置加工产物（由数据加工链路提供，本服务不取数）
+        ReportGenerateContext context = new ReportGenerateContext();
+        context.setReportNo(reportNo);
+        context.setCustomerId(customerId);
+        context.setCustomerName(customerName);
+        context.setCatalogName(catalogName);
+        context.setBlock(block);
+        ContentPayload payload = contentProvider.provide(context);
 
-            // 左栏：目录导航
-            .append(buildNav())
+        String content = payload == null ? null : payload.getContent();
+        // ② 标题类内容块无加工产物时按模板兜底（报告头 / 章节标题）
+        if (!StringUtils.hasText(content) && FILL_TITLE.equalsIgnoreCase(block.getFillType())) {
+            content = fallbackTitle(block, catalogName, reportTitle, customerName);
+        }
 
-            // 中栏：报告正文
-            .append("<div class=\"report-main\">")
-            .append(buildTopBar(companyName, riskLevel, riskColor))
-            .append(buildCustomerBasicSection(customer))
-            .append(buildIndicatorSection(indicators))
-            .append(buildAnalysisSection(analysis, summary))
-            .append("</div>")
-
-            // 右栏：侧边信息
-            .append(buildSidePanel(customer, analysis))
-
-            .append("</div></body></html>");
-
-        return html.toString();
+        AppReportContentInstance instance = new AppReportContentInstance();
+        instance.setReportNo(reportNo);
+        instance.setCustomerId(customerId);
+        instance.setCustomerName(customerName);
+        instance.setBlockCode(block.getBlockCode());
+        instance.setCatalogCode(block.getCatalogCode());
+        // 快照模板结构性字段：渲染无需 join 模板，模板改版也不污染历史报告
+        instance.setFillType(block.getFillType());
+        instance.setAnalysisType(block.getAnalysisType());
+        instance.setAgentCode(block.getAgentCode());
+        instance.setBlockName(block.getBlockName());
+        instance.setTitleLevel(block.getTitleLevel());
+        instance.setSortNo(block.getSortNo());
+        instance.setContent(trimToNull(content));
+        // ③ 本块位置锚点：其它块要跳过来时用它定位（默认取内容块编号）
+        instance.setAnchorCode(block.getBlockCode());
+        // ④ 块间跳转锚点（单向、仅用于块内位置跳转）：指向目标块的 anchorCode，
+        //    完全由前置加工产物提供，生成器不做任何推断。溯源类的外部跳转链接不在此处，随 content 写入。
+        instance.setJumpAnchorCode(payload == null ? null : trimToNull(payload.getJumpAnchorCode()));
+        return instance;
     }
 
-    /** CSS 样式 */
-    private String buildStyles() {
-        return "<style>" +
-            ":root{--bg:#f4f8ff;--panel:rgba(255,255,255,.94);--line:rgba(31,90,181,.14);" +
-            "--text:#10233f;--muted:#5d7396;--accent:#1664ff;--shadow:0 20px 56px rgba(35,88,176,.12);" +
-            "--radius:16px;--red:#b1342c;--orange:#d7872d;--yellow:#d6a11f}" +
-            "*{box-sizing:border-box}body{margin:0;font-family:\"PingFang SC\",\"Microsoft YaHei\",sans-serif;" +
-            "color:var(--text);background:linear-gradient(180deg,#fdfefe 0%,#f3f8ff 58%,#eef5ff 100%);min-height:100vh}" +
-            ".report-shell{display:grid;grid-template-columns:240px minmax(0,1fr) 340px;gap:16px;align-items:start;padding:24px}" +
-            ".panel{border-radius:var(--radius);border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow)}" +
-            ".report-nav,.side-panel{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto;padding:20px}" +
-            ".report-nav a{display:block;padding:8px 12px;color:var(--muted);text-decoration:none;border-radius:8px;" +
-            "font-size:.92rem;transition:all .2s}" +
-            ".report-nav a:hover,.report-nav a.active{color:var(--accent);background:rgba(22,100,255,.06)}" +
-            ".report-topbar{display:flex;justify-content:space-between;align-items:start;gap:16px;" +
-            "margin-bottom:16px;padding:20px 24px}" +
-            ".company-title{margin:0;font-size:1.8rem;font-weight:700}" +
-            ".report-subtitle{margin:4px 0 0;color:var(--muted);font-size:.95rem;letter-spacing:.12em}" +
-            ".risk-badge{display:inline-flex;align-items:center;gap:6px;padding:8px 20px;border-radius:20px;" +
-            "font-weight:700;font-size:.95rem}" +
-            ".risk-badge.red{background:#fde8e8;color:var(--red)}" +
-            ".risk-badge.orange{background:#fef3e3;color:var(--orange)}" +
-            ".risk-badge.yellow{background:#fefce7;color:var(--yellow)}" +
-            ".section-card{padding:20px 24px;margin-bottom:16px}" +
-            ".section-card h3{margin:0 0 16px;font-size:1.15rem;padding-bottom:10px;border-bottom:2px solid var(--accent)}" +
-            ".section-card h4{margin:16px 0 8px;font-size:1.02rem;color:var(--accent)}" +
-            "table{width:100%;border-collapse:collapse;font-size:.9rem}" +
-            "th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line)}" +
-            "th{color:var(--muted);font-weight:600;font-size:.82rem;white-space:nowrap}" +
-            ".kv-key{color:var(--muted);width:140px}" +
-            ".finding-item{padding:10px 0;border-bottom:1px solid var(--line)}" +
-            ".finding-severity{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700;margin-right:8px}" +
-            ".finding-severity.red{background:#fde8e8;color:var(--red)}" +
-            ".finding-severity.orange{background:#fef3e3;color:var(--orange)}" +
-            ".finding-severity.yellow{background:#fefce7;color:var(--yellow)}" +
-            ".rec-item{padding:8px 0;padding-left:24px;position:relative}" +
-            ".rec-item::before{content:'•';position:absolute;left:8px;color:var(--accent);font-weight:700}" +
-            ".footer-bar{text-align:center;color:var(--muted);font-size:.82rem;padding:24px 0 8px}" +
-            "</style>";
+    /**
+     * 标题兜底文案
+     * <p>level=1（报告主标题）取报告标题承载报告头；章/节标题取所属目录名称。</p>
+     */
+    private String fallbackTitle(AppReportContentBlock block, String catalogName, String reportTitle, String customerName) {
+        Integer level = block.getTitleLevel();
+        if (level != null && level == TITLE_LEVEL_REPORT) {
+            return reportTitle;
+        }
+        if (StringUtils.hasText(catalogName)) {
+            return catalogName;
+        }
+        return reportTitle != null ? reportTitle : customerName;
     }
 
-    /** 左栏目录 */
-    private String buildNav() {
-        return "<nav class=\"report-nav panel\">" +
-            "<h3 style=\"margin:0 0 12px;font-size:1rem\">报告目录</h3>" +
-            "<a href=\"#basic\">一、客户基本信息</a>" +
-            "<a href=\"#indicators\">二、指标数据总览</a>" +
-            "<a href=\"#analysis\">三、智能分析结论</a>" +
-            "<a href=\"#findings\">四、风险发现清单</a>" +
-            "<a href=\"#recommendations\">五、建议措施</a>" +
-            "</nav>";
+    /**
+     * 生成 AI 风险明细（1:1）
+     * <p>riskDesc 取正文内容同一份文案：正文 content 为准、列表为副本。</p>
+     */
+    private AppReportAiRisk buildRisk(AppReportContentInstance instance, AppReportContentBlock block, Set<String> agentCodes) {
+        if (!agentCodes.add(block.getAgentCode())) {
+            throw new ReportGenerateException("智能体编码在报告内重复，要求报告内唯一：" + block.getAgentCode());
+        }
+        AppReportAiRisk risk = new AppReportAiRisk();
+        risk.setReportNo(instance.getReportNo());
+        risk.setCustomerId(instance.getCustomerId());
+        risk.setCustomerName(instance.getCustomerName());
+        risk.setBlockCode(block.getBlockCode());
+        risk.setAgentCode(block.getAgentCode());
+        risk.setRuleName(block.getBlockName());
+        risk.setRiskDesc(instance.getContent());
+        risk.setStatus(RISK_PENDING);
+        // 单向：风险行 → 正文块位置锚点（同样属于块间位置跳转）
+        risk.setJumpAnchorCode(instance.getAnchorCode());
+        risk.setSortNo(block.getSortNo());
+        return risk;
     }
 
-    /** 顶栏 */
-    private String buildTopBar(String companyName, String riskLevel, String riskColor) {
-        return "<div class=\"report-topbar panel\">" +
-            "<div>" +
-            "<h1 class=\"company-title\">" + companyName + "</h1>" +
-            "<p class=\"report-subtitle\">贷 后 管 理 报 告</p>" +
-            "</div>" +
-            "<span class=\"risk-badge " + riskColor + "\">" + escapeHtml(riskLevel) + "</span>" +
-            "</div>";
+    /* ==================== 模板载入与校验 ==================== */
+
+    private List<AppReportCatalog> loadEnabledCatalogs() {
+        return catalogMapper.selectList(Wrappers.<AppReportCatalog>lambdaQuery()
+                .eq(AppReportCatalog::getIsEnabled, ENABLED)
+                .orderByAsc(AppReportCatalog::getSortNo)
+                .orderByAsc(AppReportCatalog::getCatalogCode));
     }
 
-    /** 客户基本信息 */
-    private String buildCustomerBasicSection(Customer c) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div class=\"section-card panel\" id=\"basic\">")
-          .append("<h3>一、客户基本信息</h3>")
-          .append("<table>");
-
-        sb.append(basicRow("企业名称", c.getCompanyName()));
-        sb.append(basicRow("统一信用代码", c.getCreditCode()));
-        sb.append(basicRow("法定代表人", c.getLegalPerson()));
-        sb.append(basicRow("实际控制人", c.getActualController()));
-        sb.append(basicRow("注册资本", c.getRegisteredCapital()));
-        sb.append(basicRow("实缴资本", c.getPaidCapital()));
-        sb.append(basicRow("所属行业", c.getIndustry()));
-        sb.append(basicRow("主营业务", c.getBizScope()));
-        sb.append(basicRow("注册地址", c.getRegisterAddress()));
-        sb.append(basicRow("持股方式", c.getHoldingType()));
-        sb.append(basicRow("股东", c.getShareholder()));
-        sb.append(basicRow("集团归属", c.getGroupName()));
-        sb.append(basicRow("客户类型", c.getCustomerType()));
-        sb.append(basicRow("基本开户行", c.getMainBank()));
-        sb.append(basicRow("主要结算行", c.getSettlementBank()));
-        sb.append(basicRow("客户状态", c.getStatus()));
-
-        sb.append("</table></div>");
-        return sb.toString();
+    private List<AppReportContentBlock> loadEnabledBlocks() {
+        return blockMapper.selectList(Wrappers.<AppReportContentBlock>lambdaQuery()
+                .eq(AppReportContentBlock::getIsEnabled, ENABLED)
+                .orderByAsc(AppReportContentBlock::getSortNo)
+                .orderByAsc(AppReportContentBlock::getBlockCode));
     }
 
-    private String basicRow(String label, String value) {
-        return "<tr><td class=\"kv-key\">" + escapeHtml(label) + "</td>" +
-               "<td>" + escapeHtml(value != null ? value : "—") + "</td></tr>";
-    }
-
-    /** 指标数据 */
-    private String buildIndicatorSection(List<IndicatorData> indicators) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div class=\"section-card panel\" id=\"indicators\">")
-          .append("<h3>二、指标数据总览</h3>");
-
-        if (indicators.isEmpty()) {
-            sb.append("<p style=\"color:var(--muted)\">暂无指标数据。请先配置采集器和解析器，完成数据接入。</p>");
-        } else {
-            sb.append("<table>")
-              .append("<thead><tr><th>数据域</th><th>指标名称</th><th>当前值</th><th>上期值</th><th>变动</th></tr></thead>")
-              .append("<tbody>");
-
-            for (IndicatorData d : indicators) {
-                sb.append("<tr>")
-                  .append("<td>").append(escapeHtml(d.getDomain())).append("</td>")
-                  .append("<td>").append(escapeHtml(d.getIndicatorName())).append("</td>")
-                  .append("<td>").append(escapeHtml(d.getCurrentValue())).append("</td>")
-                  .append("<td>").append(escapeHtml(d.getPreviousValue())).append("</td>")
-                  .append("<td>").append(escapeHtml(d.getChangeDesc())).append("</td>")
-                  .append("</tr>");
+    /** 模板配置错误一律 fail-fast，避免生成残缺报告 */
+    private void validateTemplate(List<AppReportContentBlock> blocks, Map<String, AppReportCatalog> catalogMap) {
+        Set<String> ruleAgentCodes = new HashSet<>();
+        for (AppReportContentBlock block : blocks) {
+            if (!StringUtils.hasText(block.getFillType())) {
+                throw new ReportGenerateException("内容块缺少填充类型（fillType）：" + block.getBlockCode());
             }
-            sb.append("</tbody></table>");
-            sb.append("<p style=\"color:var(--muted);font-size:.82rem;margin-top:8px\">")
-              .append("共 ").append(indicators.size()).append(" 项指标</p>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    /** 分析结论 */
-    private String buildAnalysisSection(JSONObject analysis, String summary) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div class=\"section-card panel\" id=\"analysis\">")
-          .append("<h3>三、智能分析结论</h3>")
-          .append("<p style=\"line-height:1.8\">").append(escapeHtml(summary)).append("</p>")
-          .append("</div>");
-
-        // 风险发现
-        sb.append("<div class=\"section-card panel\" id=\"findings\">")
-          .append("<h3>四、风险发现清单</h3>");
-
-        if (analysis != null && analysis.getJSONArray("findings") != null) {
-            JSONArray findings = analysis.getJSONArray("findings");
-            for (int i = 0; i < findings.size(); i++) {
-                JSONObject f = findings.getJSONObject(i);
-                String severity = f.getString("severity");
-                String sevClass = getSeverityClass(severity);
-                sb.append("<div class=\"finding-item\">")
-                  .append("<span class=\"finding-severity ").append(sevClass).append("\">")
-                  .append(escapeHtml(f.getString("dimension"))).append(" | ").append(escapeHtml(severity)).append("</span>")
-                  .append("<span>").append(escapeHtml(f.getString("finding"))).append("</span>")
-                  .append("</div>");
+            boolean reportLevel = !StringUtils.hasText(block.getCatalogCode());
+            if (!reportLevel && !catalogMap.containsKey(block.getCatalogCode())) {
+                throw new ReportGenerateException("内容块所属目录不存在或已停用：block="
+                        + block.getBlockCode() + "，catalog=" + block.getCatalogCode());
             }
-        } else {
-            sb.append("<p style=\"color:var(--muted)\">暂无风险发现记录。</p>");
-        }
-        sb.append("</div>");
-
-        // 建议措施
-        sb.append("<div class=\"section-card panel\" id=\"recommendations\">")
-          .append("<h3>五、建议措施</h3>");
-
-        if (analysis != null && analysis.getJSONArray("recommendations") != null) {
-            JSONArray recs = analysis.getJSONArray("recommendations");
-            for (int i = 0; i < recs.size(); i++) {
-                sb.append("<div class=\"rec-item\">").append(escapeHtml(recs.getString(i))).append("</div>");
+            if (StringUtils.hasText(block.getAnalysisType()) && !FILL_TEXT.equalsIgnoreCase(block.getFillType())) {
+                throw new ReportGenerateException("分析文本类型仅文本类内容块可配置：block=" + block.getBlockCode());
             }
-        } else {
-            sb.append("<p style=\"color:var(--muted)\">暂无建议措施。</p>");
+            if (!StringUtils.hasText(block.getBlockName())) {
+                throw new ReportGenerateException("内容块缺少名称（blockName）：" + block.getBlockCode());
+            }
+            if (!isRuleBlock(block)) {
+                continue;
+            }
+            if (!StringUtils.hasText(block.getAgentCode())) {
+                throw new ReportGenerateException("经验规则类内容块缺少智能体编码（agentCode）：" + block.getBlockCode());
+            }
+            if (!ruleAgentCodes.add(block.getAgentCode())) {
+                throw new ReportGenerateException("智能体编码在模板内重复，要求报告内唯一：" + block.getAgentCode());
+            }
         }
-        sb.append("</div>");
-
-        // 页脚
-        sb.append("<div class=\"footer-bar\">报告生成时间：").append(new Date()).append(" | 苏州银行贷后管理智能体</div>");
-
-        return sb.toString();
     }
 
-    /** 右侧边栏 */
-    private String buildSidePanel(Customer c, JSONObject analysis) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div class=\"side-panel panel\">")
-          .append("<h3 style=\"margin:0 0 12px\">报告摘要</h3>");
+    private boolean isRuleBlock(AppReportContentBlock block) {
+        return FILL_TEXT.equalsIgnoreCase(block.getFillType())
+                && ANALYSIS_RULE.equalsIgnoreCase(block.getAnalysisType());
+    }
 
-        sb.append("<p style=\"font-size:.88rem;line-height:1.6;color:var(--muted)\">")
-          .append("客户：").append(escapeHtml(c.getCompanyName())).append("<br>")
-          .append("行业：").append(escapeHtml(c.getIndustry())).append("<br>")
-          .append("类型：").append(escapeHtml(c.getCustomerType())).append("<br>");
+    /* ==================== 状态流转与渲染装配 ==================== */
 
-        if (analysis != null) {
-            sb.append("风险等级：").append(escapeHtml(analysis.getString("overallRiskLevel"))).append("<br>")
-              .append("风险评分：").append(analysis.getInteger("riskScore")).append("<br>")
-              .append("匹配规则数：").append(analysis.getInteger("matchedRuleCount"));
-        } else {
-            sb.append("风险等级：未分析<br>风险评分：—");
+    private void markStatus(String reportNo, String status) {
+        reportMapper.update(null, Wrappers.<Report>lambdaUpdate()
+                .eq(Report::getReportNo, reportNo)
+                .set(Report::getStatus, status)
+                .set(Report::getUpdatedAt, new Date()));
+    }
+
+    /** 写入/清空失败原因（成功时传 null 清空历史失败原因） */
+    private void markFailReason(String reportNo, String failReason) {
+        reportMapper.update(null, Wrappers.<Report>lambdaUpdate()
+                .eq(Report::getReportNo, reportNo)
+                .set(Report::getFailReason, failReason)
+                .set(Report::getUpdatedAt, new Date()));
+    }
+
+    /** 组装失败原因：技术类异常带异常类名与堆栈首因，业务类异常带业务描述 */
+    private String buildFailReason(Throwable e) {
+        String message = e.getMessage();
+        if (message == null || message.trim().isEmpty()) {
+            message = e.getClass().getSimpleName();
         }
-
-        sb.append("</p>");
-
-        // 快速操作
-        sb.append("<hr style=\"border:1px solid var(--line);margin:16px 0\">")
-          .append("<h4 style=\"font-size:.92rem;margin:0 0 8px\">快速操作</h4>")
-          .append("<p style=\"font-size:.82rem;color:var(--muted);margin:0\">")
-          .append("• 点击左侧目录跳转至对应章节<br>")
-          .append("• 报告内容由智能体自动生成<br>")
-          .append("• 生成时数据已拍快照，内容不可变</p>");
-
-        sb.append("</div>");
-        return sb.toString();
+        if (e instanceof ReportGenerateException) {
+            return "业务异常：" + message;
+        }
+        StringBuilder sb = new StringBuilder("技术异常[").append(e.getClass().getSimpleName()).append("]：").append(message);
+        Throwable cause = e.getCause();
+        if (cause != null && cause.getMessage() != null) {
+            sb.append("（根因：").append(cause.getMessage()).append("）");
+        }
+        String full = sb.toString();
+        return full.length() > 1000 ? full.substring(0, 1000) : full;
     }
 
-    // ==================== 工具方法 ====================
-
-    private String escapeHtml(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
+    /** 构造失败结果（不抛异常，success=false） */
+    private ReportGenerateResult failResult(ReportGenerateResult result, long start, String reason) {
+        result.setSuccess(false);
+        result.setFailReason(reason);
+        result.setCostMs(System.currentTimeMillis() - start);
+        return result;
     }
 
-    private String getRiskColor(String level) {
-        if (level == null) return "red";
-        if (level.contains("红")) return "red";
-        if (level.contains("橙")) return "orange";
-        if (level.contains("黄")) return "yellow";
-        return "red";
+    private Report loadReportInfo(String reportNo) {
+        Report reportInfo = reportMapper.selectOne(
+                Wrappers.<Report>lambdaQuery().eq(Report::getReportNo, reportNo));
+        if (reportInfo == null) {
+            throw new ReportGenerateException("报告记录不存在：" + reportNo);
+        }
+        return reportInfo;
     }
 
-    private String getSeverityClass(String severity) {
-        if (severity == null) return "red";
-        if (severity.contains("红")) return "red";
-        if (severity.contains("橙")) return "orange";
-        if (severity.contains("黄")) return "yellow";
-        return "red";
+    private ReportCatalogNode toCatalogNode(AppReportCatalog catalog) {
+        ReportCatalogNode node = new ReportCatalogNode();
+        node.setCatalogCode(catalog.getCatalogCode());
+        node.setCatalogName(catalog.getCatalogName());
+        node.setCatalogLevel(catalog.getCatalogLevel());
+        node.setParentCode(catalog.getParentCode());
+        node.setSortNo(catalog.getSortNo());
+        return node;
+    }
+
+    private ReportBlockVO toBlockVO(AppReportContentInstance instance, String emptyStrategy) {
+        ReportBlockVO vo = new ReportBlockVO();
+        vo.setBlockCode(instance.getBlockCode());
+        vo.setCatalogCode(instance.getCatalogCode());
+        vo.setFillType(instance.getFillType());
+        vo.setAnalysisType(instance.getAnalysisType());
+        vo.setAgentCode(instance.getAgentCode());
+        vo.setBlockName(instance.getBlockName());
+        vo.setTitleLevel(instance.getTitleLevel());
+        vo.setSortNo(instance.getSortNo());
+        vo.setEmptyStrategy(emptyStrategy);
+        vo.setAnchorCode(instance.getAnchorCode());
+        vo.setJumpAnchorCode(instance.getJumpAnchorCode());
+        vo.setContent(instance.getContent());
+        vo.setEmpty(!StringUtils.hasText(instance.getContent()));
+        return vo;
+    }
+
+    private void sortCatalogBlocks(ReportCatalogNode node) {
+        node.getBlocks().sort((a, b) -> {
+            int sa = a.getSortNo() == null ? 0 : a.getSortNo();
+            int sb = b.getSortNo() == null ? 0 : b.getSortNo();
+            return sa != sb ? Integer.compare(sa, sb)
+                    : String.valueOf(a.getBlockCode()).compareTo(String.valueOf(b.getBlockCode()));
+        });
+        node.getChildren().forEach(this::sortCatalogBlocks);
+    }
+
+    private String trimToNull(String text) {
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void assertReportNoPresent(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
+            throw new ReportGenerateException("报告编号（reportNo）不能为空");
+        }
     }
 }

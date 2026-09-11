@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.model;
+package com.suzhou.bank.service.report.model;
 
 /**
  * 报告模板枚举常量

@@ -190,7 +190,7 @@ CREATE INDEX IF NOT EXISTS idx_kit_status ON know_kit_task (status);
 -- 报告表
 CREATE TABLE IF NOT EXISTS report (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    report_no VARCHAR(32) UNIQUE,
+    report_no VARCHAR(64) UNIQUE,
     customer_id VARCHAR(64) NOT NULL,
     customer_name VARCHAR(200),
     check_task_no VARCHAR(64),
@@ -198,7 +198,8 @@ CREATE TABLE IF NOT EXISTS report (
     version VARCHAR(16),
     report_title VARCHAR(300) NOT NULL,
     report_type VARCHAR(50) NOT NULL,
-    status VARCHAR(20) DEFAULT '000',
+    status VARCHAR(20) DEFAULT '111',
+    fail_reason VARCHAR(1024),
     know_kit_task_id BIGINT,
     content_html TEXT,
     data_snapshot TEXT,

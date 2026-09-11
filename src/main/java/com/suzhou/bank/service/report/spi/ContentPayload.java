@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.spi;
+package com.suzhou.bank.service.report.spi;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

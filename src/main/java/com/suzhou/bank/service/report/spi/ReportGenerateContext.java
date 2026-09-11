@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.spi;
+package com.suzhou.bank.service.report.spi;
 
 import com.suzhou.bank.entity.report.AppReportContentBlock;
 import lombok.Data;
@@ -19,8 +19,6 @@ public class ReportGenerateContext {
     private String customerId;
 
     private String customerName;
-
-    private String reportDate;
 
     /** 内容块所属目录名称（报告级内容块为 NULL） */
     private String catalogName;

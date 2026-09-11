@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.model;
+package com.suzhou.bank.service.report.model;
 
 import lombok.Data;
 

@@ -4,7 +4,7 @@
 -- 生成依据 ：模板层两张表
 --            · app_report_catalog        （目录表）
 --            · app_report_content_block  （内容块表）
--- 上级表   ：app_report_info（报告主表，reportNo 关联，不重复建报告实例表）
+-- 上级表   ：report（报告主表，report_no 关联，不重复建报告实例表）
 -- 实例层共 2 张表：
 --   1) app_report_content_instance  内容实例表 —— 报告正文内容
 --        一条内容块 → 一条实例，所有填充类型（TITLE/TEXT/TABLE/SOURCE_LINK，
@@ -69,7 +69,7 @@ CREATE TABLE app_report_content_instance (
 
 COMMENT ON TABLE app_report_content_instance IS '报告详情-内容实例表（实例层·由内容块表生成·报告正文内容）';
 COMMENT ON COLUMN app_report_content_instance.id IS '主键（自增）';
-COMMENT ON COLUMN app_report_content_instance.reportNo IS '报告编号（关联 app_report_info.reportNo）';
+COMMENT ON COLUMN app_report_content_instance.reportNo IS '报告编号（关联 report.report_no）';
 COMMENT ON COLUMN app_report_content_instance.customerId IS '客户编号';
 COMMENT ON COLUMN app_report_content_instance.customerName IS '客户名称';
 COMMENT ON COLUMN app_report_content_instance.blockCode IS '内容块编号（关联 app_report_content_block.blockCode）';
@@ -125,7 +125,7 @@ CREATE TABLE app_report_ai_risk (
 
 COMMENT ON TABLE app_report_ai_risk IS '报告详情-AI风险实例表（实例层·右侧AI风险识别列表）';
 COMMENT ON COLUMN app_report_ai_risk.id IS '主键（自增）';
-COMMENT ON COLUMN app_report_ai_risk.reportNo IS '报告编号（关联 app_report_info.reportNo）';
+COMMENT ON COLUMN app_report_ai_risk.reportNo IS '报告编号（关联 report.report_no）';
 COMMENT ON COLUMN app_report_ai_risk.customerId IS '客户编号';
 COMMENT ON COLUMN app_report_ai_risk.customerName IS '客户名称';
 COMMENT ON COLUMN app_report_ai_risk.blockCode IS '内容块编号（关联 app_report_content_instance.blockCode，唯一键依据与落地定位键）';

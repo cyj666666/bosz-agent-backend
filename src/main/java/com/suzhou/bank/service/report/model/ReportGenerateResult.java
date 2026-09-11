@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.model;
+package com.suzhou.bank.service.report.model;
 
 import lombok.Data;
 
@@ -15,7 +15,7 @@ public class ReportGenerateResult {
     /** 报告编号 */
     private String reportNo;
 
-    /** 客户编号（app_report_info.customerId 为字符串类型） */
+    /** 客户编号（report.customer_id 为字符串类型） */
     private String customerId;
 
     private String customerName;

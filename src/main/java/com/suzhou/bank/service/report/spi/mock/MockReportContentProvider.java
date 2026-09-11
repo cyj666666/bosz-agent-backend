@@ -1,10 +1,10 @@
-package com.suzhou.bank.report.spi.mock;
+package com.suzhou.bank.service.report.spi.mock;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.suzhou.bank.report.spi.ContentPayload;
-import com.suzhou.bank.report.spi.ReportContentProvider;
-import com.suzhou.bank.report.spi.ReportGenerateContext;
+import com.suzhou.bank.service.report.spi.ContentPayload;
+import com.suzhou.bank.service.report.spi.ReportContentProvider;
+import com.suzhou.bank.service.report.spi.ReportGenerateContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;

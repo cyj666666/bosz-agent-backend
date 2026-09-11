@@ -1,7 +1,7 @@
-package com.suzhou.bank.report.config;
+package com.suzhou.bank.service.report.config;
 
-import com.suzhou.bank.report.spi.DefaultReportContentProvider;
-import com.suzhou.bank.report.spi.ReportContentProvider;
+import com.suzhou.bank.service.report.spi.DefaultReportContentProvider;
+import com.suzhou.bank.service.report.spi.ReportContentProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

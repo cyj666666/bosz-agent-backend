@@ -110,10 +110,16 @@ COMMENT ON COLUMN raw_data_log.error_msg IS '错误信息';
 -- ====== report (报告主表) ======
 COMMENT ON TABLE report IS '报告主表';
 COMMENT ON COLUMN report.id IS '主键ID';
-COMMENT ON COLUMN report.customer_id IS '客户ID';
+COMMENT ON COLUMN report.report_no IS '报告编号（业务唯一键，关联内容实例表与AI风险表）';
+COMMENT ON COLUMN report.customer_id IS '客户编号';
+COMMENT ON COLUMN report.customer_name IS '客户名称';
+COMMENT ON COLUMN report.check_task_no IS '日检任务编号';
+COMMENT ON COLUMN report.user_no IS '用户编号';
+COMMENT ON COLUMN report.version IS '版本号';
 COMMENT ON COLUMN report.report_title IS '报告标题';
 COMMENT ON COLUMN report.report_type IS '报告类型';
-COMMENT ON COLUMN report.status IS '报告状态';
+COMMENT ON COLUMN report.status IS '报告状态（111-待开始 000-进行中 888-已完成 999-失败）';
+COMMENT ON COLUMN report.fail_reason IS '失败原因（生成过程发生技术类/业务类异常时记录详细信息，成功时为空）';
 COMMENT ON COLUMN report.know_kit_task_id IS '关联Know-Kit任务ID';
 COMMENT ON COLUMN report.content_html IS '报告HTML内容';
 COMMENT ON COLUMN report.data_snapshot IS '数据快照JSON';

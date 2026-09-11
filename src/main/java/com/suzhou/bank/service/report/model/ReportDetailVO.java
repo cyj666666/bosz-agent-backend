@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.model;
+package com.suzhou.bank.service.report.model;
 
 import lombok.Data;
 
@@ -24,11 +24,11 @@ public class ReportDetailVO {
 
     private String reportTitle;
 
-    private String reportDate;
+    /** 报告状态：111-待开始 000-进行中 888-已完成 999-失败 */
+    private String status;
 
-    private String reportStatus;
-
-    private Date generateTime;
+    /** 更新时间（生成完成/失败时刷新，即报告"生成时间"） */
+    private Date updatedAt;
 
     /** 报告级内容块（catalogCode 为空，如报告头大标题），渲染在正文最上方 */
     private List<ReportBlockVO> headBlocks;

@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.spi;
+package com.suzhou.bank.service.report.spi;
 
 /**
  * 报告内容提供者（扩展点）

@@ -1,4 +1,4 @@
-package com.suzhou.bank.report.spi;
+package com.suzhou.bank.service.report.spi;
 
 /**
  * 默认内容提供者（占位实现）
