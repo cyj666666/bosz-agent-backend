@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportVersionVO;
+
+import java.util.List;
 
 /**
  * 报告服务（模板驱动的报告实例生成）
@@ -48,6 +51,25 @@ public interface ReportService {
      * @return 报告详情
      */
     ReportDetailVO detail(String reportNo);
+
+    /**
+     * 查询某日检流水号（checkTaskNo）下的所有版本（供版本下拉框）
+     * <p>按报告编号倒序（最新插入的版本在前），返回每个版本的
+     * reportNo / version / status / updatedAt。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 版本列表（空流水号返回空列表）
+     */
+    List<ReportVersionVO> versions(String checkTaskNo);
+
+    /**
+     * 查询某日检流水号（checkTaskNo）下最新版本的报告详情
+     * <p>等价于「取该流水号下最新版本 reportNo → 查详情」，供列表进入详情页时一步到位。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 最新版本报告详情
+     */
+    ReportDetailVO latest(String checkTaskNo);
 
     /**
      * 报告记录分页查询（报告列表页用）

@@ -7,8 +7,11 @@ import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportVersionVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 贷后管理报告接口（模板驱动的报告实例生成）
@@ -78,6 +81,34 @@ public class ReportController {
                                              @RequestParam(defaultValue = "10") int size,
                                              @RequestParam(required = false) String customerId) {
         return Result.ok(reportService.page(page, size, customerId));
+    }
+
+    /**
+     * 查询某日检流水号（checkTaskNo）下的所有版本（版本下拉框数据源）
+     * <p>最新版本在前，返回每个版本的 reportNo / version / status / updatedAt。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 版本列表
+     */
+    @GetMapping("/instance/versions")
+    public Result<List<ReportVersionVO>> instanceVersions(@RequestParam String checkTaskNo) {
+        return Result.ok(reportService.versions(checkTaskNo));
+    }
+
+    /**
+     * 查询某日检流水号（checkTaskNo）下最新版本的报告详情
+     * <p>供报告列表进入详情页时一步到位（用 checkTaskNo 而非 reportNo 入参）。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 最新版本报告详情
+     */
+    @GetMapping("/instance/latest")
+    public Result<ReportDetailVO> getLatestDetail(@RequestParam String checkTaskNo) {
+        try {
+            return Result.ok(reportService.latest(checkTaskNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     /**

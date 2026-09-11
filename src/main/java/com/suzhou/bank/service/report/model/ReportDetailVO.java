@@ -24,6 +24,12 @@ public class ReportDetailVO {
 
     private String reportTitle;
 
+    /** 日检流水号（同一流水号下多个版本） */
+    private String checkTaskNo;
+
+    /** 报告版本号（如 V1/V2/V3） */
+    private String version;
+
     /** 报告状态：111-待开始 000-进行中 888-已完成 999-失败 */
     private String status;
 

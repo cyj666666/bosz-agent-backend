@@ -1,11 +1,25 @@
 -- =====================================================================
--- 苏州银行 对公客户日常定期检查（贷后）报告 数据表结构 V1.10
--- 版本日期：2026-09-10
--- 上一版本：V1.9（2026-09-10，app_check_index_info 增加字段 isAbnormal/indexObject）
--- V1.10 变更：新建 app_check_object_info 对象指标检查明细表（13 字段，加 contractNo 业务合同编号；5 个字段名按"见名知意"推断：indexNo/indexName/indexType/indexResult/redTextRequire）
+-- 苏州银行 对公客户日常定期检查（贷后）报告 数据表结构 V1.25
+-- 版本日期：2026-09-11
+-- 上一版本：V1.24（2026-09-11，app_gs_tax_sales_info 加 inputtime；app_gs_finance_data_info 的 financeReportType 改名 reportScope）
+-- V1.25 变更：新建 app_graph_hit_info 企业图谱命中情况（14 字段：id + 4 公共 + 8 个"是/否"标志位，8 个字段名按"见名知意"推断；标志位类型 VARCHAR(8) DEFAULT NULL）
 -- 数据库：高斯DB（GaussDB）
 -- 设计依据：《数据映射细化V4.xlsx》
--- 共38张表（报告主表1 + 公共基础表13 + 模块明细表24）
+-- 共44张表（报告主表1 + 公共基础表13 + 模块明细表30）
+-- V1.24 变更：
+--   ① app_gs_tax_sales_info 增加 inputtime 字段（V1.23 时漏加，本版补齐）
+--   ② app_gs_finance_data_info 的 financeReportType 改名为 reportScope（推断的 financeReportType 与现有 app_finance_index_info 等表命名风格不一致，改用 reportScope）
+-- V1.23 变更：新建 2 张"国税数据"表（区别于 V1.15 已有的 app_guofa_report_info 国发征信），位置插在 app_guofa_report_info 之前：
+--   ① app_gs_tax_sales_info 国税销售额表（9 字段，无 inputtime；物理 PK=id，业务 UNIQUE=(reportNo,customerId,taxPeriod)）
+--   ② app_gs_finance_data_info 国税财务数据表（21 字段，含 inputtime + financeReportType 推断；与 guofa_report_info 对位，去 dataDate 加 financeReportType）
+-- 数据库：高斯DB（GaussDB）
+-- 设计依据：《数据映射细化V4.xlsx》
+-- 共43张表（报告主表1 + 公共基础表13 + 模块明细表29）
+-- V1.21 变更：app_credit_approval_manage_req_info.CONDITION 由 VARCHAR(1000) 扩为 TEXT（提前扩容，避免后续管理要求文本溢出）
+-- V1.20 变更：新建 app_credit_approval_manage_req_info 授信批复管理要求表（9 字段：id/reportno/customerid/customername/inputtime/swqNo/CONDITION/PELATIVESERIALNO/checkDate；保留用户原拼写 swqNo / PELATIVESERIALNO / CONDITION；不擅自修正）
+-- 数据库：高斯DB（GaussDB）
+-- 设计依据：《数据映射细化V4.xlsx》
+-- 共41张表（报告主表1 + 公共基础表13 + 模块明细表27）
 -- 设计原则：公共+模块两层、一期一行、沿用J列字段名+驼峰；经验库规则所需源数据见正文模块表
 -- 公共列：id / reportNo / customerId / customerName / inputtime
 -- =====================================================================
@@ -350,6 +364,7 @@ CREATE TABLE IF NOT EXISTS app_early_warning_info (
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
+    serialNo               VARCHAR(64),
     confirmTime            VARCHAR(32),
     inputDate              VARCHAR(32),
     approveStatusName      VARCHAR(64),
@@ -367,6 +382,7 @@ COMMENT ON TABLE app_early_warning_info IS '预警任务台账表';
 COMMENT ON COLUMN app_early_warning_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_early_warning_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_early_warning_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_early_warning_info.serialNo IS '预警任务流水号';
 COMMENT ON COLUMN app_early_warning_info.confirmTime IS '预警本次认定时间';
 COMMENT ON COLUMN app_early_warning_info.inputDate IS '预警本次发起时间';
 COMMENT ON COLUMN app_early_warning_info.approveStatusName IS '审批状态（码值：审批通过/待审批/驳回（码值待确认））';
@@ -410,6 +426,41 @@ COMMENT ON COLUMN app_early_warning_signal_info.inputDate IS '信号建立时间
 COMMENT ON COLUMN app_early_warning_signal_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_early_warning_signal_info_reportNo ON app_early_warning_signal_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_early_warning_signal_info_customerId ON app_early_warning_signal_info (customerId);
+
+CREATE TABLE IF NOT EXISTS app_early_warning_opinion_info (
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo               VARCHAR(64) NOT NULL,
+    customerId             VARCHAR(64),
+    customerName           VARCHAR(128),
+    serialNo               VARCHAR(64),
+    confirmTime            VARCHAR(32),
+    seqNo                  INT,
+    activeName             VARCHAR(64),
+    approveUserName        VARCHAR(64),
+    approveOrgName         VARCHAR(128),
+    warningLevelName       VARCHAR(64),
+    phaseOpinion           TEXT,
+    endTime                VARCHAR(32),
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_early_warning_opinion_info IS '预警意见表';
+COMMENT ON COLUMN app_early_warning_opinion_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_early_warning_opinion_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_early_warning_opinion_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_early_warning_opinion_info.serialNo IS '预警任务流水号';
+COMMENT ON COLUMN app_early_warning_opinion_info.confirmTime IS '预警本次认定时间';
+COMMENT ON COLUMN app_early_warning_opinion_info.seqNo IS '序号';
+COMMENT ON COLUMN app_early_warning_opinion_info.activeName IS '审批阶段';
+COMMENT ON COLUMN app_early_warning_opinion_info.approveUserName IS '审批人';
+COMMENT ON COLUMN app_early_warning_opinion_info.approveOrgName IS '所属机构';
+COMMENT ON COLUMN app_early_warning_opinion_info.warningLevelName IS '认定等级';
+COMMENT ON COLUMN app_early_warning_opinion_info.phaseOpinion IS '审批意见';
+COMMENT ON COLUMN app_early_warning_opinion_info.endTime IS '审批日';
+COMMENT ON COLUMN app_early_warning_opinion_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_early_warning_opinion_info_reportNo ON app_early_warning_opinion_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_early_warning_opinion_info_customerId ON app_early_warning_opinion_info (customerId);
 
 CREATE TABLE IF NOT EXISTS app_collateral_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -519,38 +570,65 @@ CREATE TABLE IF NOT EXISTS app_settle_account_info (
     accountNo              VARCHAR(64),
     accountStatus          VARCHAR(64),
     accountBalance         DECIMAL(18,2),
-    frozenAmount           DECIMAL(18,2),
-    yearAvgDeposit         DECIMAL(18,2),
     superviseFlag          VARCHAR(64),
-    propertyIncome         DECIMAL(18,2),
-    propertyIncomeYoy      DECIMAL(18,2),
-    propertyIncomeSupervised DECIMAL(18,2),
-    electricFeeIncome      DECIMAL(18,2),
-    electricFeeYoy         DECIMAL(18,2),
-    electricFeeSupervised  DECIMAL(18,2),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
 
-COMMENT ON TABLE app_settle_account_info IS '结算账户与资产表';
+COMMENT ON TABLE app_settle_account_info IS '结算账户表';
 COMMENT ON COLUMN app_settle_account_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_settle_account_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_settle_account_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_settle_account_info.accountNo IS '账号';
 COMMENT ON COLUMN app_settle_account_info.accountStatus IS '账户状态（码值：正常/冻结/销户，码值待确认）';
 COMMENT ON COLUMN app_settle_account_info.accountBalance IS '账户余额（万元）';
-COMMENT ON COLUMN app_settle_account_info.frozenAmount IS '冻结金额（万元）';
-COMMENT ON COLUMN app_settle_account_info.yearAvgDeposit IS '年日均存款（万元）';
 COMMENT ON COLUMN app_settle_account_info.superviseFlag IS '监管标识（码值：是/否，码值待确认）';
-COMMENT ON COLUMN app_settle_account_info.propertyIncome IS '当年物业收入（万元，接口待确认）';
-COMMENT ON COLUMN app_settle_account_info.propertyIncomeYoy IS '当年物业收入累计较上年同期（万元，接口待确认）';
-COMMENT ON COLUMN app_settle_account_info.propertyIncomeSupervised IS '当年监管账户物业收入（万元，接口待确认）';
-COMMENT ON COLUMN app_settle_account_info.electricFeeIncome IS '当年电费收入（万元，接口待确认）';
-COMMENT ON COLUMN app_settle_account_info.electricFeeYoy IS '当年电费收入累计较上年同期（万元，接口待确认）';
-COMMENT ON COLUMN app_settle_account_info.electricFeeSupervised IS '当年监管账户当年电费收入（万元，接口待确认）';
 COMMENT ON COLUMN app_settle_account_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_settle_account_info_reportNo ON app_settle_account_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_settle_account_info_customerId ON app_settle_account_info (customerId);
+
+CREATE TABLE IF NOT EXISTS app_settle_asset_info (
+    id                                  BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo                            VARCHAR(64) NOT NULL,
+    customerId                          VARCHAR(64),
+    customerName                        VARCHAR(128),
+    frozenAmount                        DECIMAL(18,2),
+    debitSameNameTransferRatio          DECIMAL(5,2),
+    creditSameNameTransferRatio         DECIMAL(5,2),
+    yearAvgDeposit                      DECIMAL(18,2),
+    lastYearAvgDeposit                  DECIMAL(18,2),
+    propertyIncome                      DECIMAL(18,2),
+    propertyIncomeYoy                   DECIMAL(18,2),
+    propertyIncomeSupervised            DECIMAL(18,2),
+    electricFeeIncome                   DECIMAL(18,2),
+    electricFeeYoy                      DECIMAL(18,2),
+    electricFeeSupervised               DECIMAL(18,2),
+    keywordCounterpartyCreditAmount     DECIMAL(18,2),
+    keywordRemarkCreditAmount           DECIMAL(18,2),
+    inputtime                           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_settle_asset_info IS '结算资产表';
+COMMENT ON COLUMN app_settle_asset_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_settle_asset_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_settle_asset_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_settle_asset_info.frozenAmount IS '冻结金额（万元）';
+COMMENT ON COLUMN app_settle_asset_info.debitSameNameTransferRatio IS '借方同名划转金额占比（%）';
+COMMENT ON COLUMN app_settle_asset_info.creditSameNameTransferRatio IS '贷方同名划转金额占比（%）';
+COMMENT ON COLUMN app_settle_asset_info.yearAvgDeposit IS '年日均存款（万元）';
+COMMENT ON COLUMN app_settle_asset_info.lastYearAvgDeposit IS '上年年日均存款（万元）';
+COMMENT ON COLUMN app_settle_asset_info.propertyIncome IS '当年物业收入（万元，接口待确认）';
+COMMENT ON COLUMN app_settle_asset_info.propertyIncomeYoy IS '当年物业收入累计较上年同期（万元，接口待确认）';
+COMMENT ON COLUMN app_settle_asset_info.propertyIncomeSupervised IS '当年监管账户物业收入（万元，接口待确认）';
+COMMENT ON COLUMN app_settle_asset_info.electricFeeIncome IS '当年电费收入（万元，接口待确认）';
+COMMENT ON COLUMN app_settle_asset_info.electricFeeYoy IS '当年电费收入累计较上年同期（万元，接口待确认）';
+COMMENT ON COLUMN app_settle_asset_info.electricFeeSupervised IS '当年监管账户当年电费收入（万元，接口待确认）';
+COMMENT ON COLUMN app_settle_asset_info.keywordCounterpartyCreditAmount IS '当年交易对手中出现小额贷款、担保等关键字的公司贷方发生额（万元）';
+COMMENT ON COLUMN app_settle_asset_info.keywordRemarkCreditAmount IS '当年备注中有担保、借款、投资关键字贷方发生额（万元）';
+COMMENT ON COLUMN app_settle_asset_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_settle_asset_info_reportNo ON app_settle_asset_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_settle_asset_info_customerId ON app_settle_asset_info (customerId);
 
 CREATE TABLE IF NOT EXISTS app_opinion_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -559,6 +637,9 @@ CREATE TABLE IF NOT EXISTS app_opinion_info (
     customerName           VARCHAR(128),
     phaseOpinion           TEXT,
     endTime                VARCHAR(32),
+    approveUserName        VARCHAR(64),
+    approveOrgName         VARCHAR(128),
+    `group`                VARCHAR(64),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -569,6 +650,9 @@ COMMENT ON COLUMN app_opinion_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_opinion_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_opinion_info.phaseOpinion IS '审批意见';
 COMMENT ON COLUMN app_opinion_info.endTime IS '审批日期';
+COMMENT ON COLUMN app_opinion_info.approveUserName IS '审批人';
+COMMENT ON COLUMN app_opinion_info.approveOrgName IS '所属机构';
+COMMENT ON COLUMN app_opinion_info.`group` IS '检查分组';
 COMMENT ON COLUMN app_opinion_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_opinion_info_reportNo ON app_opinion_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_opinion_info_customerId ON app_opinion_info (customerId);
@@ -650,44 +734,6 @@ CREATE INDEX IF NOT EXISTS idx_finance_index_info_customerId ON app_finance_inde
 CREATE INDEX IF NOT EXISTS idx_finance_index_info_indexType ON app_finance_index_info (indexType);
 CREATE INDEX IF NOT EXISTS idx_finance_index_info_accountMonth ON app_finance_index_info (accountMonth);
 CREATE INDEX IF NOT EXISTS idx_finance_index_info_reportScope ON app_finance_index_info (reportScope);
-
-CREATE TABLE IF NOT EXISTS app_tax_info (
-    id                     BIGINT NOT NULL AUTO_INCREMENT,
-    reportNo               VARCHAR(64) NOT NULL,
-    customerId             VARCHAR(64),
-    customerName           VARCHAR(128),
-    taxPeriod              VARCHAR(32),
-    monthlyTaxSales        DECIMAL(18,2),
-    yoyChange              DECIMAL(18,2),
-    yoyRate                DECIMAL(12,4),
-    totalSalesTax          DECIMAL(18,2),
-    taxReceivable          DECIMAL(18,2),
-    taxPayable             DECIMAL(18,2),
-    taxInventory           DECIMAL(18,2),
-    diffWithReport         DECIMAL(18,2),
-    diffRateWithReport     DECIMAL(12,4),
-    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
-);
-
-COMMENT ON TABLE app_tax_info IS '纳税数据表（增值税申报销售额，按月一期一行；同期对比/同比由查询层计算，不落表）';
-COMMENT ON COLUMN app_tax_info.reportNo IS '报告编号';
-COMMENT ON COLUMN app_tax_info.customerId IS '客户编号';
-COMMENT ON COLUMN app_tax_info.customerName IS '客户名称';
-COMMENT ON COLUMN app_tax_info.taxPeriod IS '纳税期（按月，一期一行，如202603）';
-COMMENT ON COLUMN app_tax_info.monthlyTaxSales IS '每月增值税申报销售额（万元，预留：当前取数以 totalSalesTax 该期累计为准，本字段暂不使用）';
-COMMENT ON COLUMN app_tax_info.yoyChange IS '较上年同期变动额（万元）：该期累计−上年同期累计；行级属性各期行自带（如202512行=上年全年vs上上年全年、202603行=本期vs上年同期），默认已有';
-COMMENT ON COLUMN app_tax_info.yoyRate IS '较上年同期同比（%）：变动额÷上年同期累计；行级属性各期行自带（同上），默认已有';
-COMMENT ON COLUMN app_tax_info.totalSalesTax IS '纳税申请总销售额累计（万元）：该纳税期累计数，如202603行=2026年1-3月累计、202512行=2025年全年累计、202503行=2025年1-3月累计；任何期间累计直接从对应 taxPeriod 行取';
-COMMENT ON COLUMN app_tax_info.taxReceivable IS '税务申报应收账款（万元，上游直给，供与财报应收对比；无则NULL）';
-COMMENT ON COLUMN app_tax_info.taxPayable IS '税务申报应付账款（万元，上游直给，供与财报应付对比；无则NULL）';
-COMMENT ON COLUMN app_tax_info.taxInventory IS '税务申报存货（万元，上游直给，供与财报存货对比；无则NULL）';
-COMMENT ON COLUMN app_tax_info.diffWithReport IS '与(本部)报表营收相差（万元）：该期累计纳税−该期本部营收；行级属性各期行自带，默认已有';
-COMMENT ON COLUMN app_tax_info.diffRateWithReport IS '与(本部)报表营收相差幅度（%）：相差额÷该期本部营收；行级属性各期行自带，默认已有';
-COMMENT ON COLUMN app_tax_info.inputtime IS '入库时间';
-CREATE INDEX IF NOT EXISTS idx_tax_info_reportNo ON app_tax_info (reportNo);
-CREATE INDEX IF NOT EXISTS idx_tax_info_customerId ON app_tax_info (customerId);
-CREATE INDEX IF NOT EXISTS idx_tax_info_taxPeriod ON app_tax_info (taxPeriod);
 
 CREATE TABLE IF NOT EXISTS app_credit_report_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -1006,6 +1052,7 @@ CREATE TABLE IF NOT EXISTS app_capital_flow_info (
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
     loanSerialNo           VARCHAR(64),
+    loanStatus             VARCHAR(64),
     serialNo               VARCHAR(128),
     capitalCheckTaskType   VARCHAR(64),
     approveStatus          VARCHAR(64),
@@ -1023,6 +1070,7 @@ COMMENT ON COLUMN app_capital_flow_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_capital_flow_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_capital_flow_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_capital_flow_info.loanSerialNo IS '借据号';
+COMMENT ON COLUMN app_capital_flow_info.loanStatus IS '借据状态（码值：正常/关注/次级/可疑/损失/逾期/结清（码值待确认））';
 COMMENT ON COLUMN app_capital_flow_info.serialNo IS '流水号';
 COMMENT ON COLUMN app_capital_flow_info.capitalCheckTaskType IS '任务类型（码值：资金用途检查任务类型（码值待确认））';
 COMMENT ON COLUMN app_capital_flow_info.approveStatus IS '审批状态（码值：审批通过/待审批/驳回（码值待确认））';
@@ -1043,6 +1091,7 @@ CREATE TABLE IF NOT EXISTS app_entrust_pay_info (
     paymentMode            VARCHAR(64),
     payDate                VARCHAR(32),
     accountName            VARCHAR(128),
+    payeeCancelDate        VARCHAR(32),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -1054,6 +1103,7 @@ COMMENT ON COLUMN app_entrust_pay_info.customerName IS '客户名称';
 COMMENT ON COLUMN app_entrust_pay_info.paymentMode IS '支付方式（码值：受托支付/自主支付，码值待确认）';
 COMMENT ON COLUMN app_entrust_pay_info.payDate IS '支付日期';
 COMMENT ON COLUMN app_entrust_pay_info.accountName IS '收款人名称';
+COMMENT ON COLUMN app_entrust_pay_info.payeeCancelDate IS '受托支付对象注销日期';
 COMMENT ON COLUMN app_entrust_pay_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_entrust_pay_info_reportNo ON app_entrust_pay_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_entrust_pay_info_customerId ON app_entrust_pay_info (customerId);
@@ -1087,6 +1137,29 @@ COMMENT ON COLUMN app_settle_counterparty_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_settle_counterparty_info_reportNo ON app_settle_counterparty_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_settle_counterparty_info_customerId ON app_settle_counterparty_info (customerId);
 CREATE INDEX IF NOT EXISTS idx_settle_counterparty_info_direction ON app_settle_counterparty_info (direction);
+
+CREATE TABLE IF NOT EXISTS app_top_five_updown_info (
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo               VARCHAR(64) NOT NULL,
+    customerId             VARCHAR(64),
+    customerName           VARCHAR(128),
+    supplier               VARCHAR(128),
+    supplierType           VARCHAR(64),
+    supplierTypeName       VARCHAR(64),
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE app_top_five_updown_info IS '前五大上下游表';
+COMMENT ON COLUMN app_top_five_updown_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_top_five_updown_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_top_five_updown_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_top_five_updown_info.supplier IS '供应商名称';
+COMMENT ON COLUMN app_top_five_updown_info.supplierType IS '供应商类型';
+COMMENT ON COLUMN app_top_five_updown_info.supplierTypeName IS '供应商类型名称';
+COMMENT ON COLUMN app_top_five_updown_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_top_five_updown_info_reportNo ON app_top_five_updown_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_top_five_updown_info_customerId ON app_top_five_updown_info (customerId);
 
 CREATE TABLE IF NOT EXISTS app_payroll_stat_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -1318,16 +1391,147 @@ COMMENT ON COLUMN app_reputation_event_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_reputation_event_info_reportNo ON app_reputation_event_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_reputation_event_info_customerId ON app_reputation_event_info (customerId);
 
+-- =====================================================================
+-- V1.25 新增表：app_graph_hit_info（企业图谱命中情况，14 字段）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS app_graph_hit_info (
+    id                            BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo                      VARCHAR(64) NOT NULL,
+    customerId                    VARCHAR(64),
+    customerName                  VARCHAR(128),
+    inputtime                     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    suspectedFundReturn           VARCHAR(8) DEFAULT NULL,
+    suspectedLoanPurposeAbnormal  VARCHAR(8) DEFAULT NULL,
+    suspectedBorrowedNameLoan     VARCHAR(8) DEFAULT NULL,
+    suspectedShellCompany         VARCHAR(8) DEFAULT NULL,
+    suspectedGuaranteeCircle      VARCHAR(8) DEFAULT NULL,
+    intraBankRelation             VARCHAR(8) DEFAULT NULL,
+    entrustedPayManyToOne         VARCHAR(8) DEFAULT NULL,
+    collateralSameCommunity       VARCHAR(8) DEFAULT NULL,
+    PRIMARY KEY (id)
+);
+COMMENT ON TABLE app_graph_hit_info IS '企业图谱命中情况';
+COMMENT ON COLUMN app_graph_hit_info.id IS 'id';
+COMMENT ON COLUMN app_graph_hit_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_graph_hit_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_graph_hit_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_graph_hit_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_graph_hit_info.suspectedFundReturn IS '疑似资金回流（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.suspectedLoanPurposeAbnormal IS '贷款用途疑似异常（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.suspectedBorrowedNameLoan IS '疑似借名贷款（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.suspectedShellCompany IS '疑似空壳公司（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.suspectedGuaranteeCircle IS '疑似担保圈链（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.intraBankRelation IS '行内关联关系（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.entrustedPayManyToOne IS '受托支付多对一（码值：是/否，码值待确认）';
+COMMENT ON COLUMN app_graph_hit_info.collateralSameCommunity IS '抵押物同小区关联（码值：是/否，码值待确认）';
+CREATE INDEX IF NOT EXISTS idx_graph_hit_info_reportNo ON app_graph_hit_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_graph_hit_info_customerId ON app_graph_hit_info (customerId);
+
+-- =====================================================================
+-- V1.23 新增表1：app_gs_tax_sales_info（国税销售额表，9 字段）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS app_gs_tax_sales_info (
+    id                BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo          VARCHAR(64) NOT NULL,
+    customerId        VARCHAR(64),
+    customerName      VARCHAR(128),
+    inputtime         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    taxPeriod         VARCHAR(32),
+    monthlyTaxSales   DECIMAL(18,2),
+    totalSalesTax     DECIMAL(18,2),
+    yoyChange         DECIMAL(18,2),
+    yoyRate           DECIMAL(12,4),
+    PRIMARY KEY (id)
+);
+COMMENT ON TABLE app_gs_tax_sales_info IS '国税销售额表';
+COMMENT ON COLUMN app_gs_tax_sales_info.id IS 'id';
+COMMENT ON COLUMN app_gs_tax_sales_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_gs_tax_sales_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_gs_tax_sales_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_gs_tax_sales_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_gs_tax_sales_info.taxPeriod IS '纳税期（按月，一月一行，如202603）';
+COMMENT ON COLUMN app_gs_tax_sales_info.monthlyTaxSales IS '每月纳税销售额（万元）';
+COMMENT ON COLUMN app_gs_tax_sales_info.totalSalesTax IS '当年纳税申请总销售额累计（万元）';
+COMMENT ON COLUMN app_gs_tax_sales_info.yoyChange IS '当年销售额较上年同期变动额（万元）';
+COMMENT ON COLUMN app_gs_tax_sales_info.yoyRate IS '当年销售额较上年同期同比（%）';
+CREATE INDEX IF NOT EXISTS idx_gs_tax_sales_reportNo ON app_gs_tax_sales_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_gs_tax_sales_customerId ON app_gs_tax_sales_info (customerId);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_gs_tax_sales_biz ON app_gs_tax_sales_info (reportNo, customerId, taxPeriod);
+
+-- =====================================================================
+-- V1.23 新增表2：app_gs_finance_data_info（国税财务数据表，21 字段）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS app_gs_finance_data_info (
+    id                    BIGINT NOT NULL AUTO_INCREMENT,
+    reportNo              VARCHAR(64) NOT NULL,
+    customerId            VARCHAR(64),
+    customerName          VARCHAR(128),
+    reportScope           VARCHAR(64),
+    beforeYear            VARCHAR(32),
+    lastYear              VARCHAR(32),
+    thisYear              VARCHAR(32),
+    gfRevenue             DECIMAL(18,2),
+    lastYearRevenue       DECIMAL(18,2),
+    beforeYearRevenue     DECIMAL(18,2),
+    gfReceivable          DECIMAL(18,2),
+    lastYearReceivable    DECIMAL(18,2),
+    beforeYearReceivable  DECIMAL(18,2),
+    gfPayable             DECIMAL(18,2),
+    lastYearPayable       DECIMAL(18,2),
+    beforeYearPayable     DECIMAL(18,2),
+    gfInventory           DECIMAL(18,2),
+    lastYearInventory     DECIMAL(18,2),
+    beforeYearInventory   DECIMAL(18,2),
+    inputtime             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+COMMENT ON TABLE app_gs_finance_data_info IS '国税财务数据表';
+COMMENT ON COLUMN app_gs_finance_data_info.id IS 'id';
+COMMENT ON COLUMN app_gs_finance_data_info.reportNo IS '报告编号';
+COMMENT ON COLUMN app_gs_finance_data_info.customerId IS '客户编号';
+COMMENT ON COLUMN app_gs_finance_data_info.customerName IS '客户名称';
+COMMENT ON COLUMN app_gs_finance_data_info.reportScope IS '财报口径';
+COMMENT ON COLUMN app_gs_finance_data_info.beforeYear IS '前年日期';
+COMMENT ON COLUMN app_gs_finance_data_info.lastYear IS '去年日期';
+COMMENT ON COLUMN app_gs_finance_data_info.thisYear IS '最新一期日期';
+COMMENT ON COLUMN app_gs_finance_data_info.gfRevenue IS '最近一期营收（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.lastYearRevenue IS '去年营收（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.beforeYearRevenue IS '前年营收（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.gfReceivable IS '最近一期应收账款（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.lastYearReceivable IS '去年应收账款（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.beforeYearReceivable IS '前年应收账款（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.gfPayable IS '最近一期应付账款（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.lastYearPayable IS '去年应付账款（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.beforeYearPayable IS '前年应付账款（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.gfInventory IS '最近一期存货（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.lastYearInventory IS '去年存货（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.beforeYearInventory IS '前年存货（万元）';
+COMMENT ON COLUMN app_gs_finance_data_info.inputtime IS '入库时间';
+CREATE INDEX IF NOT EXISTS idx_gs_finance_data_reportNo ON app_gs_finance_data_info (reportNo);
+CREATE INDEX IF NOT EXISTS idx_gs_finance_data_customerId ON app_gs_finance_data_info (customerId);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_gs_finance_data_biz ON app_gs_finance_data_info (reportNo, customerId, reportScope);
+
 CREATE TABLE IF NOT EXISTS app_guofa_report_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
     reportNo               VARCHAR(64) NOT NULL,
     customerId             VARCHAR(64),
     customerName           VARCHAR(128),
-    queryTime              VARCHAR(32),
+    dataDate               VARCHAR(32),
+    beforeYear             VARCHAR(32),
+    lastYear               VARCHAR(32),
+    thisYear               VARCHAR(32),
     gfRevenue              DECIMAL(18,2),
+    lastYearRevenue        DECIMAL(18,2),
+    beforeYearRevenue      DECIMAL(18,2),
     gfReceivable           DECIMAL(18,2),
+    lastYearReceivable     DECIMAL(18,2),
+    beforeYearReceivable   DECIMAL(18,2),
     gfPayable              DECIMAL(18,2),
+    lastYearPayable        DECIMAL(18,2),
+    beforeYearPayable      DECIMAL(18,2),
     gfInventory            DECIMAL(18,2),
+    lastYearInventory      DECIMAL(18,2),
+    beforeYearInventory    DECIMAL(18,2),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id)
 );
@@ -1336,15 +1540,25 @@ COMMENT ON TABLE app_guofa_report_info IS '国发征信信息表';
 COMMENT ON COLUMN app_guofa_report_info.reportNo IS '报告编号';
 COMMENT ON COLUMN app_guofa_report_info.customerId IS '客户编号';
 COMMENT ON COLUMN app_guofa_report_info.customerName IS '客户名称';
-COMMENT ON COLUMN app_guofa_report_info.queryTime IS '国发征信查询时间';
-COMMENT ON COLUMN app_guofa_report_info.gfRevenue IS '国发征信营收（万元，上游直给）';
-COMMENT ON COLUMN app_guofa_report_info.gfReceivable IS '国发征信应收账款（万元，上游直给）';
-COMMENT ON COLUMN app_guofa_report_info.gfPayable IS '国发征信应付账款（万元，上游直给）';
-COMMENT ON COLUMN app_guofa_report_info.gfInventory IS '国发征信存货（万元，上游直给）';
+COMMENT ON COLUMN app_guofa_report_info.dataDate IS '数据日期';
+COMMENT ON COLUMN app_guofa_report_info.beforeYear IS '前年日期';
+COMMENT ON COLUMN app_guofa_report_info.lastYear IS '去年日期';
+COMMENT ON COLUMN app_guofa_report_info.thisYear IS '最新一期日期';
+COMMENT ON COLUMN app_guofa_report_info.gfRevenue IS '最近一期营收（万元）';
+COMMENT ON COLUMN app_guofa_report_info.lastYearRevenue IS '去年营收（万元）';
+COMMENT ON COLUMN app_guofa_report_info.beforeYearRevenue IS '前年营收（万元）';
+COMMENT ON COLUMN app_guofa_report_info.gfReceivable IS '最近一期应收账款（万元）';
+COMMENT ON COLUMN app_guofa_report_info.lastYearReceivable IS '去年应收账款（万元）';
+COMMENT ON COLUMN app_guofa_report_info.beforeYearReceivable IS '前年应收账款（万元）';
+COMMENT ON COLUMN app_guofa_report_info.gfPayable IS '最近一期应付账款（万元）';
+COMMENT ON COLUMN app_guofa_report_info.lastYearPayable IS '去年应付账款（万元）';
+COMMENT ON COLUMN app_guofa_report_info.beforeYearPayable IS '前年应付账款（万元）';
+COMMENT ON COLUMN app_guofa_report_info.gfInventory IS '最近一期存货（万元）';
+COMMENT ON COLUMN app_guofa_report_info.lastYearInventory IS '去年存货（万元）';
+COMMENT ON COLUMN app_guofa_report_info.beforeYearInventory IS '前年存货（万元）';
 COMMENT ON COLUMN app_guofa_report_info.inputtime IS '入库时间';
 CREATE INDEX IF NOT EXISTS idx_guofa_report_info_reportNo ON app_guofa_report_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_guofa_report_info_customerId ON app_guofa_report_info (customerId);
-CREATE INDEX IF NOT EXISTS idx_guofa_report_info_queryTime ON app_guofa_report_info (queryTime);
 
 CREATE TABLE IF NOT EXISTS app_loan_plan_info (
     id                     BIGINT NOT NULL AUTO_INCREMENT,
@@ -1695,3 +1909,31 @@ COMMENT ON COLUMN app_finance_indicator_info.netProfitRatio IS '净利率（%）
 CREATE INDEX IF NOT EXISTS idx_finance_indicator_info_reportNo ON app_finance_indicator_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_finance_indicator_info_customerId ON app_finance_indicator_info (customerId);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_finance_indicator_info_biz ON app_finance_indicator_info (reportNo, customerId, finReportNo, accountMonth, reportScope, reportPeriod, reportTypeNo);
+
+-- =====================================================================
+-- V1.20 新增表：app_credit_approval_manage_req_info（授信批复管理要求表，9 字段）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS app_credit_approval_manage_req_info (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    reportno VARCHAR(64) NOT NULL,
+    customerid VARCHAR(64) DEFAULT NULL,
+    customername VARCHAR(255) DEFAULT NULL,
+    inputtime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    swqNo VARCHAR(32) DEFAULT NULL,
+    `CONDITION` TEXT DEFAULT NULL,
+    PELATIVESERIALNO VARCHAR(64) DEFAULT NULL,
+    checkDate DATE DEFAULT NULL,
+    PRIMARY KEY (id)
+);
+COMMENT ON TABLE app_credit_approval_manage_req_info IS '授信批复管理要求表';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.id IS 'id';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.reportno IS '报告编号';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.customerid IS '客户编号';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.customername IS '客户名称';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.swqNo IS '序号';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.CONDITION IS '后续管理要求';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.PELATIVESERIALNO IS '对象';
+COMMENT ON COLUMN app_credit_approval_manage_req_info.checkDate IS '检查时间';
+CREATE INDEX IF NOT EXISTS idx_credit_approval_manage_req_reportNo ON app_credit_approval_manage_req_info (reportno);
+CREATE INDEX IF NOT EXISTS idx_credit_approval_manage_req_customerId ON app_credit_approval_manage_req_info (customerid);

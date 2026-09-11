@@ -19,6 +19,7 @@ import com.suzhou.bank.service.report.model.ReportCatalogNode;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
 import com.suzhou.bank.service.report.model.ReportRiskItem;
+import com.suzhou.bank.service.report.model.ReportVersionVO;
 import com.suzhou.bank.service.report.spi.ContentPayload;
 import com.suzhou.bank.service.report.spi.ReportContentProvider;
 import com.suzhou.bank.service.report.spi.ReportGenerateContext;
@@ -293,6 +294,8 @@ public class ReportServiceImpl implements ReportService {
         detail.setCustomerId(reportInfo.getCustomerId());
         detail.setCustomerName(reportInfo.getCustomerName());
         detail.setReportTitle(reportInfo.getReportTitle());
+        detail.setCheckTaskNo(reportInfo.getCheckTaskNo());
+        detail.setVersion(reportInfo.getVersion());
         detail.setStatus(reportInfo.getStatus());
         detail.setUpdatedAt(reportInfo.getUpdatedAt());
         detail.setHeadBlocks(headBlocks);
@@ -310,6 +313,40 @@ public class ReportServiceImpl implements ReportService {
         return reportMapper.selectPage(pager, Wrappers.<Report>lambdaQuery()
                 .eq(StringUtils.hasText(customerId), Report::getCustomerId, customerId)
                 .orderByDesc(Report::getUpdatedAt));
+    }
+
+    @Override
+    public List<ReportVersionVO> versions(String checkTaskNo) {
+        if (!StringUtils.hasText(checkTaskNo)) {
+            return new ArrayList<>();
+        }
+        // 最新版本在前：id 自增即版本递增顺序，倒序取最新
+        List<Report> list = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getCheckTaskNo, checkTaskNo)
+                .orderByDesc(Report::getId));
+        return list.stream().map(r -> {
+            ReportVersionVO vo = new ReportVersionVO();
+            vo.setReportNo(r.getReportNo());
+            vo.setVersion(r.getVersion());
+            vo.setStatus(r.getStatus());
+            vo.setUpdatedAt(r.getUpdatedAt());
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public ReportDetailVO latest(String checkTaskNo) {
+        if (!StringUtils.hasText(checkTaskNo)) {
+            throw new ReportGenerateException("日检流水号（checkTaskNo）不能为空");
+        }
+        List<Report> list = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getCheckTaskNo, checkTaskNo)
+                .orderByDesc(Report::getId)
+                .last("LIMIT 1"));
+        if (list.isEmpty()) {
+            throw new ReportGenerateException("该日检流水号下不存在报告：" + checkTaskNo);
+        }
+        return detail(list.get(0).getReportNo());
     }
 
     /* ==================== 单块实例化 ==================== */
