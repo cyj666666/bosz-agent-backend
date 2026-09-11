@@ -117,6 +117,8 @@ COMMENT ON COLUMN report.status IS '报告状态';
 COMMENT ON COLUMN report.know_kit_task_id IS '关联Know-Kit任务ID';
 COMMENT ON COLUMN report.content_html IS '报告HTML内容';
 COMMENT ON COLUMN report.data_snapshot IS '数据快照JSON';
+COMMENT ON COLUMN report.created_at IS '创建时间';
+COMMENT ON COLUMN report.updated_at IS '更新时间';
 
 -- ====== rule_condition (规则条件表) ======
 COMMENT ON TABLE rule_condition IS '规则条件表';
@@ -190,7 +192,5 @@ COMMENT ON COLUMN know_kit_task.created_at IS '创建时间';
 COMMENT ON COLUMN parser_config.created_at IS '创建时间';
 COMMENT ON COLUMN parser_config.updated_at IS '更新时间';
 COMMENT ON COLUMN raw_data_log.created_at IS '创建时间';
-COMMENT ON COLUMN report.created_at IS '创建时间';
-COMMENT ON COLUMN report.updated_at IS '更新时间';
 COMMENT ON COLUMN rule_scenario.created_at IS '创建时间';
 COMMENT ON COLUMN text_data.created_at IS '创建时间';
