@@ -67,7 +67,8 @@ public class AppReportContentInstance {
 
     /**
      * 块间跳转锚点（单向）：点击本块时跳转到的目标块 anchorCode。
-     * <p>仅用于内容块之间的点击快速定位，不是外部跳转链接；无跳转则为 NULL。
+     * <p>仅用于内容块之间的点击快速定位（前端点击后<b>滚动定位</b>到目标块，不新开页面），
+     * 不是外部跳转链接；无跳转则为 NULL。
      * <b>与填充类型无关</b>：任何填充类型的块配置了本值即可跳转。</p>
      */
     @TableField("jumpAnchorCode")

@@ -19,7 +19,8 @@
 --       是生成时从模板快照过来的，目的是渲染一次查询、不 join 模板，且模板改版不污染历史报告。
 --    ② 块间跳转锚点是单向的：只存"本块 → 目标块锚点"，不存反向关系；
 --       与填充类型无关，任何填充类型的块配置了 jumpAnchorCode 即可跳转。
---       外链跳转是另一回事：SOURCE_LINK 块把链接存在自己的 content 里。
+--       前端行为：点击后滚动定位到目标块（同页面定位，不新开页面）。
+--       外链跳转是另一回事：SOURCE_LINK 块把链接存在自己的 content 里，点击新开浏览器标签页。
 --    ③ AI 风险与正文的关联：agentCode 为关联键（两侧同值，且已含经验规则编号），
 --       blockCode 为落地定位键（唯一键依据）。
 --    ④ 正文 content 为准、列表 riskDesc 为副本：内容可编辑时两处必须同事务同步更新，
@@ -79,7 +80,7 @@ COMMENT ON COLUMN app_report_content_instance.ruleName IS '经验规则名称（
 COMMENT ON COLUMN app_report_content_instance.titleLevel IS '标题级别（自模板快照）：1-报告主标题 2-章节标题 3-小节标题';
 COMMENT ON COLUMN app_report_content_instance.sortNo IS '排序（自模板快照，同一目录内）';
 COMMENT ON COLUMN app_report_content_instance.anchorCode IS '锚点编码：本块在报告内的定位锚点（默认取 blockCode），作为其它块跳转的目标标识；与填充类型无关';
-COMMENT ON COLUMN app_report_content_instance.jumpAnchorCode IS '块间跳转锚点（单向，仅用于内容块之间的点击快速定位）：点击本块时跳转到的目标块 anchorCode；非外部跳转链接；与填充类型无关，任何块配置了本值即可跳转；无跳转则为NULL';
+COMMENT ON COLUMN app_report_content_instance.jumpAnchorCode IS '块间跳转锚点（单向）：点击本块时滚动定位到的目标块 anchorCode；非外部跳转链接；与填充类型无关，任何块配置了本值即可跳转；无跳转则为NULL';
 COMMENT ON COLUMN app_report_content_instance.content IS '内容（大文本）：TITLE-标题文案 TEXT-分析文本（analysisType=RULE 时为经验规则类内容体）TABLE-表格内容 SOURCE_LINK-外部跳转链接（块本身即按钮，点击新开浏览器标签页）';
 COMMENT ON COLUMN app_report_content_instance.inputtime IS '入库时间';
 
@@ -131,7 +132,7 @@ COMMENT ON COLUMN app_report_ai_risk.agentCode IS '智能体编码（已含经�
 COMMENT ON COLUMN app_report_ai_risk.ruleName IS '经验规则名称（列表展示）';
 COMMENT ON COLUMN app_report_ai_risk.riskDesc IS '风险描述（列表展示文案；与内容实例 content 同一份文案，编辑正文时同事务同步更新）';
 COMMENT ON COLUMN app_report_ai_risk.status IS '处置状态：PENDING-待处理 ADOPTED-已采纳 INVALID-已无效';
-COMMENT ON COLUMN app_report_ai_risk.jumpAnchorCode IS '跳转锚点（单向，仅用于点击快速定位）：点击该风险行时跳转到的正文锚点（内容实例 anchorCode）；非外部跳转链接';
+COMMENT ON COLUMN app_report_ai_risk.jumpAnchorCode IS '块间跳转锚点（单向）：点击该风险行时滚动定位到的正文块 anchorCode；非外部跳转链接';
 COMMENT ON COLUMN app_report_ai_risk.sortNo IS '排序（风险列表内顺序）';
 COMMENT ON COLUMN app_report_ai_risk.inputtime IS '入库时间';
 

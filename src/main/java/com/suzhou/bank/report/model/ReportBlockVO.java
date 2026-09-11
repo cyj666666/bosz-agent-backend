@@ -38,7 +38,7 @@ public class ReportBlockVO {
     /** 本块锚点编码（作为其它块跳转的目标标识） */
     private String anchorCode;
 
-    /** 块间跳转目标锚点（单向，仅用于点击快速定位）；无跳转则为 NULL */
+    /** 块间跳转目标锚点（单向）：前端点击本块后滚动定位到该锚点对应的块；无跳转则为 NULL */
     private String jumpAnchorCode;
 
     /** 内容成品；为空时前端按 emptyStrategy 渲染。SOURCE_LINK 类此处为外部跳转链接 */
