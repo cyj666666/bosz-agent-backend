@@ -326,7 +326,7 @@ public class ReportServiceImpl implements ReportService {
                 .eq(Report::getCheckTaskNo, checkTaskNo)
                 .eq(Report::getStatus, REPORT_STATUS_DONE)
                 .isNotNull(Report::getVersion)
-                .orderByDesc(Report::getId));
+                .orderByDesc(Report::getVersion));
         return list.stream().map(r -> {
             ReportVersionVO vo = new ReportVersionVO();
             vo.setReportNo(r.getReportNo());
@@ -342,12 +342,12 @@ public class ReportServiceImpl implements ReportService {
         if (!StringUtils.hasText(checkTaskNo)) {
             throw new ReportGenerateException("日检流水号（checkTaskNo）不能为空");
         }
-        // 最新版本 = 已完成（888）且已赋予版本号 的版本中 id 最大的一条
+        // 最新版本 = 已完成（888）且已赋予版本号 的版本中version版本最新的一条
         List<Report> list = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
                 .eq(Report::getCheckTaskNo, checkTaskNo)
                 .eq(Report::getStatus, REPORT_STATUS_DONE)
                 .isNotNull(Report::getVersion)
-                .orderByDesc(Report::getId)
+                .orderByDesc(Report::getVersion)
                 .last("LIMIT 1"));
         if (list.isEmpty()) {
             throw new ReportGenerateException("该日检流水号下不存在已完成（含版本号）的报告：" + checkTaskNo);
