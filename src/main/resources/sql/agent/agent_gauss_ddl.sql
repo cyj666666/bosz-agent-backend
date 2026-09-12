@@ -1,89 +1,36 @@
 -- =====================================================================
--- agent_gauss_ddl.sql 自包含版（v6，openGauss/高斯DB 直接执行）
---   1. SET search_path = bosz_test, public：保证全部 213 张表（含第一张 agent_config）都建到 bosz_test
---   2. 补建 50 个自增序列（openGauss 不支持 CREATE SEQUENCE IF NOT EXISTS，用纯 CREATE SEQUENCE；
---      全新库一次成功；若库中已有部分序列，对应行报 already exists 时跳过该行即可）
---   3. 全部 character varying/character 列显式 COLLATE "C"：openGauss lc_collate 为 C 时必需，否则报
---      Un-support feature: type varchar cannot be set to binary collation
---   4. 2026-09-12 精简：移除 36 张 app_ 前缀表（贷后报告业务表，建表以
---      sql/20260819/app层/app_贷后报告_建表脚本.sql 为准）——含与该脚本重复的 34 张，
---      以及 app_tax_info、app_specific_loan_check_info；保留 app_api_financial_analysis_dd_*
---      3 张及 app_space_* 5 张；本文件表数 215 -> 179
+-- agent_gauss_ddl.sql 自包含版（v7，GaussDB 兼容 MySQL 版可直接执行）
+--   1. SET search_path = bosz_test, public：全部 179 张表建到 bosz_test
+--   2. 语法已对齐 sql/20260819/app层/app_贷后报告_建表脚本.sql：类型 VARCHAR/CHAR/DECIMAL/TEXT/
+--      TIMESTAMP/INT/BIGINT；主键内联 PRIMARY KEY (...)；id 统一 BIGINT NOT NULL AUTO_INCREMENT；
+--      索引 CREATE [UNIQUE] INDEX；不再使用 COLLATE "C" / USING ubtree / storage_type=USTORE /
+--      TABLESPACE / 表级 WITH(...) / CREATE SEQUENCE（50 个序列已全部并入 AUTO_INCREMENT）
+--   3. 2026-09-12 精简：移除 36 张 app_ 前缀贷后报告业务表（含与该脚本重复的 34 张 + app_tax_info
+--      + app_specific_loan_check_info），保留 app_api_financial_analysis_dd_* 3 张及 app_space_* 5 张；
+--      本文件表数 215 -> 179
 -- 前置条件：schema bosz_test 必须已存在（不存在先执行 CREATE SCHEMA bosz_test）
 -- =====================================================================
 
 SET search_path = bosz_test, public;
 
--- ---------- 自增序列（50） ----------
-CREATE SEQUENCE agent_config_id_seq;
-CREATE SEQUENCE agent_index_config_id_seq;
-CREATE SEQUENCE agent_rule_id_seq;
-CREATE SEQUENCE agent_search_memory_id_seq;
-CREATE SEQUENCE ai_component_config_id_seq;
-CREATE SEQUENCE amar_claw_memory_backups__id_seq;
-CREATE SEQUENCE app_space_config_space_id_seq;
-CREATE SEQUENCE app_space_inspiration_config_id_seq;
-CREATE SEQUENCE app_space_relate_account_id_seq;
-CREATE SEQUENCE app_space_relate_agent_id_seq;
-CREATE SEQUENCE app_space_relate_knowledge_id_seq;
-CREATE SEQUENCE bank_internal_indicators_config_id_seq;
-CREATE SEQUENCE bank_module_info__id_seq;
-CREATE SEQUENCE chat_session_msg_feedback_id_seq;
-CREATE SEQUENCE client_agent_index_config_id_seq;
-CREATE SEQUENCE coze_cache_industry_mapping_id_seq;
-CREATE SEQUENCE data_entname_indname_reference_records_id_seq;
-CREATE SEQUENCE data_relate_account_id_seq;
-CREATE SEQUENCE data_update_config_id_seq;
-CREATE SEQUENCE ent_rel_shortname_info_id_seq;
-CREATE SEQUENCE financial_transaction_records__id_seq;
-CREATE SEQUENCE finatial_records_task_id_seq;
-CREATE SEQUENCE finatial_upload_task_id_seq;
-CREATE SEQUENCE index_agent_rela_id_seq;
-CREATE SEQUENCE index_detail_code_library__id_seq;
-CREATE SEQUENCE index_detail_config_id_seq;
-CREATE SEQUENCE index_info_temp__id_seq;
-CREATE SEQUENCE index_params_temp__id_seq;
-CREATE SEQUENCE index_relate_info_id_seq;
-CREATE SEQUENCE jeecg_monthly_growth_analysis_id_seq;
-CREATE SEQUENCE jeecg_project_nature_income_id_seq;
-CREATE SEQUENCE knowledge_black_params_config_id_seq;
-CREATE SEQUENCE knowledge_black_params_config_version_id_seq;
-CREATE SEQUENCE knowledge_query_result_for_batch_id_seq;
-CREATE SEQUENCE knowledge_relate_index_id_seq;
-CREATE SEQUENCE knowledge_relate_index_version_id_seq;
-CREATE SEQUENCE large_model_config_id_seq;
-CREATE SEQUENCE message_push_config_id_seq;
-CREATE SEQUENCE message_relate_account_id_seq;
-CREATE SEQUENCE post_glm_records_id_seq;
-CREATE SEQUENCE qianxun_user_log_id_seq;
-CREATE SEQUENCE rasa_chat_detail_info_id_seq;
-CREATE SEQUENCE rela_index_config_id_seq;
-CREATE SEQUENCE scene_inflect_info__id_seq;
-CREATE SEQUENCE sence_relate_info__id_seq;
-CREATE SEQUENCE sync_knowledge_info_id_seq;
-CREATE SEQUENCE sys_announcement_send__id_seq;
-CREATE SEQUENCE sys_page_view_log_id_seq;
-CREATE SEQUENCE trace_query_result_id_seq;
-CREATE SEQUENCE workflow_return_records_id_seq;
-
--- ================= 原脚本内容（213 张表 + 约束 + 注释 + 索引） =================
+-- ================= 原脚本内容（179 张表 + 约束 + 注释 + 索引） =================
 CREATE TABLE agent_config (
-    id integer DEFAULT nextval('agent_config_id_seq'::regclass) NOT NULL,
-    agent_name character varying(100) COLLATE "C" NOT NULL,
-    agent_code character varying(32) COLLATE "C" NOT NULL,
-    entity_type character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    agent_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    agent_addr character varying(500) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    agent_detail text,
-    agent_prompt text,
-    has_statistics character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    agent_status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    update_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    agent_param_tpl text,
-    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    agent_name             VARCHAR(100) NOT NULL,
+    agent_code             VARCHAR(32) NOT NULL,
+    entity_type            VARCHAR(40),
+    agent_topic            VARCHAR(100),
+    agent_addr             VARCHAR(500) DEFAULT '' NOT NULL,
+    agent_detail           TEXT,
+    agent_prompt           TEXT,
+    has_statistics         VARCHAR(1),
+    agent_status           VARCHAR(20),
+    input_time             VARCHAR(40) DEFAULT '' NOT NULL,
+    update_time            VARCHAR(40) DEFAULT '' NOT NULL,
+    agent_param_tpl        TEXT,
+    large_model_code       VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN agent_config.agent_name IS '智能体名称';
 COMMENT ON COLUMN agent_config.agent_code IS '智能体编码';
 COMMENT ON COLUMN agent_config.entity_type IS '主体类型';
@@ -97,24 +44,22 @@ COMMENT ON COLUMN agent_config.input_time IS '入库时间';
 COMMENT ON COLUMN agent_config.update_time IS '更新时间';
 COMMENT ON COLUMN agent_config.agent_param_tpl IS '服务请求参数模板';
 COMMENT ON COLUMN agent_config.large_model_code IS '大模型编码';
-CREATE INDEX agent_status ON agent_config USING ubtree (agent_status) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_config ADD CONSTRAINT agent_name UNIQUE USING ubtree (agent_name) WITH (storage_type=USTORE);
-ALTER TABLE agent_config ADD CONSTRAINT agent_code UNIQUE USING ubtree (agent_code) WITH (storage_type=USTORE);
-ALTER TABLE agent_config ADD CONSTRAINT agent_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE INDEX agent_status ON agent_config (agent_status);
+CREATE UNIQUE INDEX agent_name ON agent_config (agent_name);
+CREATE UNIQUE INDEX agent_code ON agent_config (agent_code);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_conversation_history (
-    conversation_id character varying(50) COLLATE "C" NOT NULL,
-    session_no character varying(50) COLLATE "C" NOT NULL,
-    agent_id character varying(32) COLLATE "C" NOT NULL,
-    question character varying(1024) COLLATE "C" NOT NULL,
-    question_class character varying(128) COLLATE "C" DEFAULT NULL::character varying,
-    target_node character varying(128) COLLATE "C" DEFAULT NULL::character varying,
-    target_detail json,
-    start_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    answer text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    conversation_id        VARCHAR(50) NOT NULL,
+    session_no             VARCHAR(50) NOT NULL,
+    agent_id               VARCHAR(32) NOT NULL,
+    question               VARCHAR(1024) NOT NULL,
+    question_class         VARCHAR(128),
+    target_node            VARCHAR(128),
+    target_detail          json,
+    start_time             VARCHAR(40),
+    answer                 TEXT,
+    PRIMARY KEY (conversation_id, session_no)
+);
 COMMENT ON TABLE agent_conversation_history IS '智能体会话历史记录表';
 COMMENT ON COLUMN agent_conversation_history.conversation_id IS '会话编号';
 COMMENT ON COLUMN agent_conversation_history.session_no IS '问题编号';
@@ -125,47 +70,45 @@ COMMENT ON COLUMN agent_conversation_history.target_node IS '目标节点';
 COMMENT ON COLUMN agent_conversation_history.target_detail IS '目标细节';
 COMMENT ON COLUMN agent_conversation_history.start_time IS '开始时间';
 COMMENT ON COLUMN agent_conversation_history.answer IS '智能体回答';
-CREATE INDEX idx_start_time ON agent_conversation_history USING ubtree (start_time) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX idx_session_no ON agent_conversation_history USING ubtree (session_no) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX idx_agent_id ON agent_conversation_history USING ubtree (agent_id) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_conversation_history ADD CONSTRAINT agent_conversation_history_pkey PRIMARY KEY USING ubtree  (conversation_id, session_no) WITH (storage_type=USTORE);
+CREATE INDEX idx_start_time ON agent_conversation_history (start_time);
+CREATE INDEX idx_session_no ON agent_conversation_history (session_no);
+CREATE INDEX idx_agent_id ON agent_conversation_history (agent_id);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_index_config (
-    id integer DEFAULT nextval('agent_index_config_id_seq'::regclass) NOT NULL,
-    index_name character varying(100) COLLATE "C" NOT NULL,
-    index_code character varying(32) COLLATE "C" NOT NULL,
-    index_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    use_flag character varying(1) COLLATE "C" NOT NULL,
-    synonym_word text,
-    key_word text,
-    center_key_word text,
-    entity_type character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    inner_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    source_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    external_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    has_index_rela character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    remark text,
-    input_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    update_time character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    index_desc text,
-    sample_question text,
-    object_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    index_classification character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_prompt text,
-    final_result_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
-    final_result_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    rec_enterprise character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    none_test_flag character varying(100) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
-    source_card_channel character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    rela_knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    index_name             VARCHAR(100) NOT NULL,
+    index_code             VARCHAR(32) NOT NULL,
+    index_topic            VARCHAR(100),
+    use_flag               VARCHAR(1) NOT NULL,
+    synonym_word           TEXT,
+    key_word               TEXT,
+    center_key_word        TEXT,
+    entity_type            VARCHAR(500),
+    inner_priority         VARCHAR(50),
+    source_type            VARCHAR(200),
+    external_priority      VARCHAR(50),
+    rec_group              VARCHAR(400),
+    rec_question           VARCHAR(400),
+    has_index_rela         VARCHAR(1),
+    remark                 TEXT,
+    input_time             VARCHAR(40) DEFAULT '' NOT NULL,
+    update_time            VARCHAR(40) DEFAULT '' NOT NULL,
+    index_desc             TEXT,
+    sample_question        TEXT,
+    object_type            VARCHAR(256),
+    index_classification   VARCHAR(100),
+    index_prompt           TEXT,
+    final_result_flag      VARCHAR(1) DEFAULT 'N',
+    final_result_content   VARCHAR(2000),
+    rec_enterprise         VARCHAR(400),
+    none_test_flag         VARCHAR(100) DEFAULT '1' NOT NULL,
+    source_card_channel    VARCHAR(100),
+    large_model_code       VARCHAR(100),
+    large_model_content    VARCHAR(2000),
+    rela_knowledge_id      VARCHAR(100),
+    large_model_flag       VARCHAR(1) DEFAULT 'Y',
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN agent_index_config.index_name IS '指标名称';
 COMMENT ON COLUMN agent_index_config.index_code IS '指标编码';
 COMMENT ON COLUMN agent_index_config.index_topic IS '指标主题分类';
@@ -197,74 +140,68 @@ COMMENT ON COLUMN agent_index_config.large_model_code IS '大模型编码';
 COMMENT ON COLUMN agent_index_config.large_model_content IS '不同大模型对应的输出要求';
 COMMENT ON COLUMN agent_index_config.rela_knowledge_id IS '组件关联知识库ID';
 COMMENT ON COLUMN agent_index_config.large_model_flag IS '是否走大模型标志，默认Y（ N否，Y是 ）';
-CREATE INDEX use_flag_2 ON agent_index_config USING ubtree (use_flag) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX source_type ON agent_index_config USING ubtree (source_type) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX index_code_3 ON agent_index_config USING ubtree (index_code) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX index_code_2 ON agent_index_config USING ubtree (index_code) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX use_flag ON agent_index_config USING ubtree (use_flag) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX index_name ON agent_index_config USING ubtree (index_name) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_index_config ADD CONSTRAINT agent_index_config_index_code_idx UNIQUE USING ubtree (index_code, source_type, none_test_flag) WITH (storage_type=USTORE);
-ALTER TABLE agent_index_config ADD CONSTRAINT agent_index_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE INDEX use_flag_2 ON agent_index_config (use_flag);
+CREATE INDEX source_type ON agent_index_config (source_type);
+CREATE INDEX index_code_3 ON agent_index_config (index_code);
+CREATE INDEX index_code_2 ON agent_index_config (index_code);
+CREATE INDEX use_flag ON agent_index_config (use_flag);
+CREATE INDEX index_name ON agent_index_config (index_name);
+CREATE UNIQUE INDEX agent_index_config_index_code_idx ON agent_index_config (index_code, source_type, none_test_flag);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_memory (
-    mem_key character varying(128) COLLATE "C" NOT NULL,
-    mem_content text,
-    update_time character varying(40) COLLATE "C" NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    mem_key                VARCHAR(128) NOT NULL,
+    mem_content            TEXT,
+    update_time            VARCHAR(40) NOT NULL,
+    PRIMARY KEY (mem_key)
+);
 COMMENT ON TABLE agent_memory IS '智能体记忆';
 COMMENT ON COLUMN agent_memory.mem_key IS '记忆主键';
 COMMENT ON COLUMN agent_memory.mem_content IS '记忆内容';
 COMMENT ON COLUMN agent_memory.update_time IS '更新时间';
-ALTER TABLE agent_memory ADD CONSTRAINT agent_memory_pkey PRIMARY KEY USING ubtree  (mem_key) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_reply_message (
-    agent_id character varying(128) COLLATE "C" NOT NULL,
-    session_no character varying(50) COLLATE "C" NOT NULL,
-    sort_no bigint NOT NULL,
-    sse_message json,
-    generated_time character varying(40) COLLATE "C" NOT NULL,
-    session_msg_no character varying(128) COLLATE "C" DEFAULT ''::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    agent_id               VARCHAR(128) NOT NULL,
+    session_no             VARCHAR(50) NOT NULL,
+    sort_no                BIGINT NOT NULL,
+    sse_message            json,
+    generated_time         VARCHAR(40) NOT NULL,
+    session_msg_no         VARCHAR(128) DEFAULT '' NOT NULL,
+    PRIMARY KEY (session_no, session_msg_no, sort_no)
+);
 COMMENT ON TABLE agent_reply_message IS '智能体问答记录表';
 COMMENT ON COLUMN agent_reply_message.agent_id IS '智能体ID';
 COMMENT ON COLUMN agent_reply_message.session_no IS '会话号';
 COMMENT ON COLUMN agent_reply_message.sort_no IS '排序号';
 COMMENT ON COLUMN agent_reply_message.sse_message IS '服务器发送事件消息';
 COMMENT ON COLUMN agent_reply_message.generated_time IS '生成时间';
-CREATE INDEX generated_time ON agent_reply_message USING ubtree (generated_time) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX sort_no ON agent_reply_message USING ubtree (sort_no) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX agent_id_session_no ON agent_reply_message USING ubtree (agent_id, session_no) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_reply_message ADD CONSTRAINT agent_reply_message_pkey PRIMARY KEY USING ubtree  (session_no, session_msg_no, sort_no) WITH (storage_type=USTORE);
+CREATE INDEX generated_time ON agent_reply_message (generated_time);
+CREATE INDEX sort_no ON agent_reply_message (sort_no);
+CREATE INDEX agent_id_session_no ON agent_reply_message (agent_id, session_no);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_rule (
-    id integer DEFAULT nextval('agent_rule_id_seq'::regclass) NOT NULL,
-    rule_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    rule_text character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    parsed_expression character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    rule_status character(1) COLLATE "C" DEFAULT NULL::bpchar,
-    input_time character varying(30) COLLATE "C" DEFAULT NULL::character varying,
-    input_user character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(30) COLLATE "C" DEFAULT NULL::character varying,
-    update_user character varying(30) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_key character varying(300) COLLATE "C" DEFAULT NULL::character varying,
-    topic1 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    topic2 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    threshold_config text,
-    risk_remark text,
-    disposal_advice text,
-    additional_analysis text,
-    rule_code character varying(200) COLLATE "C" NOT NULL,
-    additional_analysis_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    rule_struct character varying(300) COLLATE "C" DEFAULT NULL::character varying,
-    fact_analysis text,
-    request_params character varying(2000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                       BIGINT NOT NULL AUTO_INCREMENT,
+    rule_name                VARCHAR(255),
+    rule_text                VARCHAR(1000),
+    parsed_expression        VARCHAR(1000),
+    rule_status              CHAR(1),
+    input_time               VARCHAR(30),
+    input_user               VARCHAR(100),
+    update_time              VARCHAR(30),
+    update_user              VARCHAR(30),
+    prompt_key               VARCHAR(300),
+    topic1                   VARCHAR(200),
+    topic2                   VARCHAR(200),
+    threshold_config         TEXT,
+    risk_remark              TEXT,
+    disposal_advice          TEXT,
+    additional_analysis      TEXT,
+    rule_code                VARCHAR(200) NOT NULL,
+    additional_analysis_name VARCHAR(200),
+    rule_struct              VARCHAR(300),
+    fact_analysis            TEXT,
+    request_params           VARCHAR(2000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE agent_rule IS '规则配置';
 COMMENT ON COLUMN agent_rule.id IS '规则ID';
 COMMENT ON COLUMN agent_rule.rule_name IS '规则名称';
@@ -287,36 +224,32 @@ COMMENT ON COLUMN agent_rule.additional_analysis_name IS '补充分析名称';
 COMMENT ON COLUMN agent_rule.rule_struct IS '规则结果结构';
 COMMENT ON COLUMN agent_rule.fact_analysis IS '事实分析';
 COMMENT ON COLUMN agent_rule.request_params IS '请求参数';
-ALTER TABLE agent_rule ADD CONSTRAINT uk_agent_rule_rule_code UNIQUE USING ubtree (rule_code) WITH (storage_type=USTORE);
-ALTER TABLE agent_rule ADD CONSTRAINT agent_rule_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX uk_agent_rule_rule_code ON agent_rule (rule_code);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_rule_prompt (
-    key character varying(300) COLLATE "C" NOT NULL,
-    prompt text NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    key                    VARCHAR(300) NOT NULL,
+    prompt                 TEXT NOT NULL,
+    PRIMARY KEY (key)
+);
 COMMENT ON TABLE agent_rule_prompt IS 'Agent大模型提示词配置表';
 COMMENT ON COLUMN agent_rule_prompt.key IS '提示词唯一标识key';
 COMMENT ON COLUMN agent_rule_prompt.prompt IS 'prompt提示词内容';
-ALTER TABLE agent_rule_prompt ADD CONSTRAINT agent_rule_prompt_pkey PRIMARY KEY USING ubtree  (key) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_search_history (
-    agent_id character varying(128) COLLATE "C" NOT NULL,
-    session_no character varying(100) COLLATE "C" NOT NULL,
-    user_id character varying(128) COLLATE "C" NOT NULL,
-    question character varying(1024) COLLATE "C" DEFAULT NULL::character varying,
-    start_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    final_answer text,
-    end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    edit_final_answer text,
-    fav_final_answer smallint,
-    status character varying(20) COLLATE "C" DEFAULT 'running'::character varying NOT NULL,
-    session_msg_no character varying(128) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    async smallint DEFAULT 0::smallint
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    agent_id               VARCHAR(128) NOT NULL,
+    session_no             VARCHAR(100) NOT NULL,
+    user_id                VARCHAR(128) NOT NULL,
+    question               VARCHAR(1024),
+    start_time             VARCHAR(40),
+    final_answer           TEXT,
+    end_time               VARCHAR(40),
+    edit_final_answer      TEXT,
+    fav_final_answer       SMALLINT,
+    status                 VARCHAR(20) DEFAULT 'running' NOT NULL,
+    session_msg_no         VARCHAR(128) DEFAULT '' NOT NULL,
+    async                  SMALLINT DEFAULT 0,
+    PRIMARY KEY (session_no, session_msg_no)
+);
 COMMENT ON TABLE agent_search_history IS '智能体问答记录表';
 COMMENT ON COLUMN agent_search_history.agent_id IS '智能体ID';
 COMMENT ON COLUMN agent_search_history.user_id IS '用户ID';
@@ -328,20 +261,18 @@ COMMENT ON COLUMN agent_search_history.edit_final_answer IS '最终答案编辑'
 COMMENT ON COLUMN agent_search_history.fav_final_answer IS '喜欢这个答案:0或1';
 COMMENT ON COLUMN agent_search_history.status IS '当前智能体的运行状态';
 COMMENT ON COLUMN agent_search_history.async IS '是否异步发起的智能体任务,1:是,0否';
-CREATE INDEX agent_id_user_id ON agent_search_history USING ubtree (agent_id, user_id) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX idx_user_id ON agent_search_history USING ubtree (user_id) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_search_history ADD CONSTRAINT agent_search_history_pkey PRIMARY KEY USING ubtree  (session_no, session_msg_no) WITH (storage_type=USTORE);
+CREATE INDEX agent_id_user_id ON agent_search_history (agent_id, user_id);
+CREATE INDEX idx_user_id ON agent_search_history (user_id);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_search_memory (
-    id bigint DEFAULT nextval('agent_search_memory_id_seq'::regclass) NOT NULL,
-    agent_id character varying(128) COLLATE "C" NOT NULL,
-    session_no character varying(50) COLLATE "C" NOT NULL,
-    mem_type character varying(128) COLLATE "C" NOT NULL,
-    mem_content text,
-    generated_time character varying(40) COLLATE "C" NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    agent_id               VARCHAR(128) NOT NULL,
+    session_no             VARCHAR(50) NOT NULL,
+    mem_type               VARCHAR(128) NOT NULL,
+    mem_content            TEXT,
+    generated_time         VARCHAR(40) NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE agent_search_memory IS '智能体问答记录表';
 COMMENT ON COLUMN agent_search_memory.id IS 'ID';
 COMMENT ON COLUMN agent_search_memory.agent_id IS '智能体ID';
@@ -349,30 +280,28 @@ COMMENT ON COLUMN agent_search_memory.session_no IS '会话号';
 COMMENT ON COLUMN agent_search_memory.mem_type IS '记忆类型';
 COMMENT ON COLUMN agent_search_memory.mem_content IS '记忆内容';
 COMMENT ON COLUMN agent_search_memory.generated_time IS '生成时间';
-CREATE INDEX idx_mem_type ON agent_search_memory USING ubtree (mem_type) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_search_memory ADD CONSTRAINT agent_search_memory_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE INDEX idx_mem_type ON agent_search_memory (mem_type);
 
-SET search_path = bosz_test;
 CREATE TABLE agent_tool_call_message (
-    session_no character varying(100) COLLATE "C" NOT NULL,
-    tool_name character varying(128) COLLATE "C" NOT NULL,
-    call_id character varying(200) COLLATE "C" NOT NULL,
-    agent_id character varying(32) COLLATE "C" NOT NULL,
-    parallel_key character varying(256) COLLATE "C" NOT NULL,
-    tool_args text,
-    agent_name character varying(128) COLLATE "C" NOT NULL,
-    start_time character varying(40) COLLATE "C" NOT NULL,
-    call_time character varying(40) COLLATE "C" NOT NULL,
-    finish_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    interrupt_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    tool_result text,
-    interrupt_result text,
-    status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    state_store_path character varying(512) COLLATE "C" DEFAULT ''::character varying,
-    session_msg_no character varying(128) COLLATE "C" DEFAULT ''::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    session_no             VARCHAR(100) NOT NULL,
+    tool_name              VARCHAR(128) NOT NULL,
+    call_id                VARCHAR(200) NOT NULL,
+    agent_id               VARCHAR(32) NOT NULL,
+    parallel_key           VARCHAR(256) NOT NULL,
+    tool_args              TEXT,
+    agent_name             VARCHAR(128) NOT NULL,
+    start_time             VARCHAR(40) NOT NULL,
+    call_time              VARCHAR(40) NOT NULL,
+    finish_time            VARCHAR(40),
+    end_time               VARCHAR(40),
+    interrupt_time         VARCHAR(40),
+    tool_result            TEXT,
+    interrupt_result       TEXT,
+    status                 VARCHAR(20),
+    state_store_path       VARCHAR(512) DEFAULT '',
+    session_msg_no         VARCHAR(128) DEFAULT '' NOT NULL,
+    PRIMARY KEY (session_no, tool_name, call_id, parallel_key)
+);
 COMMENT ON TABLE agent_tool_call_message IS '智能体工具调用记录表';
 COMMENT ON COLUMN agent_tool_call_message.tool_name IS '工具名称';
 COMMENT ON COLUMN agent_tool_call_message.call_id IS '调用ID';
@@ -385,22 +314,20 @@ COMMENT ON COLUMN agent_tool_call_message.end_time IS '结束时间';
 COMMENT ON COLUMN agent_tool_call_message.interrupt_time IS '中断时间';
 COMMENT ON COLUMN agent_tool_call_message.interrupt_result IS '中断结果';
 COMMENT ON COLUMN agent_tool_call_message.status IS '工具调用结果状态';
-CREATE INDEX start_time ON agent_tool_call_message USING ubtree (start_time) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX session_no ON agent_tool_call_message USING ubtree (session_no) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX idx_call_id ON agent_tool_call_message USING ubtree (call_id) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE agent_tool_call_message ADD CONSTRAINT agent_tool_call_message_pkey PRIMARY KEY USING ubtree  (session_no, tool_name, call_id, parallel_key) WITH (storage_type=USTORE);
+CREATE INDEX start_time ON agent_tool_call_message (start_time);
+CREATE INDEX session_no ON agent_tool_call_message (session_no);
+CREATE INDEX idx_call_id ON agent_tool_call_message (call_id);
 
-SET search_path = bosz_test;
 CREATE TABLE ai_agent_info (
-    ai_agent_id character varying(64) COLLATE "C" NOT NULL,
-    ai_agent_name character varying(255) COLLATE "C" NOT NULL,
-    input_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    data_metric_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(10) COLLATE "C" NOT NULL,
-    agent_topic character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    ai_agent_id            VARCHAR(64) NOT NULL,
+    ai_agent_name          VARCHAR(255) NOT NULL,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    data_metric_id         VARCHAR(64),
+    status                 VARCHAR(10) NOT NULL,
+    agent_topic            VARCHAR(80) DEFAULT '' NOT NULL,
+    PRIMARY KEY (ai_agent_id)
+);
 COMMENT ON TABLE ai_agent_info IS '主题智能体信息表';
 COMMENT ON COLUMN ai_agent_info.ai_agent_id IS '主题智能体ID';
 COMMENT ON COLUMN ai_agent_info.ai_agent_name IS '主题智能体名称';
@@ -408,23 +335,21 @@ COMMENT ON COLUMN ai_agent_info.input_time IS '创建时间';
 COMMENT ON COLUMN ai_agent_info.update_time IS '更新时间';
 COMMENT ON COLUMN ai_agent_info.data_metric_id IS '主题智能体关联的工作流指标ID';
 COMMENT ON COLUMN ai_agent_info.status IS '标志位';
-ALTER TABLE ai_agent_info ADD CONSTRAINT ai_agent_info_pkey PRIMARY KEY USING ubtree  (ai_agent_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ai_component_config (
-    id integer DEFAULT nextval('ai_component_config_id_seq'::regclass) NOT NULL,
-    catalog_code character varying(100) COLLATE "C" NOT NULL,
-    catalog_name character varying(200) COLLATE "C" NOT NULL,
-    catlaog_classification character varying(40) COLLATE "C" NOT NULL,
-    catalog_status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    catalog_desc text,
-    icon character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    order_no integer,
-    catalog_prompt character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    catalog_code           VARCHAR(100) NOT NULL,
+    catalog_name           VARCHAR(200) NOT NULL,
+    catlaog_classification VARCHAR(40) NOT NULL,
+    catalog_status         VARCHAR(2),
+    input_time             VARCHAR(40),
+    update_time            VARCHAR(40),
+    catalog_desc           TEXT,
+    icon                   VARCHAR(500),
+    order_no               INT,
+    catalog_prompt         VARCHAR(1000),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ai_component_config.id IS 'id';
 COMMENT ON COLUMN ai_component_config.catalog_code IS '组件code';
 COMMENT ON COLUMN ai_component_config.catalog_name IS '组件名称';
@@ -435,23 +360,21 @@ COMMENT ON COLUMN ai_component_config.update_time IS '更新时间';
 COMMENT ON COLUMN ai_component_config.icon IS '组件图标';
 COMMENT ON COLUMN ai_component_config.order_no IS '排序';
 COMMENT ON COLUMN ai_component_config.catalog_prompt IS '组件提示语';
-ALTER TABLE ai_component_config ADD CONSTRAINT catalog_code UNIQUE USING ubtree (catalog_code) WITH (storage_type=USTORE);
-ALTER TABLE ai_component_config ADD CONSTRAINT ai_component_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX catalog_code ON ai_component_config (catalog_code);
 
-SET search_path = bosz_test;
 CREATE TABLE ai_menu_config (
-    id character varying(32) COLLATE "C" NOT NULL,
-    menu_code character varying(200) COLLATE "C" NOT NULL,
-    menu_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    url character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    input_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    order_num integer DEFAULT 0,
-    icon character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    component_url character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    menu_code              VARCHAR(200) NOT NULL,
+    menu_name              VARCHAR(200),
+    status                 VARCHAR(2) DEFAULT 'Y',
+    url                    VARCHAR(500),
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    order_num              INT DEFAULT 0,
+    icon                   VARCHAR(500),
+    component_url          VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE ai_menu_config IS '千寻菜单配置表';
 COMMENT ON COLUMN ai_menu_config.menu_code IS '菜单编码';
 COMMENT ON COLUMN ai_menu_config.menu_name IS '菜单名称';
@@ -462,22 +385,20 @@ COMMENT ON COLUMN ai_menu_config.update_time IS '更新时间';
 COMMENT ON COLUMN ai_menu_config.order_num IS '排序';
 COMMENT ON COLUMN ai_menu_config.icon IS '菜单图标';
 COMMENT ON COLUMN ai_menu_config.component_url IS '菜单前端组件地址';
-CREATE INDEX input_time_idx ON ai_menu_config USING ubtree (input_time) WITH (storage_type=USTORE) TABLESPACE pg_default;
-CREATE INDEX menu_code_idx ON ai_menu_config USING ubtree (menu_code) WITH (storage_type=USTORE) TABLESPACE pg_default;
-ALTER TABLE ai_menu_config ADD CONSTRAINT ai_menu_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE INDEX input_time_idx ON ai_menu_config (input_time);
+CREATE INDEX menu_code_idx ON ai_menu_config (menu_code);
 
-SET search_path = bosz_test;
 CREATE TABLE amar_claw_memory_backups (
-    _id bigint DEFAULT nextval('amar_claw_memory_backups__id_seq'::regclass) NOT NULL,
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" NOT NULL,
-    container_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    backup_type character varying(20) COLLATE "C" DEFAULT 'auto'::character varying,
-    backup_path character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    backup_size bigint,
-    created_at timestamp without time zone DEFAULT pg_systimestamp()
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    id                     VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(32) NOT NULL,
+    container_id           VARCHAR(32),
+    backup_type            VARCHAR(20) DEFAULT 'auto',
+    backup_path            VARCHAR(500),
+    backup_size            BIGINT,
+    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (_id)
+);
 COMMENT ON TABLE amar_claw_memory_backups IS '记忆备份表';
 COMMENT ON COLUMN amar_claw_memory_backups._id IS '主键ID';
 COMMENT ON COLUMN amar_claw_memory_backups.id IS '备份ID';
@@ -487,113 +408,109 @@ COMMENT ON COLUMN amar_claw_memory_backups.backup_type IS '备份类型: auto/ma
 COMMENT ON COLUMN amar_claw_memory_backups.backup_path IS '备份路径';
 COMMENT ON COLUMN amar_claw_memory_backups.backup_size IS '备份大小';
 COMMENT ON COLUMN amar_claw_memory_backups.created_at IS '创建时间';
-ALTER TABLE amar_claw_memory_backups ADD CONSTRAINT amar_claw_memory_backups_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE api_db_cache (
-    id character varying(32) COLLATE "C" NOT NULL,
-    cache_key character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    cache_value text,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    cache_key              VARCHAR(100),
+    cache_value            TEXT,
+    input_time             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE api_db_cache IS '接口缓存表';
-ALTER TABLE api_db_cache ADD CONSTRAINT api_db_cache_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE app_api_financial_analysis_dd_cashflow (
-    userid character varying(50) COLLATE "C" NOT NULL,
-    reportdate character varying(50) COLLATE "C" NOT NULL,
-    combinetype character varying(50) COLLATE "C" NOT NULL,
-    companyname character varying(200) COLLATE "C" NOT NULL,
-    sessionno character varying(50) COLLATE "C" NOT NULL,
-    excelid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    excelurl character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    uptime timestamp without time zone,
-    reportno character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    acceptinvrec numeric(38,18) DEFAULT NULL::numeric,
-    addpledgetdeposit numeric(38,18) DEFAULT NULL::numeric,
-    buyfilassetpay numeric(38,18) DEFAULT NULL::numeric,
-    buygoodsservicepay numeric(38,18) DEFAULT NULL::numeric,
-    buysubsidiarypay numeric(38,18) DEFAULT NULL::numeric,
-    cashequibeginning numeric(38,18) DEFAULT NULL::numeric,
-    cashequiending numeric(38,18) DEFAULT NULL::numeric,
-    cashequiendingbalance numeric(38,18) DEFAULT NULL::numeric,
-    cashequiendingother numeric(38,18) DEFAULT NULL::numeric,
-    dispfilassetrec numeric(38,18) DEFAULT NULL::numeric,
-    disposalinvrec numeric(38,18) DEFAULT NULL::numeric,
-    dispsubsidiaryrec numeric(38,18) DEFAULT NULL::numeric,
-    divipay numeric(38,18) DEFAULT NULL::numeric,
-    diviprofitorintpay numeric(38,18) DEFAULT NULL::numeric,
-    effectexchangerate numeric(38,18) DEFAULT NULL::numeric,
-    employeepay numeric(38,18) DEFAULT NULL::numeric,
-    finaflowbalance numeric(38,18) DEFAULT NULL::numeric,
-    finaflowinbalance numeric(38,18) DEFAULT NULL::numeric,
-    finaflowinother numeric(38,18) DEFAULT NULL::numeric,
-    finaflowother numeric(38,18) DEFAULT NULL::numeric,
-    finaflowoutbalance numeric(38,18) DEFAULT NULL::numeric,
-    finaflowoutother numeric(38,18) DEFAULT NULL::numeric,
-    getsubsidiarypay numeric(38,18) DEFAULT NULL::numeric,
-    indemnitypay numeric(38,18) DEFAULT NULL::numeric,
-    intandcommpay numeric(38,18) DEFAULT NULL::numeric,
-    intandcommrec numeric(38,18) DEFAULT NULL::numeric,
-    invflowbalance numeric(38,18) DEFAULT NULL::numeric,
-    invflowinbalance numeric(38,18) DEFAULT NULL::numeric,
-    invflowinother numeric(38,18) DEFAULT NULL::numeric,
-    invflowother numeric(38,18) DEFAULT NULL::numeric,
-    invflowoutbalance numeric(38,18) DEFAULT NULL::numeric,
-    invflowoutother numeric(38,18) DEFAULT NULL::numeric,
-    invincomerec numeric(38,18) DEFAULT NULL::numeric,
-    invpay numeric(38,18) DEFAULT NULL::numeric,
-    issuebondrec numeric(38,18) DEFAULT NULL::numeric,
-    loanrec numeric(38,18) DEFAULT NULL::numeric,
-    ndloanadvances numeric(38,18) DEFAULT NULL::numeric,
-    netfinacashflow numeric(38,18) DEFAULT NULL::numeric,
-    netinvcashflow numeric(38,18) DEFAULT NULL::numeric,
-    netoperatecashflow numeric(38,18) DEFAULT NULL::numeric,
-    netrirec numeric(38,18) DEFAULT NULL::numeric,
-    niborrowfromcbank numeric(38,18) DEFAULT NULL::numeric,
-    niborrowfromfi numeric(38,18) DEFAULT NULL::numeric,
-    niborrowfund numeric(38,18) DEFAULT NULL::numeric,
-    nibuybackfund numeric(38,18) DEFAULT NULL::numeric,
-    nicashequi numeric(38,18) DEFAULT NULL::numeric,
-    nicashequibalance numeric(38,18) DEFAULT NULL::numeric,
-    nicashequiother numeric(38,18) DEFAULT NULL::numeric,
-    nideposit numeric(38,18) DEFAULT NULL::numeric,
-    nidepositincbankfi numeric(38,18) DEFAULT NULL::numeric,
-    nidisptradefasset numeric(38,18) DEFAULT NULL::numeric,
-    niinsureddepositinv numeric(38,18) DEFAULT NULL::numeric,
-    niloanadvances numeric(38,18) DEFAULT NULL::numeric,
-    nipledgeloan numeric(38,18) DEFAULT NULL::numeric,
-    operateflowbalance numeric(38,18) DEFAULT NULL::numeric,
-    operateflowinbalance numeric(38,18) DEFAULT NULL::numeric,
-    operateflowinother numeric(38,18) DEFAULT NULL::numeric,
-    operateflowother numeric(38,18) DEFAULT NULL::numeric,
-    operateflowoutbalance numeric(38,18) DEFAULT NULL::numeric,
-    operateflowoutother numeric(38,18) DEFAULT NULL::numeric,
-    otherfinapay numeric(38,18) DEFAULT NULL::numeric,
-    otherfinarec numeric(38,18) DEFAULT NULL::numeric,
-    otherinvpay numeric(38,18) DEFAULT NULL::numeric,
-    otherinvrec numeric(38,18) DEFAULT NULL::numeric,
-    otheroperatepay numeric(38,18) DEFAULT NULL::numeric,
-    otheroperaterec numeric(38,18) DEFAULT NULL::numeric,
-    premiumrec numeric(38,18) DEFAULT NULL::numeric,
-    reducepledgetdeposit numeric(38,18) DEFAULT NULL::numeric,
-    repaydebtpay numeric(38,18) DEFAULT NULL::numeric,
-    salegoodsservicerec numeric(38,18) DEFAULT NULL::numeric,
-    subsidiaryaccept numeric(38,18) DEFAULT NULL::numeric,
-    subsidiarypay numeric(38,18) DEFAULT NULL::numeric,
-    subsidiaryreductcapital numeric(38,18) DEFAULT NULL::numeric,
-    sumfinaflowin numeric(38,18) DEFAULT NULL::numeric,
-    sumfinaflowout numeric(38,18) DEFAULT NULL::numeric,
-    suminvflowin numeric(38,18) DEFAULT NULL::numeric,
-    suminvflowout numeric(38,18) DEFAULT NULL::numeric,
-    sumoperateflowin numeric(38,18) DEFAULT NULL::numeric,
-    sumoperateflowout numeric(38,18) DEFAULT NULL::numeric,
-    taxpay numeric(38,18) DEFAULT NULL::numeric,
-    taxreturnrec numeric(38,18) DEFAULT NULL::numeric
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    userid                  VARCHAR(50) NOT NULL,
+    reportdate              VARCHAR(50) NOT NULL,
+    combinetype             VARCHAR(50) NOT NULL,
+    companyname             VARCHAR(200) NOT NULL,
+    sessionno               VARCHAR(50) NOT NULL,
+    excelid                 VARCHAR(50),
+    excelurl                VARCHAR(500),
+    uptime                  TIMESTAMP,
+    reportno                VARCHAR(50),
+    acceptinvrec            DECIMAL(38,18),
+    addpledgetdeposit       DECIMAL(38,18),
+    buyfilassetpay          DECIMAL(38,18),
+    buygoodsservicepay      DECIMAL(38,18),
+    buysubsidiarypay        DECIMAL(38,18),
+    cashequibeginning       DECIMAL(38,18),
+    cashequiending          DECIMAL(38,18),
+    cashequiendingbalance   DECIMAL(38,18),
+    cashequiendingother     DECIMAL(38,18),
+    dispfilassetrec         DECIMAL(38,18),
+    disposalinvrec          DECIMAL(38,18),
+    dispsubsidiaryrec       DECIMAL(38,18),
+    divipay                 DECIMAL(38,18),
+    diviprofitorintpay      DECIMAL(38,18),
+    effectexchangerate      DECIMAL(38,18),
+    employeepay             DECIMAL(38,18),
+    finaflowbalance         DECIMAL(38,18),
+    finaflowinbalance       DECIMAL(38,18),
+    finaflowinother         DECIMAL(38,18),
+    finaflowother           DECIMAL(38,18),
+    finaflowoutbalance      DECIMAL(38,18),
+    finaflowoutother        DECIMAL(38,18),
+    getsubsidiarypay        DECIMAL(38,18),
+    indemnitypay            DECIMAL(38,18),
+    intandcommpay           DECIMAL(38,18),
+    intandcommrec           DECIMAL(38,18),
+    invflowbalance          DECIMAL(38,18),
+    invflowinbalance        DECIMAL(38,18),
+    invflowinother          DECIMAL(38,18),
+    invflowother            DECIMAL(38,18),
+    invflowoutbalance       DECIMAL(38,18),
+    invflowoutother         DECIMAL(38,18),
+    invincomerec            DECIMAL(38,18),
+    invpay                  DECIMAL(38,18),
+    issuebondrec            DECIMAL(38,18),
+    loanrec                 DECIMAL(38,18),
+    ndloanadvances          DECIMAL(38,18),
+    netfinacashflow         DECIMAL(38,18),
+    netinvcashflow          DECIMAL(38,18),
+    netoperatecashflow      DECIMAL(38,18),
+    netrirec                DECIMAL(38,18),
+    niborrowfromcbank       DECIMAL(38,18),
+    niborrowfromfi          DECIMAL(38,18),
+    niborrowfund            DECIMAL(38,18),
+    nibuybackfund           DECIMAL(38,18),
+    nicashequi              DECIMAL(38,18),
+    nicashequibalance       DECIMAL(38,18),
+    nicashequiother         DECIMAL(38,18),
+    nideposit               DECIMAL(38,18),
+    nidepositincbankfi      DECIMAL(38,18),
+    nidisptradefasset       DECIMAL(38,18),
+    niinsureddepositinv     DECIMAL(38,18),
+    niloanadvances          DECIMAL(38,18),
+    nipledgeloan            DECIMAL(38,18),
+    operateflowbalance      DECIMAL(38,18),
+    operateflowinbalance    DECIMAL(38,18),
+    operateflowinother      DECIMAL(38,18),
+    operateflowother        DECIMAL(38,18),
+    operateflowoutbalance   DECIMAL(38,18),
+    operateflowoutother     DECIMAL(38,18),
+    otherfinapay            DECIMAL(38,18),
+    otherfinarec            DECIMAL(38,18),
+    otherinvpay             DECIMAL(38,18),
+    otherinvrec             DECIMAL(38,18),
+    otheroperatepay         DECIMAL(38,18),
+    otheroperaterec         DECIMAL(38,18),
+    premiumrec              DECIMAL(38,18),
+    reducepledgetdeposit    DECIMAL(38,18),
+    repaydebtpay            DECIMAL(38,18),
+    salegoodsservicerec     DECIMAL(38,18),
+    subsidiaryaccept        DECIMAL(38,18),
+    subsidiarypay           DECIMAL(38,18),
+    subsidiaryreductcapital DECIMAL(38,18),
+    sumfinaflowin           DECIMAL(38,18),
+    sumfinaflowout          DECIMAL(38,18),
+    suminvflowin            DECIMAL(38,18),
+    suminvflowout           DECIMAL(38,18),
+    sumoperateflowin        DECIMAL(38,18),
+    sumoperateflowout       DECIMAL(38,18),
+    taxpay                  DECIMAL(38,18),
+    taxreturnrec            DECIMAL(38,18),
+    PRIMARY KEY (userid, reportdate, combinetype, companyname)
+);
 COMMENT ON TABLE app_api_financial_analysis_dd_cashflow IS '现金流量表';
 COMMENT ON COLUMN app_api_financial_analysis_dd_cashflow.userid IS '用户id';
 COMMENT ON COLUMN app_api_financial_analysis_dd_cashflow.reportdate IS '报表日期';
@@ -685,171 +602,169 @@ COMMENT ON COLUMN app_api_financial_analysis_dd_cashflow.sumoperateflowin IS '�
 COMMENT ON COLUMN app_api_financial_analysis_dd_cashflow.sumoperateflowout IS '经营活动现金流出小计';
 COMMENT ON COLUMN app_api_financial_analysis_dd_cashflow.taxpay IS '支付的各项税费';
 COMMENT ON COLUMN app_api_financial_analysis_dd_cashflow.taxreturnrec IS '收到的税费返还';
-ALTER TABLE app_api_financial_analysis_dd_cashflow ADD CONSTRAINT app_api_financial_analysis_dd_cashflow_pkey PRIMARY KEY USING ubtree  (userid, reportdate, combinetype, companyname) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE app_api_financial_analysis_dd_debt (
-    userid character varying(50) COLLATE "C" NOT NULL,
-    reportdate character varying(50) COLLATE "C" NOT NULL,
-    combinetype character varying(50) COLLATE "C" NOT NULL,
-    companyname character varying(200) COLLATE "C" NOT NULL,
-    sessionno character varying(50) COLLATE "C" NOT NULL,
-    excelid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    excelurl character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    uptime timestamp without time zone,
-    reportno character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    monetaryfund numeric(38,18) DEFAULT NULL::numeric,
-    settlementprovision numeric(38,18) DEFAULT NULL::numeric,
-    lendfund numeric(38,18) DEFAULT NULL::numeric,
-    tradefasset numeric(38,18) DEFAULT NULL::numeric,
-    billrec numeric(38,18) DEFAULT NULL::numeric,
-    accountrec numeric(38,18) DEFAULT NULL::numeric,
-    advancepay numeric(38,18) DEFAULT NULL::numeric,
-    premiumrec numeric(38,18) DEFAULT NULL::numeric,
-    rirec numeric(38,18) DEFAULT NULL::numeric,
-    ricontactreserverec numeric(38,18) DEFAULT NULL::numeric,
-    interestrec numeric(38,18) DEFAULT NULL::numeric,
-    dividendrec numeric(38,18) DEFAULT NULL::numeric,
-    otherrec numeric(38,18) DEFAULT NULL::numeric,
-    exportrebaterec numeric(38,18) DEFAULT NULL::numeric,
-    subsidyrec numeric(38,18) DEFAULT NULL::numeric,
-    internalrec numeric(38,18) DEFAULT NULL::numeric,
-    buysellbackfasset numeric(38,18) DEFAULT NULL::numeric,
-    inventory numeric(38,18) DEFAULT NULL::numeric,
-    nonlassetoneyear numeric(38,18) DEFAULT NULL::numeric,
-    otherlasset numeric(38,18) DEFAULT NULL::numeric,
-    lassetother numeric(38,18) DEFAULT NULL::numeric,
-    lassetbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumlasset numeric(38,18) DEFAULT NULL::numeric,
-    loanadvances numeric(38,18) DEFAULT NULL::numeric,
-    saleablefasset numeric(38,18) DEFAULT NULL::numeric,
-    heldmaturityinv numeric(38,18) DEFAULT NULL::numeric,
-    ltrec numeric(38,18) DEFAULT NULL::numeric,
-    ltequityinv numeric(38,18) DEFAULT NULL::numeric,
-    estateinvest numeric(38,18) DEFAULT NULL::numeric,
-    fixedasset numeric(38,18) DEFAULT NULL::numeric,
-    constructionprogress numeric(38,18) DEFAULT NULL::numeric,
-    constructionmaterial numeric(38,18) DEFAULT NULL::numeric,
-    liquidatefixedasset numeric(38,18) DEFAULT NULL::numeric,
-    productbiologyasset numeric(38,18) DEFAULT NULL::numeric,
-    oilgasasset numeric(38,18) DEFAULT NULL::numeric,
-    intangibleasset numeric(38,18) DEFAULT NULL::numeric,
-    developexp numeric(38,18) DEFAULT NULL::numeric,
-    goodwill numeric(38,18) DEFAULT NULL::numeric,
-    ltdeferasset numeric(38,18) DEFAULT NULL::numeric,
-    deferincometaxasset numeric(38,18) DEFAULT NULL::numeric,
-    othernonlasset numeric(38,18) DEFAULT NULL::numeric,
-    nonlassetother numeric(38,18) DEFAULT NULL::numeric,
-    nonlassetbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumnonlasset numeric(38,18) DEFAULT NULL::numeric,
-    assetother numeric(38,18) DEFAULT NULL::numeric,
-    assetbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumasset numeric(38,18) DEFAULT NULL::numeric,
-    stborrow numeric(38,18) DEFAULT NULL::numeric,
-    borrowfromcbank numeric(38,18) DEFAULT NULL::numeric,
-    deposit numeric(38,18) DEFAULT NULL::numeric,
-    borrowfund numeric(38,18) DEFAULT NULL::numeric,
-    tradefliab numeric(38,18) DEFAULT NULL::numeric,
-    billpay numeric(38,18) DEFAULT NULL::numeric,
-    accountpay numeric(38,18) DEFAULT NULL::numeric,
-    advancereceive numeric(38,18) DEFAULT NULL::numeric,
-    sellbuybackfasset numeric(38,18) DEFAULT NULL::numeric,
-    commpay numeric(38,18) DEFAULT NULL::numeric,
-    salarypay numeric(38,18) DEFAULT NULL::numeric,
-    taxpay numeric(38,18) DEFAULT NULL::numeric,
-    interestpay numeric(38,18) DEFAULT NULL::numeric,
-    dividendpay numeric(38,18) DEFAULT NULL::numeric,
-    ripay numeric(38,18) DEFAULT NULL::numeric,
-    internalpay numeric(38,18) DEFAULT NULL::numeric,
-    otherpay numeric(38,18) DEFAULT NULL::numeric,
-    anticipatelliab numeric(38,18) DEFAULT NULL::numeric,
-    contactreserve numeric(38,18) DEFAULT NULL::numeric,
-    agenttradesecurity numeric(38,18) DEFAULT NULL::numeric,
-    agentuwsecurity numeric(38,18) DEFAULT NULL::numeric,
-    deferincomeoneyear numeric(38,18) DEFAULT NULL::numeric,
-    stbondrec numeric(38,18) DEFAULT NULL::numeric,
-    nonlliaboneyear numeric(38,18) DEFAULT NULL::numeric,
-    otherlliab numeric(38,18) DEFAULT NULL::numeric,
-    lliabother numeric(38,18) DEFAULT NULL::numeric,
-    lliabbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumlliab numeric(38,18) DEFAULT NULL::numeric,
-    ltborrow numeric(38,18) DEFAULT NULL::numeric,
-    bondpay numeric(38,18) DEFAULT NULL::numeric,
-    sustainbond numeric(38,18) DEFAULT NULL::numeric,
-    preferstocbond numeric(38,18) DEFAULT NULL::numeric,
-    ltaccountpay numeric(38,18) DEFAULT NULL::numeric,
-    specialpay numeric(38,18) DEFAULT NULL::numeric,
-    anticipateliab numeric(38,18) DEFAULT NULL::numeric,
-    deferincome numeric(38,18) DEFAULT NULL::numeric,
-    deferincometaxliab numeric(38,18) DEFAULT NULL::numeric,
-    othernonlliab numeric(38,18) DEFAULT NULL::numeric,
-    nonlliabother numeric(38,18) DEFAULT NULL::numeric,
-    nonlliabbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumnonlliab numeric(38,18) DEFAULT NULL::numeric,
-    liabother numeric(38,18) DEFAULT NULL::numeric,
-    liabbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumliab numeric(38,18) DEFAULT NULL::numeric,
-    sharecapital numeric(38,18) DEFAULT NULL::numeric,
-    capitalreserve numeric(38,18) DEFAULT NULL::numeric,
-    inventoryshare numeric(38,18) DEFAULT NULL::numeric,
-    specialreserve numeric(38,18) DEFAULT NULL::numeric,
-    surplusreserve numeric(38,18) DEFAULT NULL::numeric,
-    generalriskprepare numeric(38,18) DEFAULT NULL::numeric,
-    unconfirminvloss numeric(38,18) DEFAULT NULL::numeric,
-    retainedearning numeric(38,18) DEFAULT NULL::numeric,
-    plancashdivi numeric(38,18) DEFAULT NULL::numeric,
-    diffconversionfc numeric(38,18) DEFAULT NULL::numeric,
-    parentequityother numeric(38,18) DEFAULT NULL::numeric,
-    parentequitybalance numeric(38,18) DEFAULT NULL::numeric,
-    sumparentequity numeric(38,18) DEFAULT NULL::numeric,
-    minorityequity numeric(38,18) DEFAULT NULL::numeric,
-    shequityother numeric(38,18) DEFAULT NULL::numeric,
-    shequitybalance numeric(38,18) DEFAULT NULL::numeric,
-    sumshequity numeric(48,18) DEFAULT NULL::numeric,
-    liabshequityother numeric(38,18) DEFAULT NULL::numeric,
-    liabshequitybalance numeric(38,18) DEFAULT NULL::numeric,
-    sumliabshequity numeric(38,18) DEFAULT NULL::numeric,
-    ltsalarypay numeric(38,18) DEFAULT NULL::numeric,
-    fvaluefasset numeric(38,18) DEFAULT NULL::numeric,
-    definefvaluefasset numeric(38,18) DEFAULT NULL::numeric,
-    fvaluefliab numeric(38,18) DEFAULT NULL::numeric,
-    definefvaluefliab numeric(38,18) DEFAULT NULL::numeric,
-    otherequity numeric(38,18) DEFAULT NULL::numeric,
-    otherequityother numeric(38,18) DEFAULT NULL::numeric,
-    othercincome numeric(38,18) DEFAULT NULL::numeric,
-    clheldsaleass numeric(38,18) DEFAULT NULL::numeric,
-    clheldsaleliab numeric(38,18) DEFAULT NULL::numeric,
-    othernonfasset numeric(38,18) DEFAULT NULL::numeric,
-    otherequityinv numeric(38,18) DEFAULT NULL::numeric,
-    derivefliab numeric(38,18) DEFAULT NULL::numeric,
-    contractliab numeric(38,18) DEFAULT NULL::numeric,
-    amorcostfasset numeric(38,18) DEFAULT NULL::numeric,
-    heldsaleass numeric(38,18) DEFAULT NULL::numeric,
-    fvaluecompfasset numeric(38,18) DEFAULT NULL::numeric,
-    amorcostfliabfld numeric(38,18) DEFAULT NULL::numeric,
-    drawingexp numeric(38,18) DEFAULT NULL::numeric,
-    contractasset numeric(38,18) DEFAULT NULL::numeric,
-    accountbillrec numeric(38,18) DEFAULT NULL::numeric,
-    heldsaleliab numeric(38,18) DEFAULT NULL::numeric,
-    derivefasset numeric(38,18) DEFAULT NULL::numeric,
-    accountbillpay numeric(38,18) DEFAULT NULL::numeric,
-    shortfinancing numeric(30,18) DEFAULT NULL::numeric,
-    credinv numeric(38,18) DEFAULT NULL::numeric,
-    fvaluecompfassetfld numeric(38,18) DEFAULT NULL::numeric,
-    othcredinv numeric(38,18) DEFAULT NULL::numeric,
-    marginoutfund numeric(30,4) DEFAULT NULL::numeric,
-    amorcostfliab numeric(38,18) DEFAULT NULL::numeric,
-    amorcostfassetfld numeric(38,18) DEFAULT NULL::numeric,
-    totalotherrece numeric(38,18) DEFAULT NULL::numeric,
-    financerece numeric(38,18) DEFAULT NULL::numeric,
-    userightasset numeric(38,18) DEFAULT NULL::numeric,
-    leaseliab numeric(38,18) DEFAULT NULL::numeric,
-    tradefinassetnotfvtpl numeric(38,18) DEFAULT NULL::numeric,
-    tradefinliabnotfvtpl numeric(38,18) DEFAULT NULL::numeric,
-    totalotherpayable numeric(38,18) DEFAULT NULL::numeric,
-    consumptivebiologicalasset numeric(30,4) DEFAULT NULL::numeric
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    userid                     VARCHAR(50) NOT NULL,
+    reportdate                 VARCHAR(50) NOT NULL,
+    combinetype                VARCHAR(50) NOT NULL,
+    companyname                VARCHAR(200) NOT NULL,
+    sessionno                  VARCHAR(50) NOT NULL,
+    excelid                    VARCHAR(50),
+    excelurl                   VARCHAR(500),
+    uptime                     TIMESTAMP,
+    reportno                   VARCHAR(50),
+    monetaryfund               DECIMAL(38,18),
+    settlementprovision        DECIMAL(38,18),
+    lendfund                   DECIMAL(38,18),
+    tradefasset                DECIMAL(38,18),
+    billrec                    DECIMAL(38,18),
+    accountrec                 DECIMAL(38,18),
+    advancepay                 DECIMAL(38,18),
+    premiumrec                 DECIMAL(38,18),
+    rirec                      DECIMAL(38,18),
+    ricontactreserverec        DECIMAL(38,18),
+    interestrec                DECIMAL(38,18),
+    dividendrec                DECIMAL(38,18),
+    otherrec                   DECIMAL(38,18),
+    exportrebaterec            DECIMAL(38,18),
+    subsidyrec                 DECIMAL(38,18),
+    internalrec                DECIMAL(38,18),
+    buysellbackfasset          DECIMAL(38,18),
+    inventory                  DECIMAL(38,18),
+    nonlassetoneyear           DECIMAL(38,18),
+    otherlasset                DECIMAL(38,18),
+    lassetother                DECIMAL(38,18),
+    lassetbalance              DECIMAL(38,18),
+    sumlasset                  DECIMAL(38,18),
+    loanadvances               DECIMAL(38,18),
+    saleablefasset             DECIMAL(38,18),
+    heldmaturityinv            DECIMAL(38,18),
+    ltrec                      DECIMAL(38,18),
+    ltequityinv                DECIMAL(38,18),
+    estateinvest               DECIMAL(38,18),
+    fixedasset                 DECIMAL(38,18),
+    constructionprogress       DECIMAL(38,18),
+    constructionmaterial       DECIMAL(38,18),
+    liquidatefixedasset        DECIMAL(38,18),
+    productbiologyasset        DECIMAL(38,18),
+    oilgasasset                DECIMAL(38,18),
+    intangibleasset            DECIMAL(38,18),
+    developexp                 DECIMAL(38,18),
+    goodwill                   DECIMAL(38,18),
+    ltdeferasset               DECIMAL(38,18),
+    deferincometaxasset        DECIMAL(38,18),
+    othernonlasset             DECIMAL(38,18),
+    nonlassetother             DECIMAL(38,18),
+    nonlassetbalance           DECIMAL(38,18),
+    sumnonlasset               DECIMAL(38,18),
+    assetother                 DECIMAL(38,18),
+    assetbalance               DECIMAL(38,18),
+    sumasset                   DECIMAL(38,18),
+    stborrow                   DECIMAL(38,18),
+    borrowfromcbank            DECIMAL(38,18),
+    deposit                    DECIMAL(38,18),
+    borrowfund                 DECIMAL(38,18),
+    tradefliab                 DECIMAL(38,18),
+    billpay                    DECIMAL(38,18),
+    accountpay                 DECIMAL(38,18),
+    advancereceive             DECIMAL(38,18),
+    sellbuybackfasset          DECIMAL(38,18),
+    commpay                    DECIMAL(38,18),
+    salarypay                  DECIMAL(38,18),
+    taxpay                     DECIMAL(38,18),
+    interestpay                DECIMAL(38,18),
+    dividendpay                DECIMAL(38,18),
+    ripay                      DECIMAL(38,18),
+    internalpay                DECIMAL(38,18),
+    otherpay                   DECIMAL(38,18),
+    anticipatelliab            DECIMAL(38,18),
+    contactreserve             DECIMAL(38,18),
+    agenttradesecurity         DECIMAL(38,18),
+    agentuwsecurity            DECIMAL(38,18),
+    deferincomeoneyear         DECIMAL(38,18),
+    stbondrec                  DECIMAL(38,18),
+    nonlliaboneyear            DECIMAL(38,18),
+    otherlliab                 DECIMAL(38,18),
+    lliabother                 DECIMAL(38,18),
+    lliabbalance               DECIMAL(38,18),
+    sumlliab                   DECIMAL(38,18),
+    ltborrow                   DECIMAL(38,18),
+    bondpay                    DECIMAL(38,18),
+    sustainbond                DECIMAL(38,18),
+    preferstocbond             DECIMAL(38,18),
+    ltaccountpay               DECIMAL(38,18),
+    specialpay                 DECIMAL(38,18),
+    anticipateliab             DECIMAL(38,18),
+    deferincome                DECIMAL(38,18),
+    deferincometaxliab         DECIMAL(38,18),
+    othernonlliab              DECIMAL(38,18),
+    nonlliabother              DECIMAL(38,18),
+    nonlliabbalance            DECIMAL(38,18),
+    sumnonlliab                DECIMAL(38,18),
+    liabother                  DECIMAL(38,18),
+    liabbalance                DECIMAL(38,18),
+    sumliab                    DECIMAL(38,18),
+    sharecapital               DECIMAL(38,18),
+    capitalreserve             DECIMAL(38,18),
+    inventoryshare             DECIMAL(38,18),
+    specialreserve             DECIMAL(38,18),
+    surplusreserve             DECIMAL(38,18),
+    generalriskprepare         DECIMAL(38,18),
+    unconfirminvloss           DECIMAL(38,18),
+    retainedearning            DECIMAL(38,18),
+    plancashdivi               DECIMAL(38,18),
+    diffconversionfc           DECIMAL(38,18),
+    parentequityother          DECIMAL(38,18),
+    parentequitybalance        DECIMAL(38,18),
+    sumparentequity            DECIMAL(38,18),
+    minorityequity             DECIMAL(38,18),
+    shequityother              DECIMAL(38,18),
+    shequitybalance            DECIMAL(38,18),
+    sumshequity                DECIMAL(48,18),
+    liabshequityother          DECIMAL(38,18),
+    liabshequitybalance        DECIMAL(38,18),
+    sumliabshequity            DECIMAL(38,18),
+    ltsalarypay                DECIMAL(38,18),
+    fvaluefasset               DECIMAL(38,18),
+    definefvaluefasset         DECIMAL(38,18),
+    fvaluefliab                DECIMAL(38,18),
+    definefvaluefliab          DECIMAL(38,18),
+    otherequity                DECIMAL(38,18),
+    otherequityother           DECIMAL(38,18),
+    othercincome               DECIMAL(38,18),
+    clheldsaleass              DECIMAL(38,18),
+    clheldsaleliab             DECIMAL(38,18),
+    othernonfasset             DECIMAL(38,18),
+    otherequityinv             DECIMAL(38,18),
+    derivefliab                DECIMAL(38,18),
+    contractliab               DECIMAL(38,18),
+    amorcostfasset             DECIMAL(38,18),
+    heldsaleass                DECIMAL(38,18),
+    fvaluecompfasset           DECIMAL(38,18),
+    amorcostfliabfld           DECIMAL(38,18),
+    drawingexp                 DECIMAL(38,18),
+    contractasset              DECIMAL(38,18),
+    accountbillrec             DECIMAL(38,18),
+    heldsaleliab               DECIMAL(38,18),
+    derivefasset               DECIMAL(38,18),
+    accountbillpay             DECIMAL(38,18),
+    shortfinancing             DECIMAL(30,18),
+    credinv                    DECIMAL(38,18),
+    fvaluecompfassetfld        DECIMAL(38,18),
+    othcredinv                 DECIMAL(38,18),
+    marginoutfund              DECIMAL(30,4),
+    amorcostfliab              DECIMAL(38,18),
+    amorcostfassetfld          DECIMAL(38,18),
+    totalotherrece             DECIMAL(38,18),
+    financerece                DECIMAL(38,18),
+    userightasset              DECIMAL(38,18),
+    leaseliab                  DECIMAL(38,18),
+    tradefinassetnotfvtpl      DECIMAL(38,18),
+    tradefinliabnotfvtpl       DECIMAL(38,18),
+    totalotherpayable          DECIMAL(38,18),
+    consumptivebiologicalasset DECIMAL(30,4),
+    PRIMARY KEY (userid, reportdate, combinetype, companyname)
+);
 COMMENT ON TABLE app_api_financial_analysis_dd_debt IS '资产负债表';
 COMMENT ON COLUMN app_api_financial_analysis_dd_debt.userid IS '用户id';
 COMMENT ON COLUMN app_api_financial_analysis_dd_debt.reportdate IS '报表日期';
@@ -1010,106 +925,104 @@ COMMENT ON COLUMN app_api_financial_analysis_dd_debt.tradefinassetnotfvtpl IS '�
 COMMENT ON COLUMN app_api_financial_analysis_dd_debt.tradefinliabnotfvtpl IS '交易性金融负债';
 COMMENT ON COLUMN app_api_financial_analysis_dd_debt.totalotherpayable IS '其他应付款合计';
 COMMENT ON COLUMN app_api_financial_analysis_dd_debt.consumptivebiologicalasset IS '消耗性生物资产';
-ALTER TABLE app_api_financial_analysis_dd_debt ADD CONSTRAINT app_api_financial_analysis_dd_debt_pkey PRIMARY KEY USING ubtree  (userid, reportdate, combinetype, companyname) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE app_api_financial_analysis_dd_profit (
-    userid character varying(50) COLLATE "C" NOT NULL,
-    reportdate character varying(50) COLLATE "C" NOT NULL,
-    combinetype character varying(50) COLLATE "C" NOT NULL,
-    companyname character varying(200) COLLATE "C" NOT NULL,
-    sessionno character varying(50) COLLATE "C" NOT NULL,
-    excelid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    excelurl character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    uptime timestamp without time zone,
-    reportno character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    assetdevalueloss numeric(38,18) DEFAULT NULL::numeric,
-    basiceps numeric(38,18) DEFAULT NULL::numeric,
-    cincomebalance1 numeric(38,18) DEFAULT NULL::numeric,
-    cincomebalance2 numeric(38,18) DEFAULT NULL::numeric,
-    combinednetprofitb numeric(38,18) DEFAULT NULL::numeric,
-    commexp numeric(38,18) DEFAULT NULL::numeric,
-    commreve numeric(38,18) DEFAULT NULL::numeric,
-    dilutedeps numeric(38,18) DEFAULT NULL::numeric,
-    exchangeincome numeric(38,18) DEFAULT NULL::numeric,
-    financeexp numeric(38,18) DEFAULT NULL::numeric,
-    fvalueincome numeric(38,18) DEFAULT NULL::numeric,
-    incometax numeric(38,18) DEFAULT NULL::numeric,
-    intexp numeric(38,18) DEFAULT NULL::numeric,
-    intreve numeric(38,18) DEFAULT NULL::numeric,
-    investincome numeric(38,18) DEFAULT NULL::numeric,
-    investjointincome numeric(38,18) DEFAULT NULL::numeric,
-    manageexp numeric(38,18) DEFAULT NULL::numeric,
-    minoritycincome numeric(38,18) DEFAULT NULL::numeric,
-    minorityincome numeric(38,18) DEFAULT NULL::numeric,
-    minorityothercincome numeric(38,18) DEFAULT NULL::numeric,
-    netcontactreserve numeric(38,18) DEFAULT NULL::numeric,
-    netindemnityexp numeric(38,18) DEFAULT NULL::numeric,
-    netprofit numeric(38,18) DEFAULT NULL::numeric,
-    netprofitbalance1 numeric(38,18) DEFAULT NULL::numeric,
-    netprofitbalance2 numeric(38,18) DEFAULT NULL::numeric,
-    netprofitother1 numeric(38,18) DEFAULT NULL::numeric,
-    netprofitother2 numeric(38,18) DEFAULT NULL::numeric,
-    nonlassetnetloss numeric(38,18) DEFAULT NULL::numeric,
-    nonoperateexp numeric(38,18) DEFAULT NULL::numeric,
-    nonoperatereve numeric(38,18) DEFAULT NULL::numeric,
-    operateexp numeric(38,18) DEFAULT NULL::numeric,
-    operateprofit numeric(38,18) DEFAULT NULL::numeric,
-    operateprofitbalance numeric(38,18) DEFAULT NULL::numeric,
-    operateprofitother numeric(38,18) DEFAULT NULL::numeric,
-    operatereve numeric(38,18) DEFAULT NULL::numeric,
-    operatetax numeric(38,18) DEFAULT NULL::numeric,
-    othercincome numeric(38,18) DEFAULT NULL::numeric,
-    otherexp numeric(38,18) DEFAULT NULL::numeric,
-    otherreve numeric(38,18) DEFAULT NULL::numeric,
-    parentcincome numeric(38,18) DEFAULT NULL::numeric,
-    parentnetprofit numeric(38,18) DEFAULT NULL::numeric,
-    parentothercincome numeric(38,18) DEFAULT NULL::numeric,
-    policydiviexp numeric(38,18) DEFAULT NULL::numeric,
-    premiumearned numeric(38,18) DEFAULT NULL::numeric,
-    rdexp numeric(38,18) DEFAULT NULL::numeric,
-    riexp numeric(38,18) DEFAULT NULL::numeric,
-    saleexp numeric(38,18) DEFAULT NULL::numeric,
-    sumcincome numeric(38,18) DEFAULT NULL::numeric,
-    sumprofit numeric(38,18) DEFAULT NULL::numeric,
-    sumprofitbalance numeric(38,18) DEFAULT NULL::numeric,
-    sumprofitother numeric(38,18) DEFAULT NULL::numeric,
-    surrenderpremium numeric(38,18) DEFAULT NULL::numeric,
-    totaloperateexp numeric(38,18) DEFAULT NULL::numeric,
-    totaloperateexpother numeric(38,18) DEFAULT NULL::numeric,
-    totaloperatereve numeric(38,18) DEFAULT NULL::numeric,
-    totaloperatereveother numeric(38,18) DEFAULT NULL::numeric,
-    unconfirminvloss numeric(38,18) DEFAULT NULL::numeric,
-    fvalueosalable numeric(38,18) DEFAULT NULL::numeric,
-    maturityrecsalable numeric(38,18) DEFAULT NULL::numeric,
-    effectivecaflhedging numeric(38,18) DEFAULT NULL::numeric,
-    diffconversionfc numeric(38,18) DEFAULT NULL::numeric,
-    othercincomeother numeric(38,18) DEFAULT NULL::numeric,
-    othercincomebalance numeric(38,18) DEFAULT NULL::numeric,
-    nonlassetreve numeric(38,18) DEFAULT NULL::numeric,
-    parothcinother numeric(38,18) DEFAULT NULL::numeric,
-    parothcinbala numeric(38,18) DEFAULT NULL::numeric,
-    combinedsumcincomeb numeric(38,18) DEFAULT NULL::numeric,
-    sumcincomeother numeric(38,18) DEFAULT NULL::numeric,
-    adisposalincome numeric(38,18) DEFAULT NULL::numeric,
-    continuousonprofit numeric(38,18) DEFAULT NULL::numeric,
-    terminationonprofit numeric(38,18) DEFAULT NULL::numeric,
-    miotherincome numeric(38,18) DEFAULT NULL::numeric,
-    ofwintexp numeric(38,18) DEFAULT NULL::numeric,
-    ofwintreve numeric(38,18) DEFAULT NULL::numeric,
-    otherequityinvfvalue numeric(38,18) DEFAULT NULL::numeric,
-    credriskfvalue numeric(38,18) DEFAULT NULL::numeric,
-    othcredinvfvalue numeric(38,18) DEFAULT NULL::numeric,
-    fassetrecother numeric(38,18) DEFAULT NULL::numeric,
-    othcredinvcred numeric(38,18) DEFAULT NULL::numeric,
-    creddevalueloss numeric(38,18) DEFAULT NULL::numeric,
-    netexhedgincome numeric(38,18) DEFAULT NULL::numeric,
-    ofwrdexp numeric(38,18) DEFAULT NULL::numeric,
-    acfendincome numeric(38,18) DEFAULT NULL::numeric,
-    assetimpairmentincome numeric(38,18) DEFAULT NULL::numeric,
-    creditimpairmentincome numeric(38,18) DEFAULT NULL::numeric
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    userid                 VARCHAR(50) NOT NULL,
+    reportdate             VARCHAR(50) NOT NULL,
+    combinetype            VARCHAR(50) NOT NULL,
+    companyname            VARCHAR(200) NOT NULL,
+    sessionno              VARCHAR(50) NOT NULL,
+    excelid                VARCHAR(50),
+    excelurl               VARCHAR(500),
+    uptime                 TIMESTAMP,
+    reportno               VARCHAR(50),
+    assetdevalueloss       DECIMAL(38,18),
+    basiceps               DECIMAL(38,18),
+    cincomebalance1        DECIMAL(38,18),
+    cincomebalance2        DECIMAL(38,18),
+    combinednetprofitb     DECIMAL(38,18),
+    commexp                DECIMAL(38,18),
+    commreve               DECIMAL(38,18),
+    dilutedeps             DECIMAL(38,18),
+    exchangeincome         DECIMAL(38,18),
+    financeexp             DECIMAL(38,18),
+    fvalueincome           DECIMAL(38,18),
+    incometax              DECIMAL(38,18),
+    intexp                 DECIMAL(38,18),
+    intreve                DECIMAL(38,18),
+    investincome           DECIMAL(38,18),
+    investjointincome      DECIMAL(38,18),
+    manageexp              DECIMAL(38,18),
+    minoritycincome        DECIMAL(38,18),
+    minorityincome         DECIMAL(38,18),
+    minorityothercincome   DECIMAL(38,18),
+    netcontactreserve      DECIMAL(38,18),
+    netindemnityexp        DECIMAL(38,18),
+    netprofit              DECIMAL(38,18),
+    netprofitbalance1      DECIMAL(38,18),
+    netprofitbalance2      DECIMAL(38,18),
+    netprofitother1        DECIMAL(38,18),
+    netprofitother2        DECIMAL(38,18),
+    nonlassetnetloss       DECIMAL(38,18),
+    nonoperateexp          DECIMAL(38,18),
+    nonoperatereve         DECIMAL(38,18),
+    operateexp             DECIMAL(38,18),
+    operateprofit          DECIMAL(38,18),
+    operateprofitbalance   DECIMAL(38,18),
+    operateprofitother     DECIMAL(38,18),
+    operatereve            DECIMAL(38,18),
+    operatetax             DECIMAL(38,18),
+    othercincome           DECIMAL(38,18),
+    otherexp               DECIMAL(38,18),
+    otherreve              DECIMAL(38,18),
+    parentcincome          DECIMAL(38,18),
+    parentnetprofit        DECIMAL(38,18),
+    parentothercincome     DECIMAL(38,18),
+    policydiviexp          DECIMAL(38,18),
+    premiumearned          DECIMAL(38,18),
+    rdexp                  DECIMAL(38,18),
+    riexp                  DECIMAL(38,18),
+    saleexp                DECIMAL(38,18),
+    sumcincome             DECIMAL(38,18),
+    sumprofit              DECIMAL(38,18),
+    sumprofitbalance       DECIMAL(38,18),
+    sumprofitother         DECIMAL(38,18),
+    surrenderpremium       DECIMAL(38,18),
+    totaloperateexp        DECIMAL(38,18),
+    totaloperateexpother   DECIMAL(38,18),
+    totaloperatereve       DECIMAL(38,18),
+    totaloperatereveother  DECIMAL(38,18),
+    unconfirminvloss       DECIMAL(38,18),
+    fvalueosalable         DECIMAL(38,18),
+    maturityrecsalable     DECIMAL(38,18),
+    effectivecaflhedging   DECIMAL(38,18),
+    diffconversionfc       DECIMAL(38,18),
+    othercincomeother      DECIMAL(38,18),
+    othercincomebalance    DECIMAL(38,18),
+    nonlassetreve          DECIMAL(38,18),
+    parothcinother         DECIMAL(38,18),
+    parothcinbala          DECIMAL(38,18),
+    combinedsumcincomeb    DECIMAL(38,18),
+    sumcincomeother        DECIMAL(38,18),
+    adisposalincome        DECIMAL(38,18),
+    continuousonprofit     DECIMAL(38,18),
+    terminationonprofit    DECIMAL(38,18),
+    miotherincome          DECIMAL(38,18),
+    ofwintexp              DECIMAL(38,18),
+    ofwintreve             DECIMAL(38,18),
+    otherequityinvfvalue   DECIMAL(38,18),
+    credriskfvalue         DECIMAL(38,18),
+    othcredinvfvalue       DECIMAL(38,18),
+    fassetrecother         DECIMAL(38,18),
+    othcredinvcred         DECIMAL(38,18),
+    creddevalueloss        DECIMAL(38,18),
+    netexhedgincome        DECIMAL(38,18),
+    ofwrdexp               DECIMAL(38,18),
+    acfendincome           DECIMAL(38,18),
+    assetimpairmentincome  DECIMAL(38,18),
+    creditimpairmentincome DECIMAL(38,18),
+    PRIMARY KEY (userid, reportdate, combinetype, companyname)
+);
 COMMENT ON TABLE app_api_financial_analysis_dd_profit IS '利润表';
 COMMENT ON COLUMN app_api_financial_analysis_dd_profit.userid IS '用户id';
 COMMENT ON COLUMN app_api_financial_analysis_dd_profit.reportdate IS '报表日期';
@@ -1205,92 +1118,28 @@ COMMENT ON COLUMN app_api_financial_analysis_dd_profit.ofwrdexp IS '其中:研�
 COMMENT ON COLUMN app_api_financial_analysis_dd_profit.acfendincome IS '以摊余成本计量的金融资产终止确认收益';
 COMMENT ON COLUMN app_api_financial_analysis_dd_profit.assetimpairmentincome IS '资产减值损失(新)';
 COMMENT ON COLUMN app_api_financial_analysis_dd_profit.creditimpairmentincome IS '信用减值损失(新)';
-ALTER TABLE app_api_financial_analysis_dd_profit ADD CONSTRAINT app_api_financial_analysis_dd_profit_pkey PRIMARY KEY USING ubtree  (userid, reportdate, combinetype, companyname) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
 CREATE TABLE app_space_config (
-    space_id integer DEFAULT nextval('app_space_config_space_id_seq'::regclass) NOT NULL,
-    space_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    space_desc character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    relation_account character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    index_space_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
-    index_content text,
-    default_prompt character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    sort_no integer DEFAULT 0,
-    space_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    upload_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    relation_org character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    space_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    finance_upload_flag character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    welcome_content character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    black_icon character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    icon character varying(500) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    space_id               BIGINT NOT NULL AUTO_INCREMENT,
+    space_name             VARCHAR(100),
+    space_desc             VARCHAR(1000),
+    relation_account       VARCHAR(2000),
+    index_space_flag       VARCHAR(1) DEFAULT 'N',
+    index_content          TEXT,
+    default_prompt         VARCHAR(1000),
+    sort_no                INT DEFAULT 0,
+    space_status           VARCHAR(1) DEFAULT 'Y',
+    upload_flag            VARCHAR(1) DEFAULT 'N',
+    input_time             VARCHAR(20),
+    update_time            VARCHAR(20),
+    relation_org           VARCHAR(500),
+    space_code             VARCHAR(100),
+    finance_upload_flag    VARCHAR(2) DEFAULT 'N',
+    welcome_content        VARCHAR(100),
+    black_icon             VARCHAR(500),
+    icon                   VARCHAR(500),
+    PRIMARY KEY (space_id)
+);
 COMMENT ON TABLE app_space_config IS '应用空间管理表';
 COMMENT ON COLUMN app_space_config.space_id IS '空间ID';
 COMMENT ON COLUMN app_space_config.space_name IS '空间名称';
@@ -1310,27 +1159,25 @@ COMMENT ON COLUMN app_space_config.finance_upload_flag IS '是否支持财务上
 COMMENT ON COLUMN app_space_config.welcome_content IS '欢迎语';
 COMMENT ON COLUMN app_space_config.black_icon IS '有背景色的图标';
 COMMENT ON COLUMN app_space_config.icon IS '图标';
-ALTER TABLE app_space_config ADD CONSTRAINT app_space_config_pkey PRIMARY KEY USING ubtree  (space_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE app_space_inspiration_config (
-    id integer DEFAULT nextval('app_space_inspiration_config_id_seq'::regclass) NOT NULL,
-    space_id integer,
-    belong_group character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    question character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer DEFAULT 0,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    question_type character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    entity_type character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    entity_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    index_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    show_deepseek character varying(10) COLLATE "C" DEFAULT 'N'::character varying,
-    hover_flag character varying(100) COLLATE "C" DEFAULT ''::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    space_id               INT,
+    belong_group           VARCHAR(100),
+    question               VARCHAR(500),
+    status                 VARCHAR(1) DEFAULT 'Y',
+    sort_no                INT DEFAULT 0,
+    input_time             VARCHAR(20),
+    update_time            VARCHAR(20),
+    question_type          VARCHAR(32),
+    entity_type            VARCHAR(40),
+    entity_name            VARCHAR(200),
+    index_code             VARCHAR(100),
+    index_id               VARCHAR(32),
+    show_deepseek          VARCHAR(10) DEFAULT 'N',
+    hover_flag             VARCHAR(100) DEFAULT '',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE app_space_inspiration_config IS '应用空间灵感配置表';
 COMMENT ON COLUMN app_space_inspiration_config.id IS '主键ID';
 COMMENT ON COLUMN app_space_inspiration_config.space_id IS '关联空间ID';
@@ -1347,24 +1194,22 @@ COMMENT ON COLUMN app_space_inspiration_config.index_code IS '组件编码';
 COMMENT ON COLUMN app_space_inspiration_config.index_id IS '组件ID';
 COMMENT ON COLUMN app_space_inspiration_config.show_deepseek IS '是否显示deepseek标识:Y | N';
 COMMENT ON COLUMN app_space_inspiration_config.hover_flag IS '显示标志: 无, hot,new';
-ALTER TABLE app_space_inspiration_config ADD CONSTRAINT app_space_inspiration_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE app_space_relate_account (
-    id integer DEFAULT nextval('app_space_relate_account_id_seq'::regclass) NOT NULL,
-    account character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    relate_org character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    space_id character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer DEFAULT 0,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    do_auth_index character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
-    report_text_type character varying(10) COLLATE "C" DEFAULT 'h5'::character varying,
-    relate_knowledge character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    relate_menu character varying(2000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    account                VARCHAR(100),
+    relate_org             VARCHAR(100),
+    space_id               VARCHAR(1000),
+    status                 VARCHAR(1) DEFAULT 'Y',
+    sort_no                INT DEFAULT 0,
+    input_time             VARCHAR(20),
+    update_time            VARCHAR(20),
+    do_auth_index          VARCHAR(2) DEFAULT 'Y' NOT NULL,
+    report_text_type       VARCHAR(10) DEFAULT 'h5',
+    relate_knowledge       VARCHAR(2000),
+    relate_menu            VARCHAR(2000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE app_space_relate_account IS '应用空间关联账户信息表';
 COMMENT ON COLUMN app_space_relate_account.id IS '主键ID';
 COMMENT ON COLUMN app_space_relate_account.account IS '关联账号';
@@ -1378,20 +1223,18 @@ COMMENT ON COLUMN app_space_relate_account.do_auth_index IS '是否对这个账�
 COMMENT ON COLUMN app_space_relate_account.report_text_type IS '报告文本类型';
 COMMENT ON COLUMN app_space_relate_account.relate_knowledge IS '关联知识库';
 COMMENT ON COLUMN app_space_relate_account.relate_menu IS '关联菜单';
-ALTER TABLE app_space_relate_account ADD CONSTRAINT account UNIQUE USING ubtree (account) WITH (storage_type=USTORE);
-ALTER TABLE app_space_relate_account ADD CONSTRAINT app_space_relate_account_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX account ON app_space_relate_account (account);
 
-SET search_path = bosz_test;
 CREATE TABLE app_space_relate_agent (
-    id integer DEFAULT nextval('app_space_relate_agent_id_seq'::regclass) NOT NULL,
-    space_id integer,
-    agent_id integer,
-    sort_no integer DEFAULT 0,
-    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    space_id               INT,
+    agent_id               INT,
+    sort_no                INT DEFAULT 0,
+    status                 VARCHAR(1) DEFAULT 'Y',
+    input_time             VARCHAR(20),
+    update_time            VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE app_space_relate_agent IS '应用空间关联Agent信息表';
 COMMENT ON COLUMN app_space_relate_agent.id IS '主键ID';
 COMMENT ON COLUMN app_space_relate_agent.space_id IS '关联空间ID';
@@ -1400,27 +1243,25 @@ COMMENT ON COLUMN app_space_relate_agent.sort_no IS '排序号';
 COMMENT ON COLUMN app_space_relate_agent.status IS '关联状态;Y表示有效，N表示无效，默认Y';
 COMMENT ON COLUMN app_space_relate_agent.input_time IS '创建时间';
 COMMENT ON COLUMN app_space_relate_agent.update_time IS '更新时间';
-ALTER TABLE app_space_relate_agent ADD CONSTRAINT app_space_relate_agent_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE app_space_relate_knowledge (
-    id integer DEFAULT nextval('app_space_relate_knowledge_id_seq'::regclass) NOT NULL,
-    space_id integer,
-    label_code_level_1 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_1 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_2 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_2 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_3 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_4 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    label_dict_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer DEFAULT 0,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    space_id               INT,
+    label_code_level_1     VARCHAR(100),
+    label_name_level_1     VARCHAR(200),
+    label_code_level_2     VARCHAR(100),
+    label_name_level_2     VARCHAR(200),
+    label_code_level_3     VARCHAR(100),
+    label_name_level_3     VARCHAR(200),
+    label_code_level_4     VARCHAR(100),
+    label_name_level_4     VARCHAR(200),
+    label_dict_code        VARCHAR(32),
+    status                 VARCHAR(1) DEFAULT 'Y',
+    sort_no                INT DEFAULT 0,
+    input_time             VARCHAR(20),
+    update_time            VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE app_space_relate_knowledge IS '应用空间关联知识库信息表';
 COMMENT ON COLUMN app_space_relate_knowledge.id IS '主键ID';
 COMMENT ON COLUMN app_space_relate_knowledge.space_id IS '关联空间ID';
@@ -1437,30 +1278,22 @@ COMMENT ON COLUMN app_space_relate_knowledge.status IS '关联状态;Y表示有�
 COMMENT ON COLUMN app_space_relate_knowledge.sort_no IS '排序号';
 COMMENT ON COLUMN app_space_relate_knowledge.input_time IS '创建时间';
 COMMENT ON COLUMN app_space_relate_knowledge.update_time IS '更新时间';
-ALTER TABLE app_space_relate_knowledge ADD CONSTRAINT app_space_relate_knowledge_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
-
-SET search_path = bosz_test;
 CREATE TABLE bank_internal_indicators_config (
-    id integer DEFAULT nextval('bank_internal_indicators_config_id_seq'::regclass) NOT NULL,
-    question_category character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    category character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    sub_category character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    indicator_code text,
-    indicator text,
-    indicator_show_code text,
-    indicator_show text,
-    key_word text,
-    source_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    empty_indicator_method character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    org_account character varying(400) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    question_category      VARCHAR(100),
+    category               VARCHAR(100),
+    sub_category           VARCHAR(100),
+    indicator_code         TEXT,
+    indicator              TEXT,
+    indicator_show_code    TEXT,
+    indicator_show         TEXT,
+    key_word               TEXT,
+    source_table           VARCHAR(100),
+    empty_indicator_method VARCHAR(100),
+    org_account            VARCHAR(400),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE bank_internal_indicators_config IS '行内指标配置表';
 COMMENT ON COLUMN bank_internal_indicators_config.question_category IS '问题大类';
 COMMENT ON COLUMN bank_internal_indicators_config.category IS '指标大类';
@@ -1473,80 +1306,72 @@ COMMENT ON COLUMN bank_internal_indicators_config.key_word IS '问题关键词';
 COMMENT ON COLUMN bank_internal_indicators_config.source_table IS '指标表';
 COMMENT ON COLUMN bank_internal_indicators_config.empty_indicator_method IS '指标为空的处理方式';
 COMMENT ON COLUMN bank_internal_indicators_config.org_account IS '机构账号';
-ALTER TABLE bank_internal_indicators_config ADD CONSTRAINT bank_internal_indicators_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE bank_module_info (
-    _id bigint DEFAULT nextval('bank_module_info__id_seq'::regclass) NOT NULL,
-    bankid character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    modulecode character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    largemodelcode character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    bankid                 VARCHAR(1000),
+    modulecode             VARCHAR(1000),
+    largemodelcode         VARCHAR(1000),
+    PRIMARY KEY (_id)
+);
 COMMENT ON COLUMN bank_module_info._id IS '主键ID';
-ALTER TABLE bank_module_info ADD CONSTRAINT bank_module_info_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE batch_prompt_task (
-    id character varying(100) COLLATE "C" NOT NULL,
-    trace_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_content text,
-    operate_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(100) NOT NULL,
+    trace_id               VARCHAR(32),
+    knowledge_code         VARCHAR(100),
+    prompt_content         TEXT,
+    operate_time           VARCHAR(20),
+    ent_name               VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE batch_prompt_task IS '知识库批量任务表';
 COMMENT ON COLUMN batch_prompt_task.trace_id IS '追踪ID';
 COMMENT ON COLUMN batch_prompt_task.knowledge_code IS '知识库编码';
 COMMENT ON COLUMN batch_prompt_task.prompt_content IS '文案内容';
 COMMENT ON COLUMN batch_prompt_task.operate_time IS '操作时间';
 COMMENT ON COLUMN batch_prompt_task.ent_name IS '企业名称';
-ALTER TABLE batch_prompt_task ADD CONSTRAINT batch_prompt_task_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE call_llm_record (
-    hub_account character varying(256) COLLATE "C" NOT NULL,
-    trace_id character varying(64) COLLATE "C" NOT NULL,
-    sort_no bigint NOT NULL,
-    request_time character varying(40) COLLATE "C" NOT NULL,
-    status integer,
-    content text,
-    request_body text,
-    response_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    api_key character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_tokens bigint,
-    completion_tokens bigint,
-    session_msg_no character varying(64) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
-ALTER TABLE call_llm_record ADD CONSTRAINT call_llm_record_pkey PRIMARY KEY USING ubtree  (trace_id, sort_no) WITH (storage_type=USTORE);
+    hub_account            VARCHAR(256) NOT NULL,
+    trace_id               VARCHAR(64) NOT NULL,
+    sort_no                BIGINT NOT NULL,
+    request_time           VARCHAR(40) NOT NULL,
+    status                 INT,
+    content                TEXT,
+    request_body           TEXT,
+    response_time          VARCHAR(40),
+    large_model_code       VARCHAR(64),
+    api_key                VARCHAR(256),
+    prompt_tokens          BIGINT,
+    completion_tokens      BIGINT,
+    session_msg_no         VARCHAR(64),
+    PRIMARY KEY (trace_id, sort_no)
+);
 
-SET search_path = bosz_test;
 CREATE TABLE ces_field_kongj (
-    id character varying(36) COLLATE "C" NOT NULL,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    sex character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    radio character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    checkbox character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    sel_mut character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    sel_search character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    birthday timestamp without time zone,
-    pic character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    files character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    remakr text,
-    fuwenb text,
-    user_sel character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    dep_sel character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    ddd numeric(10,0) DEFAULT NULL::numeric
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    name                   VARCHAR(32),
+    sex                    VARCHAR(32),
+    radio                  VARCHAR(32),
+    checkbox               VARCHAR(32),
+    sel_mut                VARCHAR(32),
+    sel_search             VARCHAR(32),
+    birthday               TIMESTAMP,
+    pic                    VARCHAR(1000),
+    files                  VARCHAR(1000),
+    remakr                 TEXT,
+    fuwenb                 TEXT,
+    user_sel               VARCHAR(200),
+    dep_sel                VARCHAR(200),
+    ddd                    DECIMAL(10,0),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ces_field_kongj.id IS '主键';
 COMMENT ON COLUMN ces_field_kongj.create_by IS '创建人';
 COMMENT ON COLUMN ces_field_kongj.create_time IS '创建日期';
@@ -1567,24 +1392,22 @@ COMMENT ON COLUMN ces_field_kongj.fuwenb IS '富文本';
 COMMENT ON COLUMN ces_field_kongj.user_sel IS '选择用户';
 COMMENT ON COLUMN ces_field_kongj.dep_sel IS '选择部门';
 COMMENT ON COLUMN ces_field_kongj.ddd IS 'DD类型';
-ALTER TABLE ces_field_kongj ADD CONSTRAINT ces_field_kongj_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ces_order_customer (
-    id character varying(36) COLLATE "C" NOT NULL,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    sex character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    birthday timestamp without time zone,
-    age integer,
-    address character varying(300) COLLATE "C" DEFAULT NULL::character varying,
-    order_main_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    name                   VARCHAR(32),
+    sex                    VARCHAR(1),
+    birthday               TIMESTAMP,
+    age                    INT,
+    address                VARCHAR(300),
+    order_main_id          VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ces_order_customer.create_by IS '创建人';
 COMMENT ON COLUMN ces_order_customer.create_time IS '创建日期';
 COMMENT ON COLUMN ces_order_customer.update_by IS '更新人';
@@ -1596,23 +1419,21 @@ COMMENT ON COLUMN ces_order_customer.birthday IS '客户生日';
 COMMENT ON COLUMN ces_order_customer.age IS '年龄';
 COMMENT ON COLUMN ces_order_customer.address IS '常用地址';
 COMMENT ON COLUMN ces_order_customer.order_main_id IS '订单ID';
-ALTER TABLE ces_order_customer ADD CONSTRAINT ces_order_customer_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ces_order_goods (
-    id character varying(36) COLLATE "C" NOT NULL,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    good_name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    price numeric,
-    num integer,
-    zong_price numeric,
-    order_main_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    good_name              VARCHAR(32),
+    price                  DECIMAL(38,18),
+    num                    INT,
+    zong_price             DECIMAL(38,18),
+    order_main_id          VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ces_order_goods.create_by IS '创建人';
 COMMENT ON COLUMN ces_order_goods.create_time IS '创建日期';
 COMMENT ON COLUMN ces_order_goods.update_by IS '更新人';
@@ -1623,22 +1444,20 @@ COMMENT ON COLUMN ces_order_goods.price IS '价格';
 COMMENT ON COLUMN ces_order_goods.num IS '数量';
 COMMENT ON COLUMN ces_order_goods.zong_price IS '单品总价';
 COMMENT ON COLUMN ces_order_goods.order_main_id IS '订单ID';
-ALTER TABLE ces_order_goods ADD CONSTRAINT ces_order_goods_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ces_order_main (
-    id character varying(36) COLLATE "C" NOT NULL,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    order_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    xd_date timestamp without time zone,
-    money numeric,
-    remark character varying(500) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    order_code             VARCHAR(32),
+    xd_date                TIMESTAMP,
+    money                  DECIMAL(38,18),
+    remark                 VARCHAR(500),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ces_order_main.create_by IS '创建人';
 COMMENT ON COLUMN ces_order_main.create_time IS '创建日期';
 COMMENT ON COLUMN ces_order_main.update_by IS '更新人';
@@ -1648,23 +1467,21 @@ COMMENT ON COLUMN ces_order_main.order_code IS '订单编码';
 COMMENT ON COLUMN ces_order_main.xd_date IS '下单时间';
 COMMENT ON COLUMN ces_order_main.money IS '订单总额';
 COMMENT ON COLUMN ces_order_main.remark IS '备注';
-ALTER TABLE ces_order_main ADD CONSTRAINT ces_order_main_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ces_shop_goods (
-    id character varying(36) COLLATE "C" NOT NULL,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    price numeric(10,5) DEFAULT NULL::numeric,
-    chuc_date timestamp without time zone,
-    contents text,
-    good_type_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    name                   VARCHAR(32),
+    price                  DECIMAL(10,5),
+    chuc_date              TIMESTAMP,
+    contents               TEXT,
+    good_type_id           VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ces_shop_goods.id IS '主键';
 COMMENT ON COLUMN ces_shop_goods.create_by IS '创建人';
 COMMENT ON COLUMN ces_shop_goods.create_time IS '创建日期';
@@ -1676,23 +1493,21 @@ COMMENT ON COLUMN ces_shop_goods.price IS '价格';
 COMMENT ON COLUMN ces_shop_goods.chuc_date IS '出厂时间';
 COMMENT ON COLUMN ces_shop_goods.contents IS '商品简介';
 COMMENT ON COLUMN ces_shop_goods.good_type_id IS '商品分类';
-ALTER TABLE ces_shop_goods ADD CONSTRAINT ces_shop_goods_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ces_shop_type (
-    id character varying(36) COLLATE "C" NOT NULL,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    content character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    pics character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    pid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    has_child character varying(3) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    name                   VARCHAR(32),
+    content                VARCHAR(200),
+    pics                   VARCHAR(500),
+    pid                    VARCHAR(32),
+    has_child              VARCHAR(3),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN ces_shop_type.create_by IS '创建人';
 COMMENT ON COLUMN ces_shop_type.create_time IS '创建日期';
 COMMENT ON COLUMN ces_shop_type.update_by IS '更新人';
@@ -1703,20 +1518,18 @@ COMMENT ON COLUMN ces_shop_type.content IS '描述';
 COMMENT ON COLUMN ces_shop_type.pics IS '图片';
 COMMENT ON COLUMN ces_shop_type.pid IS '父级节点';
 COMMENT ON COLUMN ces_shop_type.has_child IS '是否有子节点';
-ALTER TABLE ces_shop_type ADD CONSTRAINT ces_shop_type_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE chat_session_msg_feedback (
-    id integer DEFAULT nextval('chat_session_msg_feedback_id_seq'::regclass) NOT NULL,
-    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    client_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    grade integer DEFAULT 100 NOT NULL,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    feedback_text character varying(256) COLLATE "C" DEFAULT ''::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    user_id                VARCHAR(64) DEFAULT '' NOT NULL,
+    client_id              VARCHAR(64) DEFAULT '' NOT NULL,
+    session_msg_no         VARCHAR(64) DEFAULT '' NOT NULL,
+    grade                  INT DEFAULT 100 NOT NULL,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    feedback_text          VARCHAR(256) DEFAULT '' NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE chat_session_msg_feedback IS '会话答复评价';
 COMMENT ON COLUMN chat_session_msg_feedback.id IS '主键';
 COMMENT ON COLUMN chat_session_msg_feedback.user_id IS '用户身份识别码';
@@ -1726,47 +1539,45 @@ COMMENT ON COLUMN chat_session_msg_feedback.grade IS '100拇指向上、1拇指�
 COMMENT ON COLUMN chat_session_msg_feedback.input_time IS '创建时间';
 COMMENT ON COLUMN chat_session_msg_feedback.update_time IS '更新时间';
 COMMENT ON COLUMN chat_session_msg_feedback.feedback_text IS '反馈文本';
-ALTER TABLE chat_session_msg_feedback ADD CONSTRAINT session_msg_no_unique UNIQUE USING ubtree (session_msg_no) WITH (storage_type=USTORE);
-ALTER TABLE chat_session_msg_feedback ADD CONSTRAINT chat_session_msg_feedback_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX session_msg_no_unique ON chat_session_msg_feedback (session_msg_no);
 
-SET search_path = bosz_test;
 CREATE TABLE client_agent_index_config (
-    id integer DEFAULT nextval('client_agent_index_config_id_seq'::regclass) NOT NULL,
-    index_name character varying(100) COLLATE "C" NOT NULL,
-    index_code character varying(32) COLLATE "C" NOT NULL,
-    index_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    use_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
-    synonym_word text,
-    key_word text,
-    center_key_word text,
-    entity_type character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    inner_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    source_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    external_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    has_index_rela character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    remark text,
-    input_time character varying(40) COLLATE "C" NOT NULL,
-    update_time character varying(40) COLLATE "C" NOT NULL,
-    index_desc text,
-    sample_question text,
-    object_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    index_classification character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    visible_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    index_prompt text,
-    hub_account character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    none_test_flag character varying(2) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
-    final_result_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
-    rec_enterprise character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    text_type character varying(100) COLLATE "C" DEFAULT 'h5'::character varying,
-    source_card_channel character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    rela_knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    index_name             VARCHAR(100) NOT NULL,
+    index_code             VARCHAR(32) NOT NULL,
+    index_topic            VARCHAR(100),
+    use_flag               VARCHAR(1) DEFAULT 'Y' NOT NULL,
+    synonym_word           TEXT,
+    key_word               TEXT,
+    center_key_word        TEXT,
+    entity_type            VARCHAR(500),
+    inner_priority         VARCHAR(50),
+    source_type            VARCHAR(200),
+    external_priority      VARCHAR(50),
+    rec_group              VARCHAR(400),
+    rec_question           VARCHAR(400),
+    has_index_rela         VARCHAR(1),
+    remark                 TEXT,
+    input_time             VARCHAR(40) NOT NULL,
+    update_time            VARCHAR(40) NOT NULL,
+    index_desc             TEXT,
+    sample_question        TEXT,
+    object_type            VARCHAR(256),
+    index_classification   VARCHAR(100),
+    visible_flag           VARCHAR(1) DEFAULT 'Y',
+    index_prompt           TEXT,
+    hub_account            VARCHAR(200),
+    none_test_flag         VARCHAR(2) DEFAULT '1' NOT NULL,
+    final_result_flag      VARCHAR(1) DEFAULT 'N',
+    rec_enterprise         VARCHAR(400),
+    text_type              VARCHAR(100) DEFAULT 'h5',
+    source_card_channel    VARCHAR(100),
+    large_model_code       VARCHAR(100),
+    large_model_content    VARCHAR(2000),
+    rela_knowledge_id      VARCHAR(100),
+    large_model_flag       VARCHAR(1) DEFAULT 'Y',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE client_agent_index_config IS '客户组件配置表';
 COMMENT ON COLUMN client_agent_index_config.index_name IS '组件名称';
 COMMENT ON COLUMN client_agent_index_config.index_code IS '组件编码';
@@ -1800,22 +1611,20 @@ COMMENT ON COLUMN client_agent_index_config.large_model_code IS '大模型编码
 COMMENT ON COLUMN client_agent_index_config.large_model_content IS '不同大模型对应的输出要求';
 COMMENT ON COLUMN client_agent_index_config.rela_knowledge_id IS '组件关联知识库ID';
 COMMENT ON COLUMN client_agent_index_config.large_model_flag IS '是否走大模型标志，默认Y（ N否，Y是 ）';
-ALTER TABLE client_agent_index_config ADD CONSTRAINT client_agent_index_config_un UNIQUE USING ubtree (index_code, source_type, hub_account, none_test_flag) WITH (storage_type=USTORE);
-ALTER TABLE client_agent_index_config ADD CONSTRAINT client_agent_index_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX client_agent_index_config_un ON client_agent_index_config (index_code, source_type, hub_account, none_test_flag);
 
-SET search_path = bosz_test;
 CREATE TABLE coze_cache_industry_mapping (
-    id integer DEFAULT nextval('coze_cache_industry_mapping_id_seq'::regclass) NOT NULL,
-    ent_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    national_standard_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    model_parsed_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    user_input_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    cached_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    final_output_industry character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    created_at timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    product character varying(800) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                         BIGINT NOT NULL AUTO_INCREMENT,
+    ent_name                   VARCHAR(255),
+    national_standard_industry VARCHAR(255),
+    model_parsed_industry      VARCHAR(255),
+    user_input_industry        VARCHAR(255),
+    cached_industry            VARCHAR(255),
+    final_output_industry      VARCHAR(255),
+    created_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    product                    VARCHAR(800),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE coze_cache_industry_mapping IS '行业映射表';
 COMMENT ON COLUMN coze_cache_industry_mapping.id IS '自增主键';
 COMMENT ON COLUMN coze_cache_industry_mapping.ent_name IS '企业名称';
@@ -1826,32 +1635,28 @@ COMMENT ON COLUMN coze_cache_industry_mapping.cached_industry IS '缓存行业';
 COMMENT ON COLUMN coze_cache_industry_mapping.final_output_industry IS '最终输出行业';
 COMMENT ON COLUMN coze_cache_industry_mapping.created_at IS '插入时间';
 COMMENT ON COLUMN coze_cache_industry_mapping.product IS '产品';
-ALTER TABLE coze_cache_industry_mapping ADD CONSTRAINT coze_cache_industry_mapping_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE data_entname_indname_reference_records (
-    id integer DEFAULT nextval('data_entname_indname_reference_records_id_seq'::regclass) NOT NULL,
-    ent_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    ind_name character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    ent_name               VARCHAR(200),
+    ind_name               VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE data_entname_indname_reference_records IS '企业行业对照信息表';
 COMMENT ON COLUMN data_entname_indname_reference_records.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN data_entname_indname_reference_records.ent_name IS '企业名称';
 COMMENT ON COLUMN data_entname_indname_reference_records.ind_name IS '行业名称';
-ALTER TABLE data_entname_indname_reference_records ADD CONSTRAINT data_entname_indname_reference_records_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE data_relate_account (
-    id integer DEFAULT nextval('data_relate_account_id_seq'::regclass) NOT NULL,
-    data_id integer,
-    account_id integer,
-    relate_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    relate_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
-    is_internal character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    prefix_url character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    data_id                INT,
+    account_id             INT,
+    relate_time            VARCHAR(40),
+    relate_status          VARCHAR(2) DEFAULT '1',
+    is_internal            VARCHAR(2) DEFAULT 'N',
+    prefix_url             VARCHAR(1000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE data_relate_account IS '数据更新关联机构表';
 COMMENT ON COLUMN data_relate_account.id IS '主键ID';
 COMMENT ON COLUMN data_relate_account.data_id IS '数据ID';
@@ -1860,27 +1665,25 @@ COMMENT ON COLUMN data_relate_account.relate_time IS '关联时间';
 COMMENT ON COLUMN data_relate_account.relate_status IS '关联状态;1已关联 2已取消';
 COMMENT ON COLUMN data_relate_account.is_internal IS '是否内部使用 Y是 N否';
 COMMENT ON COLUMN data_relate_account.prefix_url IS '外部相对路径前缀';
-ALTER TABLE data_relate_account ADD CONSTRAINT data_relate_account_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE data_update_config (
-    id integer DEFAULT nextval('data_update_config_id_seq'::regclass) NOT NULL,
-    title character varying(100) COLLATE "C" NOT NULL,
-    parent_id integer,
-    parent_title character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    user_evaluation text,
-    app_channel character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    app_type character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    use_status character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    sort_no integer,
-    content_text text,
-    input_time character varying(40) COLLATE "C" NOT NULL,
-    update_time character varying(40) COLLATE "C" NOT NULL,
-    sort_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    remark text,
-    is_public character varying(2) COLLATE "C" DEFAULT 'N'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    title                  VARCHAR(100) NOT NULL,
+    parent_id              INT,
+    parent_title           VARCHAR(100),
+    user_evaluation        TEXT,
+    app_channel            VARCHAR(50),
+    app_type               VARCHAR(50),
+    use_status             VARCHAR(2) DEFAULT 'N',
+    sort_no                INT,
+    content_text           TEXT,
+    input_time             VARCHAR(40) NOT NULL,
+    update_time            VARCHAR(40) NOT NULL,
+    sort_time              VARCHAR(40),
+    remark                 TEXT,
+    is_public              VARCHAR(2) DEFAULT 'N',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE data_update_config IS '数据更新配置表';
 COMMENT ON COLUMN data_update_config.id IS '主键ID';
 COMMENT ON COLUMN data_update_config.title IS '标题名称';
@@ -1897,23 +1700,21 @@ COMMENT ON COLUMN data_update_config.update_time IS '更新时间';
 COMMENT ON COLUMN data_update_config.sort_time IS '排序时间';
 COMMENT ON COLUMN data_update_config.remark IS '备注';
 COMMENT ON COLUMN data_update_config.is_public IS '是否公开 N否 Y是';
-ALTER TABLE data_update_config ADD CONSTRAINT data_update_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE demo_field_def_val_main (
-    id character varying(36) COLLATE "C" NOT NULL,
-    code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    sex character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    address character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    address_param character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    code                   VARCHAR(200),
+    name                   VARCHAR(200),
+    sex                    VARCHAR(200),
+    address                VARCHAR(200),
+    address_param          VARCHAR(32),
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN demo_field_def_val_main.code IS '编码';
 COMMENT ON COLUMN demo_field_def_val_main.name IS '姓名';
 COMMENT ON COLUMN demo_field_def_val_main.sex IS '性别';
@@ -1924,22 +1725,20 @@ COMMENT ON COLUMN demo_field_def_val_main.create_time IS '创建日期';
 COMMENT ON COLUMN demo_field_def_val_main.update_by IS '更新人';
 COMMENT ON COLUMN demo_field_def_val_main.update_time IS '更新日期';
 COMMENT ON COLUMN demo_field_def_val_main.sys_org_code IS '所属部门';
-ALTER TABLE demo_field_def_val_main ADD CONSTRAINT demo_field_def_val_main_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE demo_field_def_val_sub (
-    id character varying(36) COLLATE "C" NOT NULL,
-    code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    "date" character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    main_id character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    code                   VARCHAR(200),
+    name                   VARCHAR(200),
+    "date"                 VARCHAR(200),
+    main_id                VARCHAR(200),
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN demo_field_def_val_sub.code IS '编码';
 COMMENT ON COLUMN demo_field_def_val_sub.name IS '名称';
 COMMENT ON COLUMN demo_field_def_val_sub."date" IS '日期';
@@ -1949,40 +1748,36 @@ COMMENT ON COLUMN demo_field_def_val_sub.create_time IS '创建日期';
 COMMENT ON COLUMN demo_field_def_val_sub.update_by IS '更新人';
 COMMENT ON COLUMN demo_field_def_val_sub.update_time IS '更新日期';
 COMMENT ON COLUMN demo_field_def_val_sub.sys_org_code IS '所属部门';
-ALTER TABLE demo_field_def_val_sub ADD CONSTRAINT demo_field_def_val_sub_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ent_rel_shortname_info (
-    id integer DEFAULT nextval('ent_rel_shortname_info_id_seq'::regclass) NOT NULL,
-    ent_rel_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    dw_ins_date timestamp without time zone DEFAULT pg_systimestamp(),
-    status character varying(10) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    ent_rel_name           VARCHAR(200),
+    ent_name               VARCHAR(200),
+    dw_ins_date            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status                 VARCHAR(10),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE ent_rel_shortname_info IS '人工维护企业简称表';
 COMMENT ON COLUMN ent_rel_shortname_info.id IS '主键';
 COMMENT ON COLUMN ent_rel_shortname_info.ent_rel_name IS '企业简称';
 COMMENT ON COLUMN ent_rel_shortname_info.ent_name IS '企业全称';
 COMMENT ON COLUMN ent_rel_shortname_info.status IS '数据状态';
-ALTER TABLE ent_rel_shortname_info ADD CONSTRAINT ent_rel_shortname_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ent_srd_task (
-    task_id character varying(45) COLLATE "C" NOT NULL,
-    file_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    user_uuid character varying(200) COLLATE "C" NOT NULL,
-    ent_count integer DEFAULT 0,
-    parse_status character varying(40) COLLATE "C" DEFAULT '初始化'::character varying NOT NULL,
-    parsing_percentage integer DEFAULT 0,
-    task_from_stage smallint NOT NULL,
-    task_status character varying(40) COLLATE "C" DEFAULT '初始化'::character varying NOT NULL,
-    screening_failed_count integer DEFAULT 0,
-    input_time character varying(24) COLLATE "C" NOT NULL,
-    update_time character varying(24) COLLATE "C" NOT NULL,
-    screening_success_count integer
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_id                 VARCHAR(45) NOT NULL,
+    file_name               VARCHAR(1000),
+    user_uuid               VARCHAR(200) NOT NULL,
+    ent_count               INT DEFAULT 0,
+    parse_status            VARCHAR(40) DEFAULT '初始化' NOT NULL,
+    parsing_percentage      INT DEFAULT 0,
+    task_from_stage         SMALLINT NOT NULL,
+    task_status             VARCHAR(40) DEFAULT '初始化' NOT NULL,
+    screening_failed_count  INT DEFAULT 0,
+    input_time              VARCHAR(24) NOT NULL,
+    update_time             VARCHAR(24) NOT NULL,
+    screening_success_count INT,
+    PRIMARY KEY (task_id)
+);
 COMMENT ON TABLE ent_srd_task IS '企业名单任务表';
 COMMENT ON COLUMN ent_srd_task.task_id IS '任务编号';
 COMMENT ON COLUMN ent_srd_task.file_name IS '文件名称';
@@ -1996,35 +1791,33 @@ COMMENT ON COLUMN ent_srd_task.screening_failed_count IS '筛查失败企业个�
 COMMENT ON COLUMN ent_srd_task.input_time IS '插入时间';
 COMMENT ON COLUMN ent_srd_task.update_time IS '更新时间';
 COMMENT ON COLUMN ent_srd_task.screening_success_count IS '筛查成功个数';
-ALTER TABLE ent_srd_task ADD CONSTRAINT ent_srd_task_pkey PRIMARY KEY USING ubtree  (task_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ext_intf_manage (
-    id character varying(32) COLLATE "C" NOT NULL,
-    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    intf_path character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    intf_type_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    intf_request_type character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    intf_time_out integer DEFAULT 0,
-    intf_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
-    intf_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    refer_intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    refer_intf_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
-    async_save character varying(2) COLLATE "C" DEFAULT '0'::character varying,
-    battle_flag character varying(2) COLLATE "C" DEFAULT '0'::character varying,
-    battle_report_content character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    before_handler character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    intf_structure text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    supplier_id            VARCHAR(100),
+    intf_no                VARCHAR(100),
+    intf_name              VARCHAR(200),
+    intf_path              VARCHAR(200),
+    intf_type_name         VARCHAR(200),
+    intf_request_type      VARCHAR(50),
+    intf_time_out          INT DEFAULT 0,
+    intf_status            VARCHAR(2) DEFAULT '1',
+    intf_desc              VARCHAR(500),
+    refer_intf_no          VARCHAR(100),
+    refer_intf_status      VARCHAR(2) DEFAULT '1',
+    async_save             VARCHAR(2) DEFAULT '0',
+    battle_flag            VARCHAR(2) DEFAULT '0',
+    battle_report_content  VARCHAR(1000),
+    before_handler         VARCHAR(100),
+    input_user_id          VARCHAR(100),
+    input_user_name        VARCHAR(100),
+    input_time             VARCHAR(20),
+    update_user_id         VARCHAR(100),
+    update_user_name       VARCHAR(100),
+    update_time            VARCHAR(20),
+    intf_structure         TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE ext_intf_manage IS '外部接口详细配置表';
 COMMENT ON COLUMN ext_intf_manage.id IS '主键';
 COMMENT ON COLUMN ext_intf_manage.supplier_id IS '服务编号';
@@ -2048,25 +1841,23 @@ COMMENT ON COLUMN ext_intf_manage.input_time IS '创建时间';
 COMMENT ON COLUMN ext_intf_manage.update_user_id IS '更新人id';
 COMMENT ON COLUMN ext_intf_manage.update_user_name IS '更新人名称';
 COMMENT ON COLUMN ext_intf_manage.update_time IS '更新时间';
-ALTER TABLE ext_intf_manage ADD CONSTRAINT ext_intf_manage_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ext_intf_param_define (
-    id character varying(32) COLLATE "C" NOT NULL,
-    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    param_value character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    param_position character varying(10) COLLATE "C" DEFAULT '1'::character varying,
-    param_is_required character varying(2) COLLATE "C" DEFAULT '0'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    supplier_id            VARCHAR(100),
+    param_code             VARCHAR(100),
+    param_type             VARCHAR(10),
+    param_value            VARCHAR(2000),
+    input_user_id          VARCHAR(100),
+    input_user_name        VARCHAR(100),
+    input_time             VARCHAR(20),
+    update_user_id         VARCHAR(100),
+    update_user_name       VARCHAR(100),
+    update_time            VARCHAR(20),
+    param_position         VARCHAR(10) DEFAULT '1',
+    param_is_required      VARCHAR(2) DEFAULT '0',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE ext_intf_param_define IS '外部服务公共参数定义表';
 COMMENT ON COLUMN ext_intf_param_define.id IS '主键';
 COMMENT ON COLUMN ext_intf_param_define.supplier_id IS '服务编号';
@@ -2081,37 +1872,35 @@ COMMENT ON COLUMN ext_intf_param_define.update_user_name IS '更新人名称';
 COMMENT ON COLUMN ext_intf_param_define.update_time IS '更新时间';
 COMMENT ON COLUMN ext_intf_param_define.param_position IS '参数使用位置 1-报文体 2-报文头 3-URL 4-PATH';
 COMMENT ON COLUMN ext_intf_param_define.param_is_required IS '参数是否必输（0否1是）';
-ALTER TABLE ext_intf_param_define ADD CONSTRAINT ext_intf_param_define_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ext_intf_param_manage (
-    id character varying(32) COLLATE "C" NOT NULL,
-    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    param_is_required character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    param_position character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    param_source character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    param_value character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    source_type_detail character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    child_param_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    child_param_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    child_param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    source_field_dict_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_field character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_field_name character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    supplier_id            VARCHAR(100),
+    intf_no                VARCHAR(100),
+    param_code             VARCHAR(100),
+    param_name             VARCHAR(200),
+    param_type             VARCHAR(10),
+    param_is_required      VARCHAR(2),
+    param_position         VARCHAR(10),
+    param_source           VARCHAR(20),
+    param_value            VARCHAR(200),
+    input_user_id          VARCHAR(100),
+    input_user_name        VARCHAR(100),
+    input_time             VARCHAR(20),
+    update_user_id         VARCHAR(100),
+    update_user_name       VARCHAR(100),
+    update_time            VARCHAR(20),
+    source_type_detail     VARCHAR(100),
+    source_param_code      VARCHAR(100),
+    source_param_type      VARCHAR(10),
+    child_param_code       VARCHAR(100),
+    child_param_name       VARCHAR(100),
+    child_param_type       VARCHAR(10),
+    source_field_dict_id   VARCHAR(100),
+    source_field           VARCHAR(100),
+    source_field_name      VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE ext_intf_param_manage IS '外部接口参数配置表';
 COMMENT ON COLUMN ext_intf_param_manage.id IS '主键';
 COMMENT ON COLUMN ext_intf_param_manage.supplier_id IS '服务编号';
@@ -2138,23 +1927,21 @@ COMMENT ON COLUMN ext_intf_param_manage.child_param_type IS '子参数类型1 �
 COMMENT ON COLUMN ext_intf_param_manage.source_field_dict_id IS '关联细类字段字典ID';
 COMMENT ON COLUMN ext_intf_param_manage.source_field IS '关联细类字段';
 COMMENT ON COLUMN ext_intf_param_manage.source_field_name IS '关联细类字段名称';
-ALTER TABLE ext_intf_param_manage ADD CONSTRAINT ext_intf_param_manage_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ext_intf_supplier_manage (
-    supplier_id character varying(100) COLLATE "C" NOT NULL,
-    supplier_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    intf_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    intf_path character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    supplier_id            VARCHAR(100) NOT NULL,
+    supplier_name          VARCHAR(200),
+    intf_type              VARCHAR(10),
+    intf_path              VARCHAR(100),
+    status                 VARCHAR(2),
+    input_user_id          VARCHAR(100),
+    input_user_name        VARCHAR(100),
+    input_time             VARCHAR(20),
+    update_user_id         VARCHAR(100),
+    update_user_name       VARCHAR(100),
+    update_time            VARCHAR(20),
+    PRIMARY KEY (supplier_id)
+);
 COMMENT ON TABLE ext_intf_supplier_manage IS '外部服务配置表';
 COMMENT ON COLUMN ext_intf_supplier_manage.supplier_id IS '服务编号';
 COMMENT ON COLUMN ext_intf_supplier_manage.supplier_name IS '服务名称';
@@ -2167,28 +1954,26 @@ COMMENT ON COLUMN ext_intf_supplier_manage.input_time IS '创建时间';
 COMMENT ON COLUMN ext_intf_supplier_manage.update_user_id IS '更新人id';
 COMMENT ON COLUMN ext_intf_supplier_manage.update_user_name IS '更新人名称';
 COMMENT ON COLUMN ext_intf_supplier_manage.update_time IS '更新时间';
-ALTER TABLE ext_intf_supplier_manage ADD CONSTRAINT ext_intf_supplier_manage_pkey PRIMARY KEY USING ubtree  (supplier_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_abnormal_transaction_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    account_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    amount character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    abnormal_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    year_month_str character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    trade_date character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    trade_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    trans_type character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    uuid                   VARCHAR(64),
+    batch_id               VARCHAR(20),
+    task_id                VARCHAR(20),
+    ent_name               VARCHAR(100),
+    account_no             VARCHAR(100),
+    label_name             VARCHAR(20),
+    amount                 VARCHAR(100),
+    abnormal_type          VARCHAR(100),
+    year_month_str         VARCHAR(20),
+    trade_date             VARCHAR(20),
+    transfer_name          VARCHAR(100),
+    trade_time             VARCHAR(20),
+    trans_type             VARCHAR(1000),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_abnormal_transaction_info IS '客户金融异常交易信息表';
 COMMENT ON COLUMN financial_abnormal_transaction_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_abnormal_transaction_info.uuid IS 'uuid';
@@ -2206,19 +1991,17 @@ COMMENT ON COLUMN financial_abnormal_transaction_info.trade_time IS '交易时�
 COMMENT ON COLUMN financial_abnormal_transaction_info.trans_type IS '摘要';
 COMMENT ON COLUMN financial_abnormal_transaction_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_abnormal_transaction_info.update_time IS '更新时间';
-ALTER TABLE financial_abnormal_transaction_info ADD CONSTRAINT financial_abnormal_transaction_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_batch_task_records (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(20) COLLATE "C" DEFAULT 'init'::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    uuid                   VARCHAR(64),
+    batch_id               VARCHAR(20),
+    task_id                VARCHAR(20),
+    status                 VARCHAR(20) DEFAULT 'init',
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_batch_task_records IS '批次任务记录表';
 COMMENT ON COLUMN financial_batch_task_records.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_batch_task_records.uuid IS 'uuid';
@@ -2227,33 +2010,31 @@ COMMENT ON COLUMN financial_batch_task_records.task_id IS '任务ID';
 COMMENT ON COLUMN financial_batch_task_records.status IS '任务状态 init 待处理 processing 处理中 finished 已完成 failed 失败';
 COMMENT ON COLUMN financial_batch_task_records.create_time IS '关联关系创建时间';
 COMMENT ON COLUMN financial_batch_task_records.update_time IS '关联关系更新时间';
-ALTER TABLE financial_batch_task_records ADD CONSTRAINT financial_batch_task_records_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_core_income_expenditure_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    proportion numeric(18,2) DEFAULT NULL::numeric,
-    trade_amount_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    trade_num integer,
-    avg_trade_amount_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    merge_trans character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    business_proportion numeric(18,2) DEFAULT NULL::numeric,
-    business_trade_amount numeric(18,2) DEFAULT NULL::numeric,
-    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    business_proportion_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    trade_amount numeric(18,2) DEFAULT NULL::numeric,
-    avg_trade_amount numeric(18,2) DEFAULT NULL::numeric,
-    trans_business_trade_amount numeric(18,2) DEFAULT NULL::numeric,
-    proportion_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                          VARCHAR(32) NOT NULL,
+    uuid                        VARCHAR(64),
+    batch_id                    VARCHAR(20),
+    task_id                     VARCHAR(20),
+    ent_name                    VARCHAR(100),
+    label_name                  VARCHAR(10),
+    proportion                  DECIMAL(18,2),
+    trade_amount_format         VARCHAR(100),
+    trade_num                   INT,
+    avg_trade_amount_format     VARCHAR(100),
+    merge_trans                 VARCHAR(10),
+    business_proportion         DECIMAL(18,2),
+    business_trade_amount       DECIMAL(18,2),
+    transfer_name               VARCHAR(100),
+    business_proportion_format  VARCHAR(100),
+    trade_amount                DECIMAL(18,2),
+    avg_trade_amount            DECIMAL(18,2),
+    trans_business_trade_amount DECIMAL(18,2),
+    proportion_format           VARCHAR(200),
+    create_time                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_core_income_expenditure_info IS '客户金融核心收支信息表';
 COMMENT ON COLUMN financial_core_income_expenditure_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_core_income_expenditure_info.uuid IS 'uuid';
@@ -2276,27 +2057,25 @@ COMMENT ON COLUMN financial_core_income_expenditure_info.trans_business_trade_am
 COMMENT ON COLUMN financial_core_income_expenditure_info.proportion_format IS '总收入占比';
 COMMENT ON COLUMN financial_core_income_expenditure_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_core_income_expenditure_info.update_time IS '更新时间';
-ALTER TABLE financial_core_income_expenditure_info ADD CONSTRAINT financial_core_income_expenditure_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_counterparty_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    amount_list text,
-    income_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    expenditure numeric(18,2) DEFAULT NULL::numeric,
-    income numeric(18,2) DEFAULT NULL::numeric,
-    expenditure_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    diff_amount character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    uuid                   VARCHAR(64),
+    batch_id               VARCHAR(20),
+    task_id                VARCHAR(20),
+    ent_name               VARCHAR(100),
+    name                   VARCHAR(100),
+    transfer_name          VARCHAR(100),
+    amount_list            TEXT,
+    income_format          VARCHAR(200),
+    expenditure            DECIMAL(18,2),
+    income                 DECIMAL(18,2),
+    expenditure_format     VARCHAR(200),
+    diff_amount            VARCHAR(200),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_counterparty_info IS '客户金融直接关联方对手信息表';
 COMMENT ON COLUMN financial_counterparty_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_counterparty_info.uuid IS 'uuid';
@@ -2313,24 +2092,22 @@ COMMENT ON COLUMN financial_counterparty_info.expenditure_format IS '流出总�
 COMMENT ON COLUMN financial_counterparty_info.diff_amount IS '交易差额';
 COMMENT ON COLUMN financial_counterparty_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_counterparty_info.update_time IS '更新时间';
-ALTER TABLE financial_counterparty_info ADD CONSTRAINT financial_counterparty_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_direct_relation_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    income_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    expenditure numeric(18,2) DEFAULT NULL::numeric,
-    income numeric(18,2) DEFAULT NULL::numeric,
-    expenditure_format character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    diff_amount character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    uuid                   VARCHAR(64),
+    batch_id               VARCHAR(20),
+    task_id                VARCHAR(20),
+    ent_name               VARCHAR(100),
+    income_format          VARCHAR(200),
+    expenditure            DECIMAL(18,2),
+    income                 DECIMAL(18,2),
+    expenditure_format     VARCHAR(200),
+    diff_amount            VARCHAR(200),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_direct_relation_info IS '客户金融直接关联方信息表';
 COMMENT ON COLUMN financial_direct_relation_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_direct_relation_info.uuid IS 'uuid';
@@ -2344,27 +2121,25 @@ COMMENT ON COLUMN financial_direct_relation_info.expenditure_format IS '流出�
 COMMENT ON COLUMN financial_direct_relation_info.diff_amount IS '交易差额';
 COMMENT ON COLUMN financial_direct_relation_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_direct_relation_info.update_time IS '更新时间';
-ALTER TABLE financial_direct_relation_info ADD CONSTRAINT financial_direct_relation_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_focus_counterparty_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    income_amount numeric(18,2) DEFAULT NULL::numeric,
-    income_trade_amount character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    income_ratio character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    expend_amount numeric(18,2) DEFAULT NULL::numeric,
-    expend_trade_amount character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    expend_ratio character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    follow_rule character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    uuid                   VARCHAR(64),
+    batch_id               VARCHAR(20),
+    task_id                VARCHAR(20),
+    ent_name               VARCHAR(100),
+    transfer_name          VARCHAR(100),
+    income_amount          DECIMAL(18,2),
+    income_trade_amount    VARCHAR(100),
+    income_ratio           VARCHAR(100),
+    expend_amount          DECIMAL(18,2),
+    expend_trade_amount    VARCHAR(100),
+    expend_ratio           VARCHAR(100),
+    follow_rule            VARCHAR(10),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_focus_counterparty_info IS '客户金融需关注对手方信息表';
 COMMENT ON COLUMN financial_focus_counterparty_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_focus_counterparty_info.uuid IS 'uuid';
@@ -2381,24 +2156,22 @@ COMMENT ON COLUMN financial_focus_counterparty_info.expend_ratio IS '支出占�
 COMMENT ON COLUMN financial_focus_counterparty_info.follow_rule IS '关注类型';
 COMMENT ON COLUMN financial_focus_counterparty_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_focus_counterparty_info.update_time IS '更新时间';
-ALTER TABLE financial_focus_counterparty_info ADD CONSTRAINT financial_focus_counterparty_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_main_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    cash_flow_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    balance_day_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    profit_loss_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    income_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    expenditure_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                       VARCHAR(32) NOT NULL,
+    uuid                     VARCHAR(64),
+    batch_id                 VARCHAR(20),
+    task_id                  VARCHAR(20),
+    ent_name                 VARCHAR(100),
+    cash_flow_total_format   VARCHAR(100),
+    balance_day_format       VARCHAR(100),
+    profit_loss_total_format VARCHAR(100),
+    income_total_format      VARCHAR(100),
+    expenditure_total_format VARCHAR(100),
+    create_time              TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time              TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_main_info IS '客户金融主体信息表';
 COMMENT ON COLUMN financial_main_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_main_info.uuid IS 'uuid';
@@ -2412,36 +2185,34 @@ COMMENT ON COLUMN financial_main_info.income_total_format IS '收入总额';
 COMMENT ON COLUMN financial_main_info.expenditure_total_format IS '支出总额';
 COMMENT ON COLUMN financial_main_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_main_info.update_time IS '更新时间';
-ALTER TABLE financial_main_info ADD CONSTRAINT financial_main_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_profit_loss_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    profit_loss_total numeric(18,2) DEFAULT NULL::numeric,
-    profit_loss_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    income_total numeric(18,2) DEFAULT NULL::numeric,
-    income_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    average_monthly_income numeric(18,2) DEFAULT NULL::numeric,
-    average_monthly_income_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    average_monthly_expenditure numeric(18,2) DEFAULT NULL::numeric,
-    average_monthly_expenditure_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    year_income numeric(18,2) DEFAULT NULL::numeric,
-    year_income_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    year_expenditure numeric(18,2) DEFAULT NULL::numeric,
-    year_expenditure_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    expenditure_total numeric(18,2) DEFAULT NULL::numeric,
-    expenditure_total_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    average_monthly_profit_loss numeric(18,2) DEFAULT NULL::numeric,
-    average_monthly_profit_loss_format character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                                 VARCHAR(32) NOT NULL,
+    uuid                               VARCHAR(64),
+    batch_id                           VARCHAR(20),
+    task_id                            VARCHAR(20),
+    ent_name                           VARCHAR(100),
+    label_name                         VARCHAR(10),
+    profit_loss_total                  DECIMAL(18,2),
+    profit_loss_total_format           VARCHAR(100),
+    income_total                       DECIMAL(18,2),
+    income_total_format                VARCHAR(100),
+    average_monthly_income             DECIMAL(18,2),
+    average_monthly_income_format      VARCHAR(100),
+    average_monthly_expenditure        DECIMAL(18,2),
+    average_monthly_expenditure_format VARCHAR(100),
+    year_income                        DECIMAL(18,2),
+    year_income_format                 VARCHAR(100),
+    year_expenditure                   DECIMAL(18,2),
+    year_expenditure_format            VARCHAR(100),
+    expenditure_total                  DECIMAL(18,2),
+    expenditure_total_format           VARCHAR(100),
+    average_monthly_profit_loss        DECIMAL(18,2),
+    average_monthly_profit_loss_format VARCHAR(100),
+    create_time                        TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time                        TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE financial_profit_loss_info IS '客户金融收支盈亏信息表';
 COMMENT ON COLUMN financial_profit_loss_info.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN financial_profit_loss_info.uuid IS 'uuid';
@@ -2467,86 +2238,84 @@ COMMENT ON COLUMN financial_profit_loss_info.average_monthly_profit_loss IS '月
 COMMENT ON COLUMN financial_profit_loss_info.average_monthly_profit_loss_format IS '月均盈亏金额格式化';
 COMMENT ON COLUMN financial_profit_loss_info.create_time IS '创建时间';
 COMMENT ON COLUMN financial_profit_loss_info.update_time IS '更新时间';
-ALTER TABLE financial_profit_loss_info ADD CONSTRAINT financial_profit_loss_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE financial_transaction_records (
-    _id bigint DEFAULT nextval('financial_transaction_records__id_seq'::regclass) NOT NULL,
-    id character varying(64) COLLATE "C" NOT NULL,
-    line_id character varying(32) COLLATE "C" NOT NULL,
-    uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    batch_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    page integer,
-    "row" integer,
-    trade_date character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    trade_date_local character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    trade_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    account_no character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_account_no character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_bank_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    transaction_type character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    amount character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    amount_cny numeric(18,2) DEFAULT NULL::numeric,
-    amount_format numeric(18,2) DEFAULT NULL::numeric,
-    balance character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    balance_format numeric(18,2) DEFAULT NULL::numeric,
-    balance_cny numeric(18,2) DEFAULT NULL::numeric,
-    notes character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    trans_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    running_days integer,
-    label_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    norm_ids character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    label_type character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    label_source character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    in_or_out character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    cuser character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    ctime bigint,
-    error_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    year_and_month integer,
-    trade_date_format character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    is_del character varying(2) COLLATE "C" DEFAULT '0'::character varying,
-    ds_note character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    alter_label_type character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    muser character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    mtime character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    delete_flag character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    holiday_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    label_con_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    recp_task_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    recp_flow_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    pay_notes character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    proportion numeric(10,2) DEFAULT NULL::numeric,
-    total numeric(18,2) DEFAULT NULL::numeric,
-    relevance_amount numeric(18,2) DEFAULT NULL::numeric,
-    postscript character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    purpose character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    remark character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    currency character varying(10) COLLATE "C" DEFAULT 'CNY'::character varying,
-    interest numeric(18,2) DEFAULT NULL::numeric,
-    is_abnormal character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    truth_check smallint,
-    abnormal_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    bank_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    bank_code character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    bank_logo character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    bank_cid character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    lend_type_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    order_date character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    order_money numeric(18,2) DEFAULT NULL::numeric,
-    trade_date_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    contact_info character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    address character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_contact_info character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    transfer_address character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    means_payment character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    wx_or_zfb character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    num_amount numeric(18,2) DEFAULT 0.00,
-    num_balance numeric(18,2) DEFAULT 0.00
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    id                     VARCHAR(64) NOT NULL,
+    line_id                VARCHAR(32) NOT NULL,
+    uuid                   VARCHAR(64),
+    batch_id               VARCHAR(20),
+    task_id                VARCHAR(20),
+    page                   INT,
+    "row"                  INT,
+    trade_date             VARCHAR(20),
+    trade_date_local       VARCHAR(20),
+    trade_time             VARCHAR(20),
+    name                   VARCHAR(100),
+    account_no             VARCHAR(50),
+    transfer_name          VARCHAR(100),
+    transfer_account_no    VARCHAR(50),
+    transfer_bank_name     VARCHAR(100),
+    transaction_type       VARCHAR(2000),
+    amount                 VARCHAR(20),
+    amount_cny             DECIMAL(18,2),
+    amount_format          DECIMAL(18,2),
+    balance                VARCHAR(20),
+    balance_format         DECIMAL(18,2),
+    balance_cny            DECIMAL(18,2),
+    notes                  VARCHAR(100),
+    trans_type             VARCHAR(200),
+    running_days           INT,
+    label_name             VARCHAR(50),
+    norm_ids               VARCHAR(255),
+    label_type             VARCHAR(2),
+    label_source           VARCHAR(50),
+    in_or_out              VARCHAR(2),
+    cuser                  VARCHAR(20),
+    ctime                  BIGINT,
+    error_type             VARCHAR(10),
+    year_and_month         INT,
+    trade_date_format      VARCHAR(20),
+    is_del                 VARCHAR(2) DEFAULT '0',
+    ds_note                VARCHAR(100),
+    alter_label_type       VARCHAR(2),
+    muser                  VARCHAR(20),
+    mtime                  VARCHAR(20),
+    delete_flag            VARCHAR(2),
+    holiday_name           VARCHAR(50),
+    label_con_type         VARCHAR(20),
+    recp_task_id           VARCHAR(50),
+    recp_flow_id           VARCHAR(50),
+    pay_notes              VARCHAR(100),
+    proportion             DECIMAL(10,2),
+    total                  DECIMAL(18,2),
+    relevance_amount       DECIMAL(18,2),
+    postscript             VARCHAR(100),
+    purpose                VARCHAR(1000),
+    remark                 VARCHAR(255),
+    currency               VARCHAR(10) DEFAULT 'CNY',
+    interest               DECIMAL(18,2),
+    is_abnormal            VARCHAR(2),
+    truth_check            SMALLINT,
+    abnormal_type          VARCHAR(20),
+    bank_name              VARCHAR(100),
+    bank_code              VARCHAR(20),
+    bank_logo              VARCHAR(255),
+    bank_cid               VARCHAR(50),
+    lend_type_name         VARCHAR(50),
+    order_date             VARCHAR(20),
+    order_money            DECIMAL(18,2),
+    trade_date_time        VARCHAR(20),
+    contact_info           VARCHAR(100),
+    address                VARCHAR(255),
+    transfer_contact_info  VARCHAR(100),
+    transfer_address       VARCHAR(255),
+    means_payment          VARCHAR(50),
+    wx_or_zfb              VARCHAR(10),
+    num_amount             DECIMAL(18,2) DEFAULT 0.00,
+    num_balance            DECIMAL(18,2) DEFAULT 0.00,
+    PRIMARY KEY (_id)
+);
 COMMENT ON TABLE financial_transaction_records IS '银行交易记录表';
 COMMENT ON COLUMN financial_transaction_records._id IS '主键ID';
 COMMENT ON COLUMN financial_transaction_records.id IS '关联关系的唯一标识，自增主键';
@@ -2622,39 +2391,35 @@ COMMENT ON COLUMN financial_transaction_records.means_payment IS '支付方式';
 COMMENT ON COLUMN financial_transaction_records.wx_or_zfb IS '微信或支付宝';
 COMMENT ON COLUMN financial_transaction_records.num_amount IS '数字金额';
 COMMENT ON COLUMN financial_transaction_records.num_balance IS '数字余额';
-ALTER TABLE financial_transaction_records ADD CONSTRAINT financial_transaction_records_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE finatial_records (
-    task_id integer DEFAULT nextval('finatial_records_task_id_seq'::regclass) NOT NULL,
-    sent_content text NOT NULL,
-    status character varying(20) COLLATE "C" DEFAULT 'pending'::character varying NOT NULL,
-    upload_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_id                BIGINT NOT NULL AUTO_INCREMENT,
+    sent_content           TEXT NOT NULL,
+    status                 VARCHAR(20) DEFAULT 'pending' NOT NULL,
+    upload_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (task_id)
+);
 COMMENT ON TABLE finatial_records IS '财务上传数据记录表';
 COMMENT ON COLUMN finatial_records.task_id IS '任务id(自增主键)';
 COMMENT ON COLUMN finatial_records.sent_content IS '存放的json数据';
 COMMENT ON COLUMN finatial_records.status IS '任务状态';
 COMMENT ON COLUMN finatial_records.upload_time IS '上传时间';
-ALTER TABLE finatial_records ADD CONSTRAINT finatial_records_pkey PRIMARY KEY USING ubtree  (task_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE finatial_upload_task (
-    id integer DEFAULT nextval('finatial_upload_task_id_seq'::regclass) NOT NULL,
-    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    session_no character varying(100) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    file_id character varying(2048) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    file_name character varying(500) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    file_path character varying(500) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    file_size integer DEFAULT 0 NOT NULL,
-    parsing_state character varying(20) COLLATE "C" DEFAULT 'parsing'::character varying NOT NULL,
-    ent_name character varying(256) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    fail_reason character varying(2000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    user_id                VARCHAR(64) DEFAULT '' NOT NULL,
+    session_no             VARCHAR(100) DEFAULT '' NOT NULL,
+    file_id                VARCHAR(2048) DEFAULT '' NOT NULL,
+    file_name              VARCHAR(500) DEFAULT '' NOT NULL,
+    file_path              VARCHAR(500) DEFAULT '' NOT NULL,
+    file_size              INT DEFAULT 0 NOT NULL,
+    parsing_state          VARCHAR(20) DEFAULT 'parsing' NOT NULL,
+    ent_name               VARCHAR(256) DEFAULT '' NOT NULL,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    fail_reason            VARCHAR(2000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE finatial_upload_task IS '财务上传任务表';
 COMMENT ON COLUMN finatial_upload_task.id IS '任务id';
 COMMENT ON COLUMN finatial_upload_task.user_id IS '用户身份识别码';
@@ -2668,21 +2433,19 @@ COMMENT ON COLUMN finatial_upload_task.ent_name IS '企业名称';
 COMMENT ON COLUMN finatial_upload_task.input_time IS '创建时间';
 COMMENT ON COLUMN finatial_upload_task.update_time IS '更新时间';
 COMMENT ON COLUMN finatial_upload_task.fail_reason IS '失败原因';
-ALTER TABLE finatial_upload_task ADD CONSTRAINT finatial_upload_task_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE graphs_info (
-    user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    graph_id character varying(64) COLLATE "C" NOT NULL,
-    biz_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    graph_desc text,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    status character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    graph_summary text,
-    node_classification text,
-    update_time timestamp without time zone DEFAULT pg_systimestamp()
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    user_id                VARCHAR(64),
+    graph_id               VARCHAR(64) NOT NULL,
+    biz_type               VARCHAR(256),
+    graph_desc             TEXT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status                 VARCHAR(50),
+    graph_summary          TEXT,
+    node_classification    TEXT,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (graph_id)
+);
 COMMENT ON TABLE graphs_info IS '图谱信息表';
 COMMENT ON COLUMN graphs_info.user_id IS '构建子图的用户,根据用户区分是用户上传的图还是线下构建的图';
 COMMENT ON COLUMN graphs_info.graph_id IS '子图id';
@@ -2693,20 +2456,18 @@ COMMENT ON COLUMN graphs_info.status IS '状态: init=开始构建(还是个空�
 COMMENT ON COLUMN graphs_info.graph_summary IS '洞见';
 COMMENT ON COLUMN graphs_info.node_classification IS '本体分类';
 COMMENT ON COLUMN graphs_info.update_time IS '子图更新时间';
-ALTER TABLE graphs_info ADD CONSTRAINT graphs_info_pkey PRIMARY KEY USING ubtree  (graph_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_agent_rela (
-    id integer DEFAULT nextval('index_agent_rela_id_seq'::regclass) NOT NULL,
-    index_id integer,
-    index_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    agent_id integer,
-    extra_column text,
-    index_agent_prompt text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    index_id               INT,
+    index_status           VARCHAR(1) DEFAULT 'Y',
+    rec_group              VARCHAR(400),
+    rec_question           VARCHAR(400),
+    agent_id               INT,
+    extra_column           TEXT,
+    index_agent_prompt     TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE index_agent_rela IS '指标Agent关联表';
 COMMENT ON COLUMN index_agent_rela.id IS '主键ID';
 COMMENT ON COLUMN index_agent_rela.index_id IS '关联指标ID';
@@ -2716,22 +2477,20 @@ COMMENT ON COLUMN index_agent_rela.rec_question IS '推荐问题';
 COMMENT ON COLUMN index_agent_rela.agent_id IS '智能体ID';
 COMMENT ON COLUMN index_agent_rela.extra_column IS '扩展指标值报告流程';
 COMMENT ON COLUMN index_agent_rela.index_agent_prompt IS 'prompt配置管理';
-ALTER TABLE index_agent_rela ADD CONSTRAINT idx_source_agent_index UNIQUE USING ubtree (index_id, agent_id) WITH (storage_type=USTORE);
-ALTER TABLE index_agent_rela ADD CONSTRAINT index_agent_rela_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX idx_source_agent_index ON index_agent_rela (index_id, agent_id);
 
-SET search_path = bosz_test;
 CREATE TABLE index_base_group (
-    groupid character varying(32) COLLATE "C" NOT NULL,
-    groupvalue character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    groupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    parentgroupid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    parentgroupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    sortno character varying(10) COLLATE "C" DEFAULT '0'::character varying,
-    groupstatus character varying(10) COLLATE "C" DEFAULT '1'::character varying,
-    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    groupid                VARCHAR(32) NOT NULL,
+    groupvalue             VARCHAR(100),
+    groupname              VARCHAR(200),
+    parentgroupid          VARCHAR(32),
+    parentgroupname        VARCHAR(200),
+    sortno                 VARCHAR(10) DEFAULT '0',
+    groupstatus            VARCHAR(10) DEFAULT '1',
+    inputtime              VARCHAR(32),
+    updatetime             VARCHAR(32),
+    PRIMARY KEY (groupid)
+);
 COMMENT ON TABLE index_base_group IS '分组信息';
 COMMENT ON COLUMN index_base_group.groupid IS '知识库分组Id';
 COMMENT ON COLUMN index_base_group.groupvalue IS '知识库分组编码';
@@ -2742,23 +2501,21 @@ COMMENT ON COLUMN index_base_group.sortno IS '排序';
 COMMENT ON COLUMN index_base_group.groupstatus IS '知识库分组状态 0无效 1有效';
 COMMENT ON COLUMN index_base_group.inputtime IS '登记日期';
 COMMENT ON COLUMN index_base_group.updatetime IS '更新日期';
-ALTER TABLE index_base_group ADD CONSTRAINT index_base_group_pkey PRIMARY KEY USING ubtree  (groupid) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_detail_code_library (
-    _id bigint DEFAULT nextval('index_detail_code_library__id_seq'::regclass) NOT NULL,
-    index_detail_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_layer1_item_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_layer1_item_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_layer2_item_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_layer2_item_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_layer3_item_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_layer3_item_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    synonym_word text,
-    key_word text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                           BIGINT NOT NULL AUTO_INCREMENT,
+    index_detail_name             VARCHAR(100),
+    index_detail_code             VARCHAR(32),
+    index_detail_layer1_item_name VARCHAR(100),
+    index_detail_layer1_item_code VARCHAR(32),
+    index_detail_layer2_item_name VARCHAR(100),
+    index_detail_layer2_item_code VARCHAR(32),
+    index_detail_layer3_item_name VARCHAR(100),
+    index_detail_layer3_item_code VARCHAR(32),
+    synonym_word                  TEXT,
+    key_word                      TEXT,
+    PRIMARY KEY (_id)
+);
 COMMENT ON COLUMN index_detail_code_library._id IS '主键ID';
 COMMENT ON COLUMN index_detail_code_library.index_detail_name IS '指标分析维度名称';
 COMMENT ON COLUMN index_detail_code_library.index_detail_code IS '指标分析维度编码';
@@ -2770,23 +2527,21 @@ COMMENT ON COLUMN index_detail_code_library.index_detail_layer3_item_name IS '�
 COMMENT ON COLUMN index_detail_code_library.index_detail_layer3_item_code IS '指标分析维度三层枚举值编码';
 COMMENT ON COLUMN index_detail_code_library.synonym_word IS '同义词';
 COMMENT ON COLUMN index_detail_code_library.key_word IS '关键字';
-ALTER TABLE index_detail_code_library ADD CONSTRAINT index_detail_code_library_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_detail_config (
-    id integer DEFAULT nextval('index_detail_config_id_seq'::regclass) NOT NULL,
-    index_id integer,
-    index_detail_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_type_detail character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    default_value character varying(128) COLLATE "C" DEFAULT NULL::character varying,
-    remark character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    param_value_id character varying(266) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_field character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    index_detail_field_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    ai_identify_param character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    sample_question character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                      BIGINT NOT NULL AUTO_INCREMENT,
+    index_id                INT,
+    index_detail_name       VARCHAR(100),
+    source_type_detail      VARCHAR(32),
+    default_value           VARCHAR(128),
+    remark                  VARCHAR(200),
+    param_value_id          VARCHAR(266),
+    index_detail_field      VARCHAR(100),
+    index_detail_field_type VARCHAR(100),
+    ai_identify_param       VARCHAR(100),
+    sample_question         VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE index_detail_config IS '指标分析维度配置表';
 COMMENT ON COLUMN index_detail_config.id IS '主键ID';
 COMMENT ON COLUMN index_detail_config.index_id IS '组件ID';
@@ -2799,45 +2554,41 @@ COMMENT ON COLUMN index_detail_config.index_detail_field IS '细类字段编码'
 COMMENT ON COLUMN index_detail_config.index_detail_field_type IS '细类字段类型';
 COMMENT ON COLUMN index_detail_config.ai_identify_param IS 'AI识别参数';
 COMMENT ON COLUMN index_detail_config.sample_question IS '示例问题';
-ALTER TABLE index_detail_config ADD CONSTRAINT index_detail_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_info_temp (
-    _id bigint DEFAULT nextval('index_info_temp__id_seq'::regclass) NOT NULL,
-    paramno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    paramid character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    paramno                VARCHAR(32),
+    paramid                VARCHAR(200),
+    paramname              VARCHAR(200),
+    PRIMARY KEY (_id)
+);
 COMMENT ON COLUMN index_info_temp._id IS '主键ID';
-ALTER TABLE index_info_temp ADD CONSTRAINT index_info_temp_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_label_rela (
-    index_name character varying(100) COLLATE "C" NOT NULL,
-    index_code character varying(32) COLLATE "C" NOT NULL,
-    source_type character varying(200) COLLATE "C" NOT NULL,
-    label_database_type character varying(20) COLLATE "C" DEFAULT '分类知识库'::character varying NOT NULL,
-    label_name_level_1 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_1 character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_2 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_2 character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_name_level_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_code_level_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    interface_no character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    label_database character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_column character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_vectordb_addr character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_dict_code_1 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_dict_code_2 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_dict_code_3 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    label_dict_code_4 character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    index_name             VARCHAR(100) NOT NULL,
+    index_code             VARCHAR(32) NOT NULL,
+    source_type            VARCHAR(200) NOT NULL,
+    label_database_type    VARCHAR(20) DEFAULT '分类知识库' NOT NULL,
+    label_name_level_1     VARCHAR(100),
+    label_code_level_1     VARCHAR(32),
+    label_name_level_2     VARCHAR(100),
+    label_code_level_2     VARCHAR(32),
+    label_name_level_3     VARCHAR(100),
+    label_code_level_3     VARCHAR(100),
+    label_name_level_4     VARCHAR(100),
+    label_code_level_4     VARCHAR(100),
+    interface_no           VARCHAR(256),
+    label_database         VARCHAR(100),
+    label_table            VARCHAR(100),
+    label_column           VARCHAR(100),
+    label_vectordb_addr    VARCHAR(100),
+    label_dict_code_1      VARCHAR(100),
+    label_dict_code_2      VARCHAR(100),
+    label_dict_code_3      VARCHAR(100),
+    label_dict_code_4      VARCHAR(100),
+    knowledge_id           VARCHAR(100),
+    PRIMARY KEY (index_code, source_type)
+);
 COMMENT ON COLUMN index_label_rela.index_name IS '指标名称';
 COMMENT ON COLUMN index_label_rela.index_code IS '指标编码';
 COMMENT ON COLUMN index_label_rela.source_type IS '数据来源';
@@ -2860,71 +2611,69 @@ COMMENT ON COLUMN index_label_rela.label_dict_code_2 IS '二级知识库字典�
 COMMENT ON COLUMN index_label_rela.label_dict_code_3 IS '三级知识库字典码值';
 COMMENT ON COLUMN index_label_rela.label_dict_code_4 IS '四级知识库字典码值';
 COMMENT ON COLUMN index_label_rela.knowledge_id IS '关联知识库ID';
-ALTER TABLE index_label_rela ADD CONSTRAINT index_label_rela_pkey PRIMARY KEY USING ubtree  (index_code, source_type) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_params (
-    paramno character varying(32) COLLATE "C" NOT NULL,
-    paramid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    paramtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    codemethod character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    codeno character varying(120) COLLATE "C" DEFAULT NULL::character varying,
-    required character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    readonly character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    defaultformat character varying(120) COLLATE "C" DEFAULT NULL::character varying,
-    inputmethod character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    fromparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    defaultvalue character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    parentparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    publicparamstatus character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    modelno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    initmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    datamethod character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    parentparamname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    reportversion character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    versionno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    paramsource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    charttype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    placeholder character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    acturecolumn character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnlength character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columntype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnremark character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnisnull character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columncomment character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnfromtable character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnfromdatasource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    otherconfig character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    scripttype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    script text,
-    validators character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    chartinitmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    inputuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    inputorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updateuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updateorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    supplierid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intfno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intfparams character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
-    intffield text,
-    intffieldtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    structure text,
-    extendfield text,
-    otherno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    count_field text,
-    is_online smallint DEFAULT 0::smallint,
-    metric_intro character varying(500) COLLATE "C" DEFAULT ''::character varying,
-    data_unit character varying(50) COLLATE "C" DEFAULT ''::character varying,
-    data_example character varying(1000) COLLATE "C" DEFAULT ''::character varying,
-    data_type character varying(30) COLLATE "C" DEFAULT ''::character varying,
-    data_content_parse text,
-    paramkey character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    paramno                VARCHAR(32) NOT NULL,
+    paramid                VARCHAR(100),
+    paramname              VARCHAR(200),
+    paramtype              VARCHAR(10),
+    codemethod             VARCHAR(20),
+    codeno                 VARCHAR(120),
+    required               VARCHAR(10),
+    readonly               VARCHAR(10),
+    defaultformat          VARCHAR(120),
+    inputmethod            VARCHAR(40),
+    fromparamno            VARCHAR(32),
+    defaultvalue           VARCHAR(2000),
+    parentparamno          VARCHAR(32),
+    publicparamstatus      VARCHAR(10),
+    modelno                VARCHAR(32),
+    initmethod             VARCHAR(100),
+    datamethod             VARCHAR(10),
+    parentparamname        VARCHAR(200),
+    reportversion          VARCHAR(100),
+    versionno              VARCHAR(100),
+    paramsource            VARCHAR(100),
+    charttype              VARCHAR(100),
+    sortno                 VARCHAR(10),
+    placeholder            VARCHAR(2000),
+    acturecolumn           VARCHAR(100),
+    columnlength           VARCHAR(100),
+    columntype             VARCHAR(100),
+    columnremark           VARCHAR(100),
+    columnisnull           VARCHAR(100),
+    columncomment          VARCHAR(100),
+    columnfromtable        VARCHAR(100),
+    columnfromdatasource   VARCHAR(100),
+    otherconfig            VARCHAR(1000),
+    scripttype             VARCHAR(100),
+    script                 TEXT,
+    validators             VARCHAR(500),
+    chartinitmethod        VARCHAR(100),
+    inputuserid            VARCHAR(32),
+    inputorgid             VARCHAR(32),
+    inputtime              VARCHAR(32),
+    updateuserid           VARCHAR(32),
+    updateorgid            VARCHAR(32),
+    updatetime             VARCHAR(32),
+    supplierid             VARCHAR(100),
+    intfno                 VARCHAR(100),
+    intfparams             VARCHAR(3000),
+    intffield              TEXT,
+    intffieldtype          VARCHAR(10),
+    structure              TEXT,
+    extendfield            TEXT,
+    otherno                VARCHAR(100),
+    count_field            TEXT,
+    is_online              SMALLINT DEFAULT 0,
+    metric_intro           VARCHAR(500) DEFAULT '',
+    data_unit              VARCHAR(50) DEFAULT '',
+    data_example           VARCHAR(1000) DEFAULT '',
+    data_type              VARCHAR(30) DEFAULT '',
+    data_content_parse     TEXT,
+    paramkey               VARCHAR(200),
+    PRIMARY KEY (paramno)
+);
 COMMENT ON TABLE index_params IS '指标参数信息表';
 COMMENT ON COLUMN index_params.paramno IS '指标流水号';
 COMMENT ON COLUMN index_params.paramid IS '指标ID';
@@ -2985,78 +2734,74 @@ COMMENT ON COLUMN index_params.data_example IS '数据样例';
 COMMENT ON COLUMN index_params.data_type IS '数据类型';
 COMMENT ON COLUMN index_params.data_content_parse IS '数据内容解析结果';
 COMMENT ON COLUMN index_params.paramkey IS '指标唯一标志';
-ALTER TABLE index_params ADD CONSTRAINT index_params_pkey PRIMARY KEY USING ubtree  (paramno) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_params_temp (
-    _id bigint DEFAULT nextval('index_params_temp__id_seq'::regclass) NOT NULL,
-    paramno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    intfparams text,
-    script text,
-    scripttype character varying(10) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    paramno                VARCHAR(32),
+    intfparams             TEXT,
+    script                 TEXT,
+    scripttype             VARCHAR(10),
+    PRIMARY KEY (_id)
+);
 COMMENT ON COLUMN index_params_temp._id IS '主键ID';
-ALTER TABLE index_params_temp ADD CONSTRAINT index_params_temp_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_params_version (
-    id character varying(32) COLLATE "C" NOT NULL,
-    paramno character varying(32) COLLATE "C" NOT NULL,
-    paramversion character varying(100) COLLATE "C" NOT NULL,
-    paramid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    paramtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    codemethod character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    codeno character varying(120) COLLATE "C" DEFAULT NULL::character varying,
-    required character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    readonly character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    defaultformat character varying(120) COLLATE "C" DEFAULT NULL::character varying,
-    inputmethod character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    fromparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    defaultvalue character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    parentparamno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    publicparamstatus character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    modelno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    initmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    datamethod character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    parentparamname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    reportversion character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    versionno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    paramsource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    charttype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    placeholder character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    acturecolumn character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnlength character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columntype character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnremark character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnisnull character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columncomment character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnfromtable character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    columnfromdatasource character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    otherconfig character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    scripttype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    script text,
-    validators character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    chartinitmethod character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    inputuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    inputorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updateuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updateorgid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    supplierid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intfno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intfparams character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
-    intffield text,
-    intffieldtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    structure text,
-    extendfield text,
-    otherno character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    count_field text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    paramno                VARCHAR(32) NOT NULL,
+    paramversion           VARCHAR(100) NOT NULL,
+    paramid                VARCHAR(100),
+    paramname              VARCHAR(200),
+    paramtype              VARCHAR(10),
+    codemethod             VARCHAR(20),
+    codeno                 VARCHAR(120),
+    required               VARCHAR(10),
+    readonly               VARCHAR(10),
+    defaultformat          VARCHAR(120),
+    inputmethod            VARCHAR(40),
+    fromparamno            VARCHAR(32),
+    defaultvalue           VARCHAR(2000),
+    parentparamno          VARCHAR(32),
+    publicparamstatus      VARCHAR(10),
+    modelno                VARCHAR(32),
+    initmethod             VARCHAR(100),
+    datamethod             VARCHAR(10),
+    parentparamname        VARCHAR(200),
+    reportversion          VARCHAR(100),
+    versionno              VARCHAR(100),
+    paramsource            VARCHAR(100),
+    charttype              VARCHAR(100),
+    sortno                 VARCHAR(10),
+    placeholder            VARCHAR(2000),
+    acturecolumn           VARCHAR(100),
+    columnlength           VARCHAR(100),
+    columntype             VARCHAR(100),
+    columnremark           VARCHAR(100),
+    columnisnull           VARCHAR(100),
+    columncomment          VARCHAR(100),
+    columnfromtable        VARCHAR(100),
+    columnfromdatasource   VARCHAR(100),
+    otherconfig            VARCHAR(1000),
+    scripttype             VARCHAR(10),
+    script                 TEXT,
+    validators             VARCHAR(500),
+    chartinitmethod        VARCHAR(100),
+    inputuserid            VARCHAR(32),
+    inputorgid             VARCHAR(32),
+    inputtime              VARCHAR(32),
+    updateuserid           VARCHAR(32),
+    updateorgid            VARCHAR(32),
+    updatetime             VARCHAR(32),
+    supplierid             VARCHAR(100),
+    intfno                 VARCHAR(100),
+    intfparams             VARCHAR(3000),
+    intffield              TEXT,
+    intffieldtype          VARCHAR(10),
+    structure              TEXT,
+    extendfield            TEXT,
+    otherno                VARCHAR(100),
+    count_field            TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE index_params_version IS '指标参数版本信息表';
 COMMENT ON COLUMN index_params_version.id IS '主键ID';
 COMMENT ON COLUMN index_params_version.paramno IS '指标流水号';
@@ -3112,20 +2857,18 @@ COMMENT ON COLUMN index_params_version.structure IS '接口结构';
 COMMENT ON COLUMN index_params_version.extendfield IS '拓展字段';
 COMMENT ON COLUMN index_params_version.otherno IS 'api层级编号';
 COMMENT ON COLUMN index_params_version.count_field IS '统计字段';
-ALTER TABLE index_params_version ADD CONSTRAINT index_params_version_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_relate_index_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    param_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_id character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_group_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp()
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    param_no               VARCHAR(64),
+    relate_param_no        VARCHAR(64),
+    relate_param_id        VARCHAR(200),
+    relate_param_name      VARCHAR(200),
+    relate_group_id        VARCHAR(64),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE index_relate_index_info IS '指标关联指标信息表';
 COMMENT ON COLUMN index_relate_index_info.id IS '主键id';
 COMMENT ON COLUMN index_relate_index_info.param_no IS '指标编号';
@@ -3135,37 +2878,33 @@ COMMENT ON COLUMN index_relate_index_info.relate_param_name IS '关联指标名�
 COMMENT ON COLUMN index_relate_index_info.relate_group_id IS '关联指标分组ID';
 COMMENT ON COLUMN index_relate_index_info.create_time IS '创建时间';
 COMMENT ON COLUMN index_relate_index_info.update_time IS '更新时间';
-ALTER TABLE index_relate_index_info ADD CONSTRAINT index_relate_index_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_relate_info (
-    id integer DEFAULT nextval('index_relate_info_id_seq'::regclass) NOT NULL,
-    index_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    relate_index_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    relate_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    index_id               VARCHAR(100),
+    relate_index_id        VARCHAR(100),
+    relate_time            VARCHAR(40),
+    comment                VARCHAR(500),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE index_relate_info IS '指标关联信息表';
 COMMENT ON COLUMN index_relate_info.index_id IS '指标ID';
 COMMENT ON COLUMN index_relate_info.relate_index_id IS '关联指标ID';
 COMMENT ON COLUMN index_relate_info.relate_time IS '关联时间';
 COMMENT ON COLUMN index_relate_info.comment IS '备注';
-ALTER TABLE index_relate_info ADD CONSTRAINT index_relate_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE index_relate_knowledge_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    param_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    relate_knowledge_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    relate_knowledge_code character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    relate_knowledge_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_group_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    relate_items character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp()
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    param_no               VARCHAR(64),
+    relate_knowledge_no    VARCHAR(64),
+    relate_knowledge_code  VARCHAR(500),
+    relate_knowledge_name  VARCHAR(200),
+    relate_group_id        VARCHAR(64),
+    relate_items           VARCHAR(500),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE index_relate_knowledge_info IS '指标关联知识库信息表';
 COMMENT ON COLUMN index_relate_knowledge_info.id IS '主键id';
 COMMENT ON COLUMN index_relate_knowledge_info.param_no IS '指标编号';
@@ -3176,37 +2915,33 @@ COMMENT ON COLUMN index_relate_knowledge_info.relate_group_id IS '关联知识�
 COMMENT ON COLUMN index_relate_knowledge_info.relate_items IS '关联知识库项，包含知识配置、溯源配置、图片配置、全部来源配置';
 COMMENT ON COLUMN index_relate_knowledge_info.create_time IS '创建时间';
 COMMENT ON COLUMN index_relate_knowledge_info.update_time IS '更新时间';
-ALTER TABLE index_relate_knowledge_info ADD CONSTRAINT index_relate_knowledge_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE jeecg_monthly_growth_analysis (
-    id integer DEFAULT nextval('jeecg_monthly_growth_analysis_id_seq'::regclass) NOT NULL,
-    year character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    month character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    main_income numeric(18,2) DEFAULT 0.00,
-    other_income numeric(18,2) DEFAULT 0.00
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    year                   VARCHAR(50),
+    month                  VARCHAR(50),
+    main_income            DECIMAL(18,2) DEFAULT 0.00,
+    other_income           DECIMAL(18,2) DEFAULT 0.00,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN jeecg_monthly_growth_analysis.month IS '月份';
 COMMENT ON COLUMN jeecg_monthly_growth_analysis.main_income IS '佣金/主营收入';
 COMMENT ON COLUMN jeecg_monthly_growth_analysis.other_income IS '其他收入';
-ALTER TABLE jeecg_monthly_growth_analysis ADD CONSTRAINT jeecg_monthly_growth_analysis_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE jeecg_order_customer (
-    id character varying(32) COLLATE "C" NOT NULL,
-    name character varying(100) COLLATE "C" NOT NULL,
-    sex character varying(4) COLLATE "C" DEFAULT NULL::character varying,
-    idcard character varying(18) COLLATE "C" DEFAULT NULL::character varying,
-    idcard_pic character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    telphone character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    order_id character varying(32) COLLATE "C" NOT NULL,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    name                   VARCHAR(100) NOT NULL,
+    sex                    VARCHAR(4),
+    idcard                 VARCHAR(18),
+    idcard_pic             VARCHAR(500),
+    telphone               VARCHAR(32),
+    order_id               VARCHAR(32) NOT NULL,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN jeecg_order_customer.id IS '主键';
 COMMENT ON COLUMN jeecg_order_customer.name IS '客户名';
 COMMENT ON COLUMN jeecg_order_customer.sex IS '性别';
@@ -3218,22 +2953,20 @@ COMMENT ON COLUMN jeecg_order_customer.create_by IS '创建人';
 COMMENT ON COLUMN jeecg_order_customer.create_time IS '创建时间';
 COMMENT ON COLUMN jeecg_order_customer.update_by IS '修改人';
 COMMENT ON COLUMN jeecg_order_customer.update_time IS '修改时间';
-ALTER TABLE jeecg_order_customer ADD CONSTRAINT jeecg_order_customer_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE jeecg_order_main (
-    id character varying(32) COLLATE "C" NOT NULL,
-    order_code character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    ctype character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    order_date timestamp without time zone,
-    order_money numeric(10,3) DEFAULT NULL::numeric,
-    content character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    order_code             VARCHAR(50),
+    ctype                  VARCHAR(500),
+    order_date             TIMESTAMP,
+    order_money            DECIMAL(10,3),
+    content                VARCHAR(500),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN jeecg_order_main.id IS '主键';
 COMMENT ON COLUMN jeecg_order_main.order_code IS '订单号';
 COMMENT ON COLUMN jeecg_order_main.ctype IS '订单类型';
@@ -3244,20 +2977,18 @@ COMMENT ON COLUMN jeecg_order_main.create_by IS '创建人';
 COMMENT ON COLUMN jeecg_order_main.create_time IS '创建时间';
 COMMENT ON COLUMN jeecg_order_main.update_by IS '修改人';
 COMMENT ON COLUMN jeecg_order_main.update_time IS '修改时间';
-ALTER TABLE jeecg_order_main ADD CONSTRAINT jeecg_order_main_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE jeecg_order_ticket (
-    id character varying(32) COLLATE "C" NOT NULL,
-    ticket_code character varying(100) COLLATE "C" NOT NULL,
-    tickect_date timestamp without time zone,
-    order_id character varying(32) COLLATE "C" NOT NULL,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    ticket_code            VARCHAR(100) NOT NULL,
+    tickect_date           TIMESTAMP,
+    order_id               VARCHAR(32) NOT NULL,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN jeecg_order_ticket.id IS '主键';
 COMMENT ON COLUMN jeecg_order_ticket.ticket_code IS '航班号';
 COMMENT ON COLUMN jeecg_order_ticket.tickect_date IS '航班时间';
@@ -3266,20 +2997,18 @@ COMMENT ON COLUMN jeecg_order_ticket.create_by IS '创建人';
 COMMENT ON COLUMN jeecg_order_ticket.create_time IS '创建时间';
 COMMENT ON COLUMN jeecg_order_ticket.update_by IS '修改人';
 COMMENT ON COLUMN jeecg_order_ticket.update_time IS '修改时间';
-ALTER TABLE jeecg_order_ticket ADD CONSTRAINT jeecg_order_ticket_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE jeecg_project_nature_income (
-    id integer DEFAULT nextval('jeecg_project_nature_income_id_seq'::regclass) NOT NULL,
-    nature character varying(50) COLLATE "C" NOT NULL,
-    insurance_fee numeric(18,2) DEFAULT 0.00,
-    risk_consulting_fee numeric(18,2) DEFAULT 0.00,
-    evaluation_fee numeric(18,2) DEFAULT 0.00,
-    insurance_evaluation_fee numeric(18,2) DEFAULT 0.00,
-    bidding_consulting_fee numeric(18,2) DEFAULT 0.00,
-    interol_consulting_fee numeric(18,2) DEFAULT 0.00
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                       BIGINT NOT NULL AUTO_INCREMENT,
+    nature                   VARCHAR(50) NOT NULL,
+    insurance_fee            DECIMAL(18,2) DEFAULT 0.00,
+    risk_consulting_fee      DECIMAL(18,2) DEFAULT 0.00,
+    evaluation_fee           DECIMAL(18,2) DEFAULT 0.00,
+    insurance_evaluation_fee DECIMAL(18,2) DEFAULT 0.00,
+    bidding_consulting_fee   DECIMAL(18,2) DEFAULT 0.00,
+    interol_consulting_fee   DECIMAL(18,2) DEFAULT 0.00,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN jeecg_project_nature_income.nature IS '项目性质';
 COMMENT ON COLUMN jeecg_project_nature_income.insurance_fee IS '保险经纪佣金费';
 COMMENT ON COLUMN jeecg_project_nature_income.risk_consulting_fee IS '风险咨询费';
@@ -3287,22 +3016,20 @@ COMMENT ON COLUMN jeecg_project_nature_income.evaluation_fee IS '承保公估评
 COMMENT ON COLUMN jeecg_project_nature_income.insurance_evaluation_fee IS '保险公估费';
 COMMENT ON COLUMN jeecg_project_nature_income.bidding_consulting_fee IS '投标咨询费';
 COMMENT ON COLUMN jeecg_project_nature_income.interol_consulting_fee IS '内控咨询费';
-ALTER TABLE jeecg_project_nature_income ADD CONSTRAINT jeecg_project_nature_income_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_base_group (
-    groupid character varying(32) COLLATE "C" NOT NULL,
-    groupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    parentgroupid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    parentgroupname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    groupstatus character varying(10) COLLATE "C" DEFAULT '1'::character varying,
-    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    groupvalue character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    grouptype character varying(20) COLLATE "C" DEFAULT 'get_knowledge'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    groupid                VARCHAR(32) NOT NULL,
+    groupname              VARCHAR(200),
+    parentgroupid          VARCHAR(32),
+    parentgroupname        VARCHAR(200),
+    sortno                 VARCHAR(10),
+    groupstatus            VARCHAR(10) DEFAULT '1',
+    inputtime              VARCHAR(32),
+    updatetime             VARCHAR(32),
+    groupvalue             VARCHAR(100),
+    grouptype              VARCHAR(20) DEFAULT 'get_knowledge',
+    PRIMARY KEY (groupid)
+);
 COMMENT ON TABLE knowledge_base_group IS '知识库分组信息';
 COMMENT ON COLUMN knowledge_base_group.groupid IS '知识库分组Id';
 COMMENT ON COLUMN knowledge_base_group.groupname IS '知识库分组名称';
@@ -3314,58 +3041,56 @@ COMMENT ON COLUMN knowledge_base_group.inputtime IS '登记日期';
 COMMENT ON COLUMN knowledge_base_group.updatetime IS '更新日期';
 COMMENT ON COLUMN knowledge_base_group.groupvalue IS '知识库分组编码';
 COMMENT ON COLUMN knowledge_base_group.grouptype IS '知识库分类 get_knowledge-知识库 apply_prompt-应用提示词 custom-用户自定义';
-ALTER TABLE knowledge_base_group ADD CONSTRAINT knowledge_base_group_pkey PRIMARY KEY USING ubtree  (groupid) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_base_params (
-    paramid character varying(32) COLLATE "C" NOT NULL,
-    paramno character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    paramname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    paramtype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    paramentitytype character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    paramlabel character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    modelno character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    parentparamid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    parentparamname character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    reportversion character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    prompt text,
-    agentid character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    otherconfig character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    paramstatus character varying(10) COLLATE "C" DEFAULT 'Y'::character varying,
-    inputuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    inputtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updateuserid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    updatetime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    groupid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    "online" character varying(10) COLLATE "C" DEFAULT 'N'::character varying,
-    prompttype character varying(10) COLLATE "C" DEFAULT 'basic'::character varying,
-    contentdesc text,
-    input_param text,
-    large_model_code character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    trace_config text,
-    image_config text,
-    whole_source_config text,
-    large_model_content text,
-    relate_index_set text,
-    black_content_desc character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    black_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    is_markdown character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    param_description character varying(5000) COLLATE "C" DEFAULT NULL::character varying,
-    input_condition text,
-    is_client_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    is_online_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    input_index text,
-    large_model_param text,
-    is_top character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    splitter_param text,
-    tool_parameters_config text,
-    is_cloud_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    user_prompt text,
-    split_strategy_param text,
-    business_experience text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    paramid                VARCHAR(32) NOT NULL,
+    paramno                VARCHAR(500),
+    paramname              VARCHAR(200),
+    paramtype              VARCHAR(10),
+    paramentitytype        VARCHAR(10),
+    paramlabel             VARCHAR(500),
+    modelno                VARCHAR(32),
+    parentparamid          VARCHAR(32),
+    parentparamname        VARCHAR(200),
+    reportversion          VARCHAR(100),
+    sortno                 VARCHAR(10),
+    prompt                 TEXT,
+    agentid                VARCHAR(1000),
+    otherconfig            VARCHAR(1000),
+    paramstatus            VARCHAR(10) DEFAULT 'Y',
+    inputuserid            VARCHAR(32),
+    inputtime              VARCHAR(32),
+    updateuserid           VARCHAR(32),
+    updatetime             VARCHAR(32),
+    groupid                VARCHAR(100),
+    "online"               VARCHAR(10) DEFAULT 'N',
+    prompttype             VARCHAR(10) DEFAULT 'basic',
+    contentdesc            TEXT,
+    input_param            TEXT,
+    large_model_code       VARCHAR(1000),
+    trace_config           TEXT,
+    image_config           TEXT,
+    whole_source_config    TEXT,
+    large_model_content    TEXT,
+    relate_index_set       TEXT,
+    black_content_desc     VARCHAR(2000),
+    black_model_code       VARCHAR(100),
+    is_markdown            VARCHAR(2) DEFAULT 'N',
+    param_description      VARCHAR(5000),
+    input_condition        TEXT,
+    is_client_search       VARCHAR(2) DEFAULT 'N',
+    is_online_search       VARCHAR(2) DEFAULT 'N',
+    input_index            TEXT,
+    large_model_param      TEXT,
+    is_top                 VARCHAR(2) DEFAULT 'N',
+    splitter_param         TEXT,
+    tool_parameters_config TEXT,
+    is_cloud_search        VARCHAR(2) DEFAULT 'N',
+    user_prompt            TEXT,
+    split_strategy_param   TEXT,
+    business_experience    TEXT,
+    PRIMARY KEY (paramid)
+);
 COMMENT ON TABLE knowledge_base_params IS '知识库参数信息表';
 COMMENT ON COLUMN knowledge_base_params.paramid IS '知识库流水号';
 COMMENT ON COLUMN knowledge_base_params.paramno IS '知识库编号';
@@ -3413,44 +3138,42 @@ COMMENT ON COLUMN knowledge_base_params.is_cloud_search IS '是否走云端大�
 COMMENT ON COLUMN knowledge_base_params.user_prompt IS '用户提示词';
 COMMENT ON COLUMN knowledge_base_params.split_strategy_param IS '知识库拆分策略参数';
 COMMENT ON COLUMN knowledge_base_params.business_experience IS '业务经验知识';
-ALTER TABLE knowledge_base_params ADD CONSTRAINT knowledge_base_params_pkey PRIMARY KEY USING ubtree  (paramid) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_base_version (
-    id character varying(32) COLLATE "C" NOT NULL,
-    param_id character varying(32) COLLATE "C" NOT NULL,
-    version_no character varying(200) COLLATE "C" NOT NULL,
-    version_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    create_user_id character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    create_user_name character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    sort_no integer DEFAULT 0,
-    latest_flag integer DEFAULT 1,
-    prompt text,
-    content_desc text,
-    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    trace_config text,
-    large_model_content text,
-    image_config text,
-    whole_source_config text,
-    relate_index_set text,
-    black_content_desc character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    black_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_condition text,
-    input_index text,
-    large_model_param character varying(2000) COLLATE "C" DEFAULT ''::character varying,
-    is_top character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    splitter_param text,
-    is_cloud_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    is_markdown character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    is_online_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    is_client_search character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    user_prompt text,
-    split_strategy_param text,
-    business_experience text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    param_id               VARCHAR(32) NOT NULL,
+    version_no             VARCHAR(200) NOT NULL,
+    version_name           VARCHAR(200),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    create_user_id         VARCHAR(20),
+    create_user_name       VARCHAR(20),
+    sort_no                INT DEFAULT 0,
+    latest_flag            INT DEFAULT 1,
+    prompt                 TEXT,
+    content_desc           TEXT,
+    large_model_code       VARCHAR(100),
+    trace_config           TEXT,
+    large_model_content    TEXT,
+    image_config           TEXT,
+    whole_source_config    TEXT,
+    relate_index_set       TEXT,
+    black_content_desc     VARCHAR(2000),
+    black_model_code       VARCHAR(100),
+    input_condition        TEXT,
+    input_index            TEXT,
+    large_model_param      VARCHAR(2000) DEFAULT '',
+    is_top                 VARCHAR(2) DEFAULT 'N',
+    splitter_param         TEXT,
+    is_cloud_search        VARCHAR(2) DEFAULT 'N',
+    is_markdown            VARCHAR(2) DEFAULT 'N',
+    is_online_search       VARCHAR(2) DEFAULT 'N',
+    is_client_search       VARCHAR(2) DEFAULT 'N',
+    user_prompt            TEXT,
+    split_strategy_param   TEXT,
+    business_experience    TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_base_version IS '知识库版本管理';
 COMMENT ON COLUMN knowledge_base_version.id IS '主键ID';
 COMMENT ON COLUMN knowledge_base_version.param_id IS '知识库ID';
@@ -3484,30 +3207,28 @@ COMMENT ON COLUMN knowledge_base_version.is_client_search IS '是否走客户端
 COMMENT ON COLUMN knowledge_base_version.user_prompt IS '用户提示词';
 COMMENT ON COLUMN knowledge_base_version.split_strategy_param IS '知识库拆分策略参数';
 COMMENT ON COLUMN knowledge_base_version.business_experience IS '业务经验知识';
-ALTER TABLE knowledge_base_version ADD CONSTRAINT knowledge_base_version_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_black_params_config (
-    id integer DEFAULT nextval('knowledge_black_params_config_id_seq'::regclass) NOT NULL,
-    relate_knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    param_no character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    param_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    param_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    param_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    param_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    relate_dict_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    relate_source_param character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    show_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    sort_no character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    relate_dict_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    relate_knowledge_id    VARCHAR(32),
+    param_no               VARCHAR(32),
+    param_code             VARCHAR(32),
+    param_type             VARCHAR(10),
+    param_name             VARCHAR(200),
+    param_desc             VARCHAR(500),
+    param_value            VARCHAR(1000),
+    param_status           VARCHAR(2) DEFAULT 'Y',
+    relate_dict_id         VARCHAR(32),
+    relate_source_param    VARCHAR(200),
+    relate_param_code      VARCHAR(200),
+    relate_param_name      VARCHAR(200),
+    show_name              VARCHAR(200),
+    sort_no                VARCHAR(10),
+    input_time             VARCHAR(32),
+    update_time            VARCHAR(32),
+    relate_dict_value      VARCHAR(1000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_black_params_config IS '知识库黑盒参数配置表';
 COMMENT ON COLUMN knowledge_black_params_config.id IS '主键ID';
 COMMENT ON COLUMN knowledge_black_params_config.relate_knowledge_id IS '关联知识库ID';
@@ -3527,31 +3248,29 @@ COMMENT ON COLUMN knowledge_black_params_config.sort_no IS '排序';
 COMMENT ON COLUMN knowledge_black_params_config.input_time IS '登记日期';
 COMMENT ON COLUMN knowledge_black_params_config.update_time IS '更新日期';
 COMMENT ON COLUMN knowledge_black_params_config.relate_dict_value IS '关联数据字段值';
-ALTER TABLE knowledge_black_params_config ADD CONSTRAINT knowledge_black_params_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_black_params_config_version (
-    id integer DEFAULT nextval('knowledge_black_params_config_version_id_seq'::regclass) NOT NULL,
-    relate_knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    version_no character varying(100) COLLATE "C" NOT NULL,
-    param_no character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    param_code character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    param_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    param_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    param_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    param_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    relate_dict_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    relate_source_param character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    relate_param_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    show_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    sort_no character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    relate_dict_value character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    relate_knowledge_id    VARCHAR(32),
+    version_no             VARCHAR(100) NOT NULL,
+    param_no               VARCHAR(32),
+    param_code             VARCHAR(32),
+    param_type             VARCHAR(10),
+    param_name             VARCHAR(200),
+    param_desc             VARCHAR(500),
+    param_value            VARCHAR(1000),
+    param_status           VARCHAR(2) DEFAULT 'Y',
+    relate_dict_id         VARCHAR(32),
+    relate_source_param    VARCHAR(200),
+    relate_param_code      VARCHAR(200),
+    relate_param_name      VARCHAR(200),
+    show_name              VARCHAR(200),
+    sort_no                VARCHAR(10),
+    input_time             VARCHAR(32),
+    update_time            VARCHAR(32),
+    relate_dict_value      VARCHAR(1000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_black_params_config_version IS '知识库黑盒参数配置版本记录表';
 COMMENT ON COLUMN knowledge_black_params_config_version.id IS '主键ID';
 COMMENT ON COLUMN knowledge_black_params_config_version.relate_knowledge_id IS '关联知识库ID';
@@ -3572,26 +3291,24 @@ COMMENT ON COLUMN knowledge_black_params_config_version.sort_no IS '排序';
 COMMENT ON COLUMN knowledge_black_params_config_version.input_time IS '登记日期';
 COMMENT ON COLUMN knowledge_black_params_config_version.update_time IS '更新日期';
 COMMENT ON COLUMN knowledge_black_params_config_version.relate_dict_value IS '关联数据字段值';
-ALTER TABLE knowledge_black_params_config_version ADD CONSTRAINT knowledge_black_params_config_version_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_query_result (
-    id character varying(100) COLLATE "C" NOT NULL,
-    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_param text,
-    script_sql text,
-    sql_param text,
-    query_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    query_type integer DEFAULT 0,
-    query_result text,
-    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    cost_time integer,
-    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(100) NOT NULL,
+    trace_id               VARCHAR(100),
+    knowledge_code         VARCHAR(100),
+    supplier_id            VARCHAR(100),
+    intf_no                VARCHAR(100),
+    intf_param             TEXT,
+    script_sql             TEXT,
+    sql_param              TEXT,
+    query_status           VARCHAR(1) DEFAULT 'Y',
+    query_type             INT DEFAULT 0,
+    query_result           TEXT,
+    query_time             VARCHAR(40),
+    cost_time              INT,
+    comment                VARCHAR(500),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_query_result IS '知识库查询记录表';
 COMMENT ON COLUMN knowledge_query_result.trace_id IS '追踪ID';
 COMMENT ON COLUMN knowledge_query_result.knowledge_code IS '关联知识库编码';
@@ -3606,26 +3323,24 @@ COMMENT ON COLUMN knowledge_query_result.query_result IS '请求结果';
 COMMENT ON COLUMN knowledge_query_result.query_time IS '请求时间';
 COMMENT ON COLUMN knowledge_query_result.cost_time IS '花费时间;请求总耗时，单位毫秒';
 COMMENT ON COLUMN knowledge_query_result.comment IS '备注';
-ALTER TABLE knowledge_query_result ADD CONSTRAINT knowledge_query_result_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_query_result_for_batch (
-    id integer DEFAULT nextval('knowledge_query_result_for_batch_id_seq'::regclass) NOT NULL,
-    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    supplier_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    intf_param text,
-    script_sql character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    sql_param character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    query_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    query_type integer DEFAULT 0,
-    query_result text,
-    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    cost_time integer,
-    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    trace_id               VARCHAR(100),
+    knowledge_code         VARCHAR(100),
+    supplier_id            VARCHAR(100),
+    intf_no                VARCHAR(100),
+    intf_param             TEXT,
+    script_sql             VARCHAR(2000),
+    sql_param              VARCHAR(500),
+    query_status           VARCHAR(1) DEFAULT 'Y',
+    query_type             INT DEFAULT 0,
+    query_result           TEXT,
+    query_time             VARCHAR(40),
+    cost_time              INT,
+    comment                VARCHAR(500),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_query_result_for_batch IS '知识库查批量询记录表';
 COMMENT ON COLUMN knowledge_query_result_for_batch.trace_id IS '追踪ID';
 COMMENT ON COLUMN knowledge_query_result_for_batch.knowledge_code IS '关联知识库编码';
@@ -3640,26 +3355,24 @@ COMMENT ON COLUMN knowledge_query_result_for_batch.query_result IS '请求结果
 COMMENT ON COLUMN knowledge_query_result_for_batch.query_time IS '请求时间';
 COMMENT ON COLUMN knowledge_query_result_for_batch.cost_time IS '花费时间;请求总耗时，单位毫秒';
 COMMENT ON COLUMN knowledge_query_result_for_batch.comment IS '备注';
-ALTER TABLE knowledge_query_result_for_batch ADD CONSTRAINT knowledge_query_result_for_batch_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_index (
-    id integer DEFAULT nextval('knowledge_relate_index_id_seq'::regclass) NOT NULL,
-    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    parent_index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    index_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    index_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    supplier_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    intf_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    add_type character varying(20) COLLATE "C" DEFAULT 'add'::character varying,
-    trace_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
-    trace_card_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
-    trace_config text,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    knowledge_id           VARCHAR(64),
+    index_no               VARCHAR(64),
+    parent_index_no        VARCHAR(64),
+    index_name             VARCHAR(200),
+    index_type             VARCHAR(10),
+    supplier_id            VARCHAR(64),
+    intf_no                VARCHAR(64),
+    add_type               VARCHAR(20) DEFAULT 'add',
+    trace_status           CHAR(2) DEFAULT 'N' NOT NULL,
+    trace_card_status      CHAR(2) DEFAULT 'N' NOT NULL,
+    trace_config           TEXT,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_relate_index IS '知识库关联指标信息';
 COMMENT ON COLUMN knowledge_relate_index.id IS '主键ID';
 COMMENT ON COLUMN knowledge_relate_index.knowledge_id IS '知识库ID';
@@ -3675,27 +3388,25 @@ COMMENT ON COLUMN knowledge_relate_index.trace_card_status IS '是否溯源卡�
 COMMENT ON COLUMN knowledge_relate_index.trace_config IS '溯源配置';
 COMMENT ON COLUMN knowledge_relate_index.input_time IS '创建时间';
 COMMENT ON COLUMN knowledge_relate_index.update_time IS '更新时间';
-ALTER TABLE knowledge_relate_index ADD CONSTRAINT knowledge_relate_index_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_index_version (
-    id integer DEFAULT nextval('knowledge_relate_index_version_id_seq'::regclass) NOT NULL,
-    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    version_no character varying(100) COLLATE "C" NOT NULL,
-    index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    parent_index_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    index_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    index_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    supplier_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    intf_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    add_type character varying(20) COLLATE "C" DEFAULT 'add'::character varying,
-    trace_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
-    trace_card_status character(2) COLLATE "C" DEFAULT 'N'::bpchar NOT NULL,
-    trace_config text,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    knowledge_id           VARCHAR(64),
+    version_no             VARCHAR(100) NOT NULL,
+    index_no               VARCHAR(64),
+    parent_index_no        VARCHAR(64),
+    index_name             VARCHAR(200),
+    index_type             VARCHAR(10),
+    supplier_id            VARCHAR(64),
+    intf_no                VARCHAR(64),
+    add_type               VARCHAR(20) DEFAULT 'add',
+    trace_status           CHAR(2) DEFAULT 'N' NOT NULL,
+    trace_card_status      CHAR(2) DEFAULT 'N' NOT NULL,
+    trace_config           TEXT,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_relate_index_version IS '知识库关联指标版本记录表';
 COMMENT ON COLUMN knowledge_relate_index_version.id IS '主键ID';
 COMMENT ON COLUMN knowledge_relate_index_version.knowledge_id IS '知识库ID';
@@ -3712,18 +3423,16 @@ COMMENT ON COLUMN knowledge_relate_index_version.trace_card_status IS '是否溯
 COMMENT ON COLUMN knowledge_relate_index_version.trace_config IS '溯源配置';
 COMMENT ON COLUMN knowledge_relate_index_version.input_time IS '创建时间';
 COMMENT ON COLUMN knowledge_relate_index_version.update_time IS '更新时间';
-ALTER TABLE knowledge_relate_index_version ADD CONSTRAINT knowledge_relate_index_version_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_input_param (
-    id character varying(32) COLLATE "C" NOT NULL,
-    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    input_param character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    input_param_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    knowledge_id           VARCHAR(64),
+    input_param            VARCHAR(2000),
+    input_param_name       VARCHAR(100),
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_relate_input_param IS '知识库关联参数集';
 COMMENT ON COLUMN knowledge_relate_input_param.id IS '主键ID';
 COMMENT ON COLUMN knowledge_relate_input_param.knowledge_id IS '知识库ID';
@@ -3731,19 +3440,17 @@ COMMENT ON COLUMN knowledge_relate_input_param.input_param IS '参数集';
 COMMENT ON COLUMN knowledge_relate_input_param.input_param_name IS '参数集名称';
 COMMENT ON COLUMN knowledge_relate_input_param.input_time IS '创建时间';
 COMMENT ON COLUMN knowledge_relate_input_param.update_time IS '更新时间';
-ALTER TABLE knowledge_relate_input_param ADD CONSTRAINT knowledge_relate_input_param_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_relate_input_param_version (
-    id character varying(32) COLLATE "C" NOT NULL,
-    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    version_no character varying(100) COLLATE "C" NOT NULL,
-    input_param character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    input_param_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    knowledge_id           VARCHAR(64),
+    version_no             VARCHAR(100) NOT NULL,
+    input_param            VARCHAR(2000),
+    input_param_name       VARCHAR(100),
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_relate_input_param_version IS '知识库关联参数集版本记录表';
 COMMENT ON COLUMN knowledge_relate_input_param_version.id IS '主键ID';
 COMMENT ON COLUMN knowledge_relate_input_param_version.knowledge_id IS '知识库ID';
@@ -3752,20 +3459,18 @@ COMMENT ON COLUMN knowledge_relate_input_param_version.input_param IS '参数集
 COMMENT ON COLUMN knowledge_relate_input_param_version.input_param_name IS '参数集名称';
 COMMENT ON COLUMN knowledge_relate_input_param_version.input_time IS '创建时间';
 COMMENT ON COLUMN knowledge_relate_input_param_version.update_time IS '更新时间';
-ALTER TABLE knowledge_relate_input_param_version ADD CONSTRAINT knowledge_relate_input_param_version_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_sync_task (
-    id character varying(32) COLLATE "C" NOT NULL,
-    sync_type character varying(32) COLLATE "C" NOT NULL,
-    sync_status character varying(20) COLLATE "C" DEFAULT 'new'::character varying NOT NULL,
-    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    user_name character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    finish_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    cost_time integer DEFAULT 0 NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    sync_type              VARCHAR(32) NOT NULL,
+    sync_status            VARCHAR(20) DEFAULT 'new' NOT NULL,
+    user_id                VARCHAR(64) DEFAULT '' NOT NULL,
+    user_name              VARCHAR(64) DEFAULT '' NOT NULL,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    finish_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    cost_time              INT DEFAULT 0 NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_sync_task IS '知识库同步任务记录表';
 COMMENT ON COLUMN knowledge_sync_task.id IS '主键id';
 COMMENT ON COLUMN knowledge_sync_task.sync_type IS 'knowledge-知识库同步, index-指标同步, apiSource-API数据源同步, dataSource-SQL数据源';
@@ -3775,43 +3480,39 @@ COMMENT ON COLUMN knowledge_sync_task.user_name IS '同步用户名称';
 COMMENT ON COLUMN knowledge_sync_task.input_time IS '创建时间';
 COMMENT ON COLUMN knowledge_sync_task.finish_time IS '完成时间';
 COMMENT ON COLUMN knowledge_sync_task.cost_time IS '耗时（毫秒）';
-ALTER TABLE knowledge_sync_task ADD CONSTRAINT knowledge_sync_task_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE knowledge_sync_task_exception_record (
-    id character varying(32) COLLATE "C" NOT NULL,
-    task_id character varying(32) COLLATE "C" NOT NULL,
-    exception_stage character varying(100) COLLATE "C" NOT NULL,
-    input_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    fail_reason text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    task_id                VARCHAR(32) NOT NULL,
+    exception_stage        VARCHAR(100) NOT NULL,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    fail_reason            TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE knowledge_sync_task_exception_record IS '知识库同步任务异常记录表';
 COMMENT ON COLUMN knowledge_sync_task_exception_record.id IS '主键id';
 COMMENT ON COLUMN knowledge_sync_task_exception_record.task_id IS '任务id';
 COMMENT ON COLUMN knowledge_sync_task_exception_record.exception_stage IS '异常阶段：init-数据查询阶段；knowledge-同步知识库配置阶段；knowledge_relate_index-同步知识库溯源阶段；knowledge_black_params-同步知识库黑盒参数阶段；knowledge_input_param-同步知识库参数集阶段；knowledge_group-同步知识库分组阶段；index-同步指标配置阶段；index_group-同步指标分组阶段；source-同步数据源阶段；';
 COMMENT ON COLUMN knowledge_sync_task_exception_record.input_time IS '创建时间';
 COMMENT ON COLUMN knowledge_sync_task_exception_record.fail_reason IS '失败原因';
-ALTER TABLE knowledge_sync_task_exception_record ADD CONSTRAINT knowledge_sync_task_exception_record_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE large_model_config (
-    id integer DEFAULT nextval('large_model_config_id_seq'::regclass) NOT NULL,
-    lm_code character varying(100) COLLATE "C" NOT NULL,
-    model character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    lm_name character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    url character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    api_key character varying(5000) COLLATE "C" DEFAULT NULL::character varying,
-    lm_desc text,
-    use_flag character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
-    with_think character varying(10) COLLATE "C" DEFAULT 'N'::character varying,
-    default_think_flag character varying(4) COLLATE "C" DEFAULT 'N'::character varying,
-    max_tokens integer DEFAULT 0,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    model_config text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    lm_code                VARCHAR(100) NOT NULL,
+    model                  VARCHAR(100),
+    lm_name                VARCHAR(256),
+    url                    VARCHAR(2000),
+    api_key                VARCHAR(5000),
+    lm_desc                TEXT,
+    use_flag               VARCHAR(2) DEFAULT 'Y' NOT NULL,
+    with_think             VARCHAR(10) DEFAULT 'N',
+    default_think_flag     VARCHAR(4) DEFAULT 'N',
+    max_tokens             INT DEFAULT 0,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    model_config           TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN large_model_config.id IS '大模型唯一ID';
 COMMENT ON COLUMN large_model_config.lm_code IS '大模型唯一CODE';
 COMMENT ON COLUMN large_model_config.model IS '模型';
@@ -3826,23 +3527,21 @@ COMMENT ON COLUMN large_model_config.max_tokens IS '最大token数';
 COMMENT ON COLUMN large_model_config.create_time IS '创建时间';
 COMMENT ON COLUMN large_model_config.update_time IS '更新时间';
 COMMENT ON COLUMN large_model_config.model_config IS '模型配置';
-ALTER TABLE large_model_config ADD CONSTRAINT large_model_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE largemodel_queue (
-    queueid character varying(100) COLLATE "C" NOT NULL,
-    hubaccount character varying(100) COLLATE "C" NOT NULL,
-    modulecode character varying(300) COLLATE "C" NOT NULL,
-    largemodelcode character varying(300) COLLATE "C" NOT NULL,
-    largemodelreqkey character varying(300) COLLATE "C" NOT NULL,
-    processstatus character varying(300) COLLATE "C" DEFAULT 'ready'::character varying NOT NULL,
-    queuereason character varying(300) COLLATE "C" DEFAULT NULL::character varying,
-    begintime character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    endtime character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    inputtime character varying(20) COLLATE "C" NOT NULL,
-    updatetime character varying(20) COLLATE "C" NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    queueid                VARCHAR(100) NOT NULL,
+    hubaccount             VARCHAR(100) NOT NULL,
+    modulecode             VARCHAR(300) NOT NULL,
+    largemodelcode         VARCHAR(300) NOT NULL,
+    largemodelreqkey       VARCHAR(300) NOT NULL,
+    processstatus          VARCHAR(300) DEFAULT 'ready' NOT NULL,
+    queuereason            VARCHAR(300),
+    begintime              VARCHAR(20),
+    endtime                VARCHAR(20),
+    inputtime              VARCHAR(20) NOT NULL,
+    updatetime             VARCHAR(20) NOT NULL,
+    PRIMARY KEY (queueid)
+);
 COMMENT ON TABLE largemodel_queue IS '大模型请求队列表';
 COMMENT ON COLUMN largemodel_queue.queueid IS '队列Id';
 COMMENT ON COLUMN largemodel_queue.hubaccount IS 'hub账号';
@@ -3855,30 +3554,28 @@ COMMENT ON COLUMN largemodel_queue.begintime IS '大模型开始时间';
 COMMENT ON COLUMN largemodel_queue.endtime IS '大模型开始时间';
 COMMENT ON COLUMN largemodel_queue.inputtime IS '入库时间';
 COMMENT ON COLUMN largemodel_queue.updatetime IS '更新时间';
-ALTER TABLE largemodel_queue ADD CONSTRAINT largemodel_queue_pkey PRIMARY KEY USING ubtree  (queueid) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE llm_batch_analysis_task (
-    task_id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" NOT NULL,
-    prompt text,
-    model_codes character varying(2000) COLLATE "C" NOT NULL,
-    start_time timestamp without time zone,
-    end_time timestamp without time zone,
-    status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    failure_reason text,
-    evaluation_prompt text,
-    total_rounds integer DEFAULT 10 NOT NULL,
-    hallucination_check character varying(2) COLLATE "C" DEFAULT 'N'::character varying NOT NULL,
-    hallucination_prompt text,
-    evaluation_title character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    evaluation_comment text,
-    other_relate_prompt text,
-    evaluate_model character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    relate_dataset character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    evaluate_dimension character varying(2000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_id                VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(32) NOT NULL,
+    prompt                 TEXT,
+    model_codes            VARCHAR(2000) NOT NULL,
+    start_time             TIMESTAMP,
+    end_time               TIMESTAMP,
+    status                 VARCHAR(20),
+    failure_reason         TEXT,
+    evaluation_prompt      TEXT,
+    total_rounds           INT DEFAULT 10 NOT NULL,
+    hallucination_check    VARCHAR(2) DEFAULT 'N' NOT NULL,
+    hallucination_prompt   TEXT,
+    evaluation_title       VARCHAR(50),
+    evaluation_comment     TEXT,
+    other_relate_prompt    TEXT,
+    evaluate_model         VARCHAR(100),
+    relate_dataset         VARCHAR(2000),
+    evaluate_dimension     VARCHAR(2000),
+    PRIMARY KEY (task_id)
+);
 COMMENT ON TABLE llm_batch_analysis_task IS '大模型跑批任务表';
 COMMENT ON COLUMN llm_batch_analysis_task.task_id IS '任务ID';
 COMMENT ON COLUMN llm_batch_analysis_task.user_id IS '用户ID';
@@ -3897,32 +3594,30 @@ COMMENT ON COLUMN llm_batch_analysis_task.other_relate_prompt IS '其它关联�
 COMMENT ON COLUMN llm_batch_analysis_task.evaluate_model IS '评估模型';
 COMMENT ON COLUMN llm_batch_analysis_task.relate_dataset IS '关联测试集';
 COMMENT ON COLUMN llm_batch_analysis_task.evaluate_dimension IS '评估维度';
-ALTER TABLE llm_batch_analysis_task ADD CONSTRAINT llm_batch_analysis_task_pkey PRIMARY KEY USING ubtree  (task_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE llm_batch_analysis_task_detail (
-    task_id character varying(32) COLLATE "C" NOT NULL,
-    model_code character varying(128) COLLATE "C" NOT NULL,
-    round_num integer NOT NULL,
-    model_result text,
-    hallucination_result text,
-    evaluation_result text,
-    start_time character varying(40) COLLATE "C" NOT NULL,
-    model_end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    evaluation_end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    hallucination_end_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    evaluation_score json,
-    failure_reason text,
-    evaluation_status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    hallucination_status character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    evaluation_comment text,
-    dataset_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT ''::character varying,
-    prompt_code character varying(200) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    dataset_uid character varying(32) COLLATE "C" DEFAULT ''::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_id                VARCHAR(32) NOT NULL,
+    model_code             VARCHAR(128) NOT NULL,
+    round_num              INT NOT NULL,
+    model_result           TEXT,
+    hallucination_result   TEXT,
+    evaluation_result      TEXT,
+    start_time             VARCHAR(40) NOT NULL,
+    model_end_time         VARCHAR(40),
+    evaluation_end_time    VARCHAR(40),
+    hallucination_end_time VARCHAR(40),
+    status                 VARCHAR(20),
+    evaluation_score       json,
+    failure_reason         TEXT,
+    evaluation_status      VARCHAR(20),
+    hallucination_status   VARCHAR(20),
+    evaluation_comment     TEXT,
+    dataset_id             VARCHAR(32),
+    ent_name               VARCHAR(100) DEFAULT '',
+    prompt_code            VARCHAR(200) DEFAULT '' NOT NULL,
+    dataset_uid            VARCHAR(32) DEFAULT '' NOT NULL,
+    PRIMARY KEY (task_id, model_code, round_num, dataset_uid, prompt_code)
+);
 COMMENT ON TABLE llm_batch_analysis_task_detail IS '大模型跑批任务明细表';
 COMMENT ON COLUMN llm_batch_analysis_task_detail.task_id IS '任务ID';
 COMMENT ON COLUMN llm_batch_analysis_task_detail.model_code IS '模型编码';
@@ -3941,24 +3636,22 @@ COMMENT ON COLUMN llm_batch_analysis_task_detail.dataset_id IS '测试集ID';
 COMMENT ON COLUMN llm_batch_analysis_task_detail.ent_name IS '企业名称';
 COMMENT ON COLUMN llm_batch_analysis_task_detail.prompt_code IS '提示词编号';
 COMMENT ON COLUMN llm_batch_analysis_task_detail.dataset_uid IS '数据集uuid';
-ALTER TABLE llm_batch_analysis_task_detail ADD CONSTRAINT llm_batch_analysis_task_detail_pkey PRIMARY KEY USING ubtree  (task_id, model_code, round_num, dataset_uid, prompt_code) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE llm_batch_analysis_task_hallucination (
-    task_id character varying(32) COLLATE "C" NOT NULL,
-    model_code character varying(128) COLLATE "C" NOT NULL,
-    round_num integer NOT NULL,
-    sequence_num character varying(36) COLLATE "C" NOT NULL,
-    hallucination_type text,
-    hallucination_desc text,
-    evaluation_source character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    manual_review_result character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    reviewer character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    review_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    review_notes text,
-    prompt_code character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_id                VARCHAR(32) NOT NULL,
+    model_code             VARCHAR(128) NOT NULL,
+    round_num              INT NOT NULL,
+    sequence_num           VARCHAR(36) NOT NULL,
+    hallucination_type     TEXT,
+    hallucination_desc     TEXT,
+    evaluation_source      VARCHAR(50),
+    manual_review_result   VARCHAR(20),
+    reviewer               VARCHAR(50),
+    review_time            VARCHAR(40),
+    review_notes           TEXT,
+    prompt_code            VARCHAR(200),
+    PRIMARY KEY (task_id, model_code, round_num, sequence_num)
+);
 COMMENT ON TABLE llm_batch_analysis_task_hallucination IS '大模型跑批任务明细幻觉信息表';
 COMMENT ON COLUMN llm_batch_analysis_task_hallucination.task_id IS '任务ID';
 COMMENT ON COLUMN llm_batch_analysis_task_hallucination.model_code IS '模型编码';
@@ -3972,19 +3665,17 @@ COMMENT ON COLUMN llm_batch_analysis_task_hallucination.reviewer IS '审核人';
 COMMENT ON COLUMN llm_batch_analysis_task_hallucination.review_time IS '审核时间';
 COMMENT ON COLUMN llm_batch_analysis_task_hallucination.review_notes IS '审核备注';
 COMMENT ON COLUMN llm_batch_analysis_task_hallucination.prompt_code IS '提示词编号';
-ALTER TABLE llm_batch_analysis_task_hallucination ADD CONSTRAINT llm_batch_analysis_task_hallucination_pkey PRIMARY KEY USING ubtree  (task_id, model_code, round_num, sequence_num) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE llm_evaluate_dataset_management (
-    id character varying(32) COLLATE "C" NOT NULL,
-    dataset_code character varying(100) COLLATE "C" NOT NULL,
-    dataset_desc text,
-    input_time timestamp without time zone DEFAULT pg_systimestamp(),
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    dataset_code           VARCHAR(100) NOT NULL,
+    dataset_desc           TEXT,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    create_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE llm_evaluate_dataset_management IS '大模型评估测试集';
 COMMENT ON COLUMN llm_evaluate_dataset_management.id IS '主键ID';
 COMMENT ON COLUMN llm_evaluate_dataset_management.dataset_code IS '测试集编号';
@@ -3993,23 +3684,21 @@ COMMENT ON COLUMN llm_evaluate_dataset_management.input_time IS '创建时间';
 COMMENT ON COLUMN llm_evaluate_dataset_management.create_by IS '创建人';
 COMMENT ON COLUMN llm_evaluate_dataset_management.update_time IS '更新时间';
 COMMENT ON COLUMN llm_evaluate_dataset_management.update_by IS '更新人';
-ALTER TABLE llm_evaluate_dataset_management ADD CONSTRAINT llm_evaluate_dataset_management_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE llm_evaluate_dataset_management_detail (
-    id character varying(32) COLLATE "C" NOT NULL,
-    dataset_id character varying(32) COLLATE "C" NOT NULL,
-    ent_name character varying(100) COLLATE "C" NOT NULL,
-    prompt_code character varying(100) COLLATE "C" NOT NULL,
-    prompt text,
-    expected_output text,
-    input_time timestamp without time zone DEFAULT pg_systimestamp(),
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    requirements text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    dataset_id             VARCHAR(32) NOT NULL,
+    ent_name               VARCHAR(100) NOT NULL,
+    prompt_code            VARCHAR(100) NOT NULL,
+    prompt                 TEXT,
+    expected_output        TEXT,
+    input_time             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    create_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    requirements           TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE llm_evaluate_dataset_management_detail IS '大模型评估测试集明细';
 COMMENT ON COLUMN llm_evaluate_dataset_management_detail.id IS '主键ID';
 COMMENT ON COLUMN llm_evaluate_dataset_management_detail.dataset_id IS '测试集ID';
@@ -4022,36 +3711,32 @@ COMMENT ON COLUMN llm_evaluate_dataset_management_detail.create_by IS '创建人
 COMMENT ON COLUMN llm_evaluate_dataset_management_detail.update_time IS '更新时间';
 COMMENT ON COLUMN llm_evaluate_dataset_management_detail.update_by IS '更新人';
 COMMENT ON COLUMN llm_evaluate_dataset_management_detail.requirements IS '输出要求';
-ALTER TABLE llm_evaluate_dataset_management_detail ADD CONSTRAINT ent_code_idx UNIQUE USING ubtree (ent_name, prompt_code, dataset_id) WITH (storage_type=USTORE);
-ALTER TABLE llm_evaluate_dataset_management_detail ADD CONSTRAINT llm_evaluate_dataset_management_detail_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX ent_code_idx ON llm_evaluate_dataset_management_detail (ent_name, prompt_code, dataset_id);
 
-SET search_path = bosz_test;
 CREATE TABLE login_verfication_code (
-    id character varying(64) COLLATE "C" NOT NULL,
-    user_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    verfication_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    input_time character varying(50) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    user_id                VARCHAR(50),
+    verfication_code       VARCHAR(200),
+    input_time             VARCHAR(50),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN login_verfication_code.user_id IS '用户id';
 COMMENT ON COLUMN login_verfication_code.verfication_code IS '验证码';
 COMMENT ON COLUMN login_verfication_code.input_time IS '插入时间';
-ALTER TABLE login_verfication_code ADD CONSTRAINT login_verfication_code_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE message_push_config (
-    id integer DEFAULT nextval('message_push_config_id_seq'::regclass) NOT NULL,
-    content_text text,
-    input_time character varying(40) COLLATE "C" NOT NULL,
-    update_time character varying(40) COLLATE "C" NOT NULL,
-    push_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    push_channel character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    push_flag character varying(2) COLLATE "C" DEFAULT '1'::character varying,
-    push_status character varying(2) COLLATE "C" DEFAULT '1'::character varying,
-    remark character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    title character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    content_text           TEXT,
+    input_time             VARCHAR(40) NOT NULL,
+    update_time            VARCHAR(40) NOT NULL,
+    push_time              VARCHAR(40),
+    push_channel           VARCHAR(200),
+    push_flag              VARCHAR(2) DEFAULT '1',
+    push_status            VARCHAR(2) DEFAULT '1',
+    remark                 VARCHAR(500),
+    title                  VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE message_push_config IS '消息推送配置表';
 COMMENT ON COLUMN message_push_config.id IS '主键ID';
 COMMENT ON COLUMN message_push_config.content_text IS '消息文本内容';
@@ -4063,37 +3748,33 @@ COMMENT ON COLUMN message_push_config.push_flag IS '是否推送;0否 1是';
 COMMENT ON COLUMN message_push_config.push_status IS '推送状态;1待推送 2已推送 3定时推送';
 COMMENT ON COLUMN message_push_config.remark IS '备注';
 COMMENT ON COLUMN message_push_config.title IS '消息标题';
-ALTER TABLE message_push_config ADD CONSTRAINT message_push_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE message_relate_account (
-    id integer DEFAULT nextval('message_relate_account_id_seq'::regclass) NOT NULL,
-    message_id integer,
-    account_id integer,
-    relate_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    relate_status character varying(2) COLLATE "C" DEFAULT '1'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    message_id             INT,
+    account_id             INT,
+    relate_time            VARCHAR(40),
+    relate_status          VARCHAR(2) DEFAULT '1',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE message_relate_account IS '消息推送关联机构表';
 COMMENT ON COLUMN message_relate_account.id IS '主键ID';
 COMMENT ON COLUMN message_relate_account.message_id IS '消息ID';
 COMMENT ON COLUMN message_relate_account.account_id IS '关联账号ID';
 COMMENT ON COLUMN message_relate_account.relate_time IS '关联时间';
 COMMENT ON COLUMN message_relate_account.relate_status IS '关联状态;1已关联 2已取消';
-ALTER TABLE message_relate_account ADD CONSTRAINT message_relate_account_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE module_code_prompt_cache (
-    module_code character varying(200) COLLATE "C" NOT NULL,
-    module_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    params text,
-    params_md5 character varying(200) COLLATE "C" NOT NULL,
-    prompt text,
-    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    module_code            VARCHAR(200) NOT NULL,
+    module_name            VARCHAR(200),
+    params                 TEXT,
+    params_md5             VARCHAR(200) NOT NULL,
+    prompt                 TEXT,
+    status                 VARCHAR(1) DEFAULT 'Y',
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (module_code, params_md5)
+);
 COMMENT ON TABLE module_code_prompt_cache IS '知识库文案缓存表';
 COMMENT ON COLUMN module_code_prompt_cache.module_code IS '知识库编码';
 COMMENT ON COLUMN module_code_prompt_cache.module_name IS '知识库名称';
@@ -4103,51 +3784,47 @@ COMMENT ON COLUMN module_code_prompt_cache.prompt IS '文案内容';
 COMMENT ON COLUMN module_code_prompt_cache.status IS '缓存状态;Y表示有效，N表示无效，默认Y';
 COMMENT ON COLUMN module_code_prompt_cache.create_time IS '创建时间';
 COMMENT ON COLUMN module_code_prompt_cache.update_time IS '更新时间';
-ALTER TABLE module_code_prompt_cache ADD CONSTRAINT module_code_prompt_cache_pkey PRIMARY KEY USING ubtree  (module_code, params_md5) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE ocr_parse_task (
-    task_id character varying(64) COLLATE "C" NOT NULL,
-    file_name character varying(512) COLLATE "C" NOT NULL,
-    file_type character varying(32) COLLATE "C" NOT NULL,
-    status character varying(32) COLLATE "C" NOT NULL,
-    source_file_path character varying(1024) COLLATE "C" NOT NULL,
-    storage_type character varying(32) COLLATE "C" NOT NULL,
-    result text,
-    result_content_json text,
-    error text,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
-ALTER TABLE ocr_parse_task ADD CONSTRAINT ocr_parse_task_pkey PRIMARY KEY USING ubtree  (task_id) WITH (storage_type=USTORE);
+    task_id                VARCHAR(64) NOT NULL,
+    file_name              VARCHAR(512) NOT NULL,
+    file_type              VARCHAR(32) NOT NULL,
+    status                 VARCHAR(32) NOT NULL,
+    source_file_path       VARCHAR(1024) NOT NULL,
+    storage_type           VARCHAR(32) NOT NULL,
+    result                 TEXT,
+    result_content_json    TEXT,
+    error                  TEXT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (task_id)
+);
 
-SET search_path = bosz_test;
 CREATE TABLE open_api_conf (
-    id character varying(32) COLLATE "C" NOT NULL,
-    provider_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    api_code character varying(50) COLLATE "C" NOT NULL,
-    api_type character varying(50) COLLATE "C" NOT NULL,
-    api_desc character varying(500) COLLATE "C" NOT NULL,
-    api_category_code character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    upstream_path character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    http_method character varying(10) COLLATE "C" NOT NULL,
-    message_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    header character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
-    request_param character varying(3000) COLLATE "C" NOT NULL,
-    success_code_field character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    success_code_value character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    response_biz_data_field character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    response_biz_data_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    response_param character varying(3000) COLLATE "C" DEFAULT NULL::character varying,
-    stream_flag character varying(5) COLLATE "C" DEFAULT 'false'::character varying,
-    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    api_name character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                      VARCHAR(32) NOT NULL,
+    provider_id             VARCHAR(100),
+    api_code                VARCHAR(50) NOT NULL,
+    api_type                VARCHAR(50) NOT NULL,
+    api_desc                VARCHAR(500) NOT NULL,
+    api_category_code       VARCHAR(50),
+    upstream_path           VARCHAR(255),
+    http_method             VARCHAR(10) NOT NULL,
+    message_type            VARCHAR(10),
+    header                  VARCHAR(3000),
+    request_param           VARCHAR(3000) NOT NULL,
+    success_code_field      VARCHAR(20),
+    success_code_value      VARCHAR(20),
+    response_biz_data_field VARCHAR(100),
+    response_biz_data_type  VARCHAR(100),
+    response_param          VARCHAR(3000),
+    stream_flag             VARCHAR(5) DEFAULT 'false',
+    create_time             VARCHAR(20),
+    create_by               VARCHAR(32),
+    update_time             VARCHAR(20),
+    update_by               VARCHAR(32),
+    api_name                VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE open_api_conf IS 'api_openapi定义';
 COMMENT ON COLUMN open_api_conf.id IS '主键';
 COMMENT ON COLUMN open_api_conf.provider_id IS '关联供应商ID，针对第三方接口，参考ext_intf_supplier_manage表的supplier_id，针对hub接口填固定值hub、custom接口固定值custom，知识库接口固定值knowledge';
@@ -4171,49 +3848,47 @@ COMMENT ON COLUMN open_api_conf.create_by IS '创建人';
 COMMENT ON COLUMN open_api_conf.update_time IS '更新时间';
 COMMENT ON COLUMN open_api_conf.update_by IS '更新人';
 COMMENT ON COLUMN open_api_conf.api_name IS '工具展示中文名';
-ALTER TABLE open_api_conf ADD CONSTRAINT idx_api_code UNIQUE USING ubtree (api_code) WITH (storage_type=USTORE);
-ALTER TABLE open_api_conf ADD CONSTRAINT open_api_conf_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX idx_api_code ON open_api_conf (api_code);
 
-SET search_path = bosz_test;
 CREATE TABLE package_agent_index_config (
-    id character varying(32) COLLATE "C" NOT NULL,
-    index_name character varying(100) COLLATE "C" NOT NULL,
-    index_code character varying(32) COLLATE "C" NOT NULL,
-    index_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    use_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
-    synonym_word text,
-    key_word text,
-    center_key_word text,
-    entity_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    inner_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    source_type character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    external_priority character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    rec_group character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    rec_question character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    has_index_rela character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    remark text,
-    input_time character varying(40) COLLATE "C" NOT NULL,
-    update_time character varying(40) COLLATE "C" NOT NULL,
-    index_desc text,
-    sample_question text,
-    object_type character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    index_classification character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    visible_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    index_prompt text,
-    hub_account character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    none_test_flag character varying(100) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
-    final_result_flag character varying(1) COLLATE "C" DEFAULT 'N'::character varying,
-    rec_enterprise character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    text_type character varying(100) COLLATE "C" DEFAULT 'H5'::character varying,
-    source_card_channel character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_content character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    rela_knowledge_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_flag character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    is_recommend character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    recommend_weight integer DEFAULT 0
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    index_name             VARCHAR(100) NOT NULL,
+    index_code             VARCHAR(32) NOT NULL,
+    index_topic            VARCHAR(100),
+    use_flag               VARCHAR(1) DEFAULT 'Y' NOT NULL,
+    synonym_word           TEXT,
+    key_word               TEXT,
+    center_key_word        TEXT,
+    entity_type            VARCHAR(200),
+    inner_priority         VARCHAR(50),
+    source_type            VARCHAR(200),
+    external_priority      VARCHAR(50),
+    rec_group              VARCHAR(400),
+    rec_question           VARCHAR(400),
+    has_index_rela         VARCHAR(1),
+    remark                 TEXT,
+    input_time             VARCHAR(40) NOT NULL,
+    update_time            VARCHAR(40) NOT NULL,
+    index_desc             TEXT,
+    sample_question        TEXT,
+    object_type            VARCHAR(256),
+    index_classification   VARCHAR(100),
+    visible_flag           VARCHAR(1) DEFAULT 'Y',
+    index_prompt           TEXT,
+    hub_account            VARCHAR(200),
+    none_test_flag         VARCHAR(100) DEFAULT '1' NOT NULL,
+    final_result_flag      VARCHAR(1) DEFAULT 'N',
+    rec_enterprise         VARCHAR(400),
+    text_type              VARCHAR(100) DEFAULT 'H5',
+    source_card_channel    VARCHAR(100),
+    large_model_code       VARCHAR(100),
+    large_model_content    VARCHAR(2000),
+    rela_knowledge_id      VARCHAR(100),
+    large_model_flag       VARCHAR(1) DEFAULT 'Y',
+    is_recommend           VARCHAR(2) DEFAULT 'N',
+    recommend_weight       INT DEFAULT 0,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE package_agent_index_config IS '套餐关联组件配置表';
 COMMENT ON COLUMN package_agent_index_config.index_name IS '组件名称';
 COMMENT ON COLUMN package_agent_index_config.index_code IS '组件编码';
@@ -4250,47 +3925,43 @@ COMMENT ON COLUMN package_agent_index_config.rela_knowledge_id IS '组件关联�
 COMMENT ON COLUMN package_agent_index_config.large_model_flag IS '是否走大模型标志，默认Y（ N否，Y是 ）';
 COMMENT ON COLUMN package_agent_index_config.is_recommend IS '否放入推荐问题池 Y 是 N 否';
 COMMENT ON COLUMN package_agent_index_config.recommend_weight IS '推荐问题权重';
-ALTER TABLE package_agent_index_config ADD CONSTRAINT package_agent_index_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE post_glm_records (
-    id integer DEFAULT nextval('post_glm_records_id_seq'::regclass) NOT NULL,
-    question text,
-    answer text,
-    remark1 character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    remark2 character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    remark3 character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    createtime timestamp without time zone DEFAULT pg_systimestamp(),
-    time_cost character varying(400) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    question               TEXT,
+    answer                 TEXT,
+    remark1                VARCHAR(400),
+    remark2                VARCHAR(400),
+    remark3                VARCHAR(400),
+    createtime             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    time_cost              VARCHAR(400),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE post_glm_records IS '请求glm记录表';
 COMMENT ON COLUMN post_glm_records.question IS '问题';
 COMMENT ON COLUMN post_glm_records.answer IS '答案';
 COMMENT ON COLUMN post_glm_records.remark1 IS '备注1';
 COMMENT ON COLUMN post_glm_records.remark2 IS '备注2';
 COMMENT ON COLUMN post_glm_records.remark3 IS '备注3';
-ALTER TABLE post_glm_records ADD CONSTRAINT post_glm_records_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_query_result (
-    id character varying(32) COLLATE "C" NOT NULL,
-    module_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    module_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    ent_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    is_muti_ent character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    query_param text,
-    result_mode character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    query_status character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    cost_time integer,
-    query_result text,
-    fail_reason text,
-    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    end_time character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    module_code            VARCHAR(100),
+    module_name            VARCHAR(100),
+    ent_name               VARCHAR(100),
+    is_muti_ent            VARCHAR(10),
+    query_param            TEXT,
+    result_mode            VARCHAR(10),
+    query_status           VARCHAR(1),
+    cost_time              INT,
+    query_result           TEXT,
+    fail_reason            TEXT,
+    query_time             VARCHAR(40),
+    comment                VARCHAR(500),
+    trace_id               VARCHAR(100),
+    end_time               VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_query_result IS 'prompt请求结果记录表';
 COMMENT ON COLUMN prompt_query_result.module_code IS '模块编码';
 COMMENT ON COLUMN prompt_query_result.module_name IS '模块名称';
@@ -4305,22 +3976,20 @@ COMMENT ON COLUMN prompt_query_result.query_time IS '请求时间';
 COMMENT ON COLUMN prompt_query_result.comment IS '备注';
 COMMENT ON COLUMN prompt_query_result.trace_id IS '追踪ID';
 COMMENT ON COLUMN prompt_query_result.end_time IS '请求结束时间';
-ALTER TABLE prompt_query_result ADD CONSTRAINT prompt_query_result_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_result_compare_task (
-    id character varying(64) COLLATE "C" NOT NULL,
-    scene_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    result_id_list character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    standard_result_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    start_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    end_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    compare_result_summary character varying(2000) COLLATE "C" DEFAULT NULL::character varying,
-    compare_result_statistic text,
-    status character varying(20) COLLATE "C" DEFAULT 'init'::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                       VARCHAR(64) NOT NULL,
+    scene_id                 VARCHAR(64),
+    result_id_list           VARCHAR(500),
+    standard_result_id       VARCHAR(100),
+    create_time              VARCHAR(20),
+    start_time               VARCHAR(20),
+    end_time                 VARCHAR(20),
+    compare_result_summary   VARCHAR(2000),
+    compare_result_statistic TEXT,
+    status                   VARCHAR(20) DEFAULT 'init' NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_running_result_compare_task IS '大模型校验结果对比表';
 COMMENT ON COLUMN prompt_verify_running_result_compare_task.id IS '主键ID';
 COMMENT ON COLUMN prompt_verify_running_result_compare_task.scene_id IS '场景ID';
@@ -4331,23 +4000,21 @@ COMMENT ON COLUMN prompt_verify_running_result_compare_task.start_time IS '开�
 COMMENT ON COLUMN prompt_verify_running_result_compare_task.end_time IS '结束时间';
 COMMENT ON COLUMN prompt_verify_running_result_compare_task.compare_result_summary IS '对比结果';
 COMMENT ON COLUMN prompt_verify_running_result_compare_task.status IS '对比状态（ init-初始化状态 running-运行中 success-运行成功 fail-运行失败）';
-ALTER TABLE prompt_verify_running_result_compare_task ADD CONSTRAINT prompt_verify_running_result_compare_task_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task (
-    id character varying(64) COLLATE "C" NOT NULL,
-    scene_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_template text,
-    task_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    task_desc character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_code_list character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    task_status character varying(20) COLLATE "C" DEFAULT 'none'::character varying NOT NULL,
-    concurrent_num integer
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    scene_id               VARCHAR(64),
+    prompt_id              VARCHAR(64),
+    prompt_template        TEXT,
+    task_name              VARCHAR(200),
+    task_desc              VARCHAR(500),
+    large_model_code_list  VARCHAR(1000),
+    create_time            VARCHAR(20),
+    update_time            VARCHAR(20),
+    task_status            VARCHAR(20) DEFAULT 'none' NOT NULL,
+    concurrent_num         INT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_running_task IS '大模型校验任务表';
 COMMENT ON COLUMN prompt_verify_running_task.id IS '主键ID';
 COMMENT ON COLUMN prompt_verify_running_task.scene_id IS '场景ID';
@@ -4359,60 +4026,54 @@ COMMENT ON COLUMN prompt_verify_running_task.create_time IS '创建时间';
 COMMENT ON COLUMN prompt_verify_running_task.update_time IS '更新时间';
 COMMENT ON COLUMN prompt_verify_running_task.task_status IS '任务状态（none-无状态 init-初始化状态 running-运行中 success-运行成功 fail-运行失败）';
 COMMENT ON COLUMN prompt_verify_running_task.concurrent_num IS '并发数';
-ALTER TABLE prompt_verify_running_task ADD CONSTRAINT prompt_verify_running_task_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task_detail (
-    id character varying(64) COLLATE "C" NOT NULL,
-    task_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_params text,
-    prompt_template text,
-    prompt_params_md5 character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    task_id                VARCHAR(64),
+    prompt_params          TEXT,
+    prompt_template        TEXT,
+    prompt_params_md5      VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_running_task_detail IS '大模型校验任务详情表';
 COMMENT ON COLUMN prompt_verify_running_task_detail.id IS '主键ID';
 COMMENT ON COLUMN prompt_verify_running_task_detail.task_id IS '关联任务ID';
 COMMENT ON COLUMN prompt_verify_running_task_detail.prompt_params IS 'prompt参数信息';
 COMMENT ON COLUMN prompt_verify_running_task_detail.prompt_template IS 'prompt模板信息';
 COMMENT ON COLUMN prompt_verify_running_task_detail.prompt_params_md5 IS 'prompt参数唯一键';
-ALTER TABLE prompt_verify_running_task_detail ADD CONSTRAINT prompt_verify_running_task_detail_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task_result (
-    id character varying(64) COLLATE "C" NOT NULL,
-    task_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    start_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    end_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    evaluation character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_template text,
-    large_model_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    task_id                VARCHAR(64),
+    start_time             VARCHAR(20),
+    end_time               VARCHAR(20),
+    evaluation             VARCHAR(1000),
+    prompt_template        TEXT,
+    large_model_code       VARCHAR(64),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_running_task_result IS '大模型校验任务结果表';
 COMMENT ON COLUMN prompt_verify_running_task_result.id IS '主键ID';
 COMMENT ON COLUMN prompt_verify_running_task_result.task_id IS '任务ID';
 COMMENT ON COLUMN prompt_verify_running_task_result.start_time IS '开始时间';
 COMMENT ON COLUMN prompt_verify_running_task_result.end_time IS '结束时间';
 COMMENT ON COLUMN prompt_verify_running_task_result.evaluation IS '综合评价';
-ALTER TABLE prompt_verify_running_task_result ADD CONSTRAINT prompt_verify_running_task_result_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_running_task_result_detail (
-    task_result_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    task_detail_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    task_time numeric(10,4) DEFAULT NULL::numeric,
-    prompt_params_md5 character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_result text,
-    format_standard character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    id character varying(64) COLLATE "C" NOT NULL,
-    start_time character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    end_time character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    error_msg text,
-    expect_format character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_sample text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_result_id         VARCHAR(64),
+    task_detail_id         VARCHAR(64),
+    task_time              DECIMAL(10,4),
+    prompt_params_md5      VARCHAR(200),
+    prompt_result          TEXT,
+    format_standard        VARCHAR(2),
+    id                     VARCHAR(64) NOT NULL,
+    start_time             VARCHAR(64),
+    end_time               VARCHAR(64),
+    error_msg              TEXT,
+    expect_format          VARCHAR(50),
+    prompt_sample          TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_running_task_result_detail IS '大模型校验任务结果明细表';
 COMMENT ON COLUMN prompt_verify_running_task_result_detail.task_result_id IS '任务结果ID';
 COMMENT ON COLUMN prompt_verify_running_task_result_detail.task_detail_id IS '任务详情ID';
@@ -4425,19 +4086,17 @@ COMMENT ON COLUMN prompt_verify_running_task_result_detail.start_time IS '开始
 COMMENT ON COLUMN prompt_verify_running_task_result_detail.end_time IS '结束时间';
 COMMENT ON COLUMN prompt_verify_running_task_result_detail.error_msg IS '错误信息';
 COMMENT ON COLUMN prompt_verify_running_task_result_detail.expect_format IS '期望格式';
-ALTER TABLE prompt_verify_running_task_result_detail ADD CONSTRAINT prompt_verify_running_task_result_detail_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_scene_info (
-    id character varying(64) COLLATE "C" NOT NULL,
-    scene_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    scene_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    scene_group character varying(100) COLLATE "C" DEFAULT ''::character varying,
-    scene_desc character varying(1000) COLLATE "C" DEFAULT ''::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    scene_code             VARCHAR(200),
+    scene_name             VARCHAR(200),
+    create_time            VARCHAR(20),
+    update_time            VARCHAR(20),
+    scene_group            VARCHAR(100) DEFAULT '',
+    scene_desc             VARCHAR(1000) DEFAULT '',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_scene_info IS '场景信息表';
 COMMENT ON COLUMN prompt_verify_scene_info.id IS '主键ID';
 COMMENT ON COLUMN prompt_verify_scene_info.scene_code IS '场景编码';
@@ -4446,24 +4105,22 @@ COMMENT ON COLUMN prompt_verify_scene_info.create_time IS '创建时间';
 COMMENT ON COLUMN prompt_verify_scene_info.update_time IS '更新时间';
 COMMENT ON COLUMN prompt_verify_scene_info.scene_group IS '场景分组';
 COMMENT ON COLUMN prompt_verify_scene_info.scene_desc IS '场景描述';
-ALTER TABLE prompt_verify_scene_info ADD CONSTRAINT scene_name UNIQUE USING ubtree (scene_name) WITH (storage_type=USTORE);
-ALTER TABLE prompt_verify_scene_info ADD CONSTRAINT scene_code_idx UNIQUE USING ubtree (scene_code) WITH (storage_type=USTORE);
-ALTER TABLE prompt_verify_scene_info ADD CONSTRAINT prompt_verify_scene_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX scene_name ON prompt_verify_scene_info (scene_name);
+CREATE UNIQUE INDEX scene_code_idx ON prompt_verify_scene_info (scene_code);
 
-SET search_path = bosz_test;
 CREATE TABLE prompt_verify_scene_relate_prompt_info (
-    id character varying(64) COLLATE "C" NOT NULL,
-    scene_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    large_model_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_template text,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL,
-    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    update_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    expect_format character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    prompt_parameters text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    scene_id               VARCHAR(64),
+    large_model_code       VARCHAR(100),
+    prompt_name            VARCHAR(200),
+    prompt_template        TEXT,
+    status                 VARCHAR(2) DEFAULT 'Y' NOT NULL,
+    create_time            VARCHAR(20),
+    update_time            VARCHAR(20),
+    expect_format          VARCHAR(255),
+    prompt_parameters      TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE prompt_verify_scene_relate_prompt_info IS '场景关联prompt信息表';
 COMMENT ON COLUMN prompt_verify_scene_relate_prompt_info.id IS '主键ID';
 COMMENT ON COLUMN prompt_verify_scene_relate_prompt_info.scene_id IS '场景ID';
@@ -4474,20 +4131,18 @@ COMMENT ON COLUMN prompt_verify_scene_relate_prompt_info.create_time IS '创建�
 COMMENT ON COLUMN prompt_verify_scene_relate_prompt_info.update_time IS '更新时间';
 COMMENT ON COLUMN prompt_verify_scene_relate_prompt_info.expect_format IS '期望格式（json、text)';
 COMMENT ON COLUMN prompt_verify_scene_relate_prompt_info.prompt_parameters IS 'prompt解析参数';
-ALTER TABLE prompt_verify_scene_relate_prompt_info ADD CONSTRAINT prompt_verify_scene_relate_prompt_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_knowledge_base_info (
-    knowledge_id character varying(64) COLLATE "C" NOT NULL,
-    knowledge_code character varying(255) COLLATE "C" NOT NULL,
-    knowledge_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    create_user_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    belong_user_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_desc text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    knowledge_id           VARCHAR(64) NOT NULL,
+    knowledge_code         VARCHAR(255) NOT NULL,
+    knowledge_name         VARCHAR(50),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    create_user_id         VARCHAR(50),
+    belong_user_id         VARCHAR(50),
+    knowledge_desc         TEXT,
+    PRIMARY KEY (knowledge_id)
+);
 COMMENT ON TABLE qianxun_knowledge_base_info IS '知识库信息表';
 COMMENT ON COLUMN qianxun_knowledge_base_info.knowledge_id IS '知识库唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_knowledge_base_info.knowledge_code IS '知识库code';
@@ -4497,26 +4152,24 @@ COMMENT ON COLUMN qianxun_knowledge_base_info.update_time IS '知识库更新时
 COMMENT ON COLUMN qianxun_knowledge_base_info.create_user_id IS '创建用户id,agent平台的用户';
 COMMENT ON COLUMN qianxun_knowledge_base_info.belong_user_id IS '某个用户的私人知识库,千寻用户';
 COMMENT ON COLUMN qianxun_knowledge_base_info.knowledge_desc IS '知识描述';
-ALTER TABLE qianxun_knowledge_base_info ADD CONSTRAINT qianxun_knowledge_base_info_pkey PRIMARY KEY USING ubtree  (knowledge_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_knowledge_base_upload_file_info (
-    file_id character varying(64) COLLATE "C" NOT NULL,
-    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    file_name character varying(255) COLLATE "C" NOT NULL,
-    file_extension character varying(10) COLLATE "C" NOT NULL,
-    user_uuid character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    session_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    file_size bigint DEFAULT 0::bigint NOT NULL,
-    file_storage_path character varying(255) COLLATE "C" NOT NULL,
-    upload_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    finish_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    description text,
-    file_flag character varying(20) COLLATE "C" DEFAULT '0'::character varying,
-    parse_status character varying(30) COLLATE "C" DEFAULT 'uploading'::character varying,
-    fail_count integer DEFAULT 0
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    file_id                VARCHAR(64) NOT NULL,
+    knowledge_id           VARCHAR(64),
+    file_name              VARCHAR(255) NOT NULL,
+    file_extension         VARCHAR(10) NOT NULL,
+    user_uuid              VARCHAR(64),
+    session_no             VARCHAR(64),
+    file_size              BIGINT DEFAULT 0 NOT NULL,
+    file_storage_path      VARCHAR(255) NOT NULL,
+    upload_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    finish_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    description            TEXT,
+    file_flag              VARCHAR(20) DEFAULT '0',
+    parse_status           VARCHAR(30) DEFAULT 'uploading',
+    fail_count             INT DEFAULT 0,
+    PRIMARY KEY (file_id)
+);
 COMMENT ON TABLE qianxun_knowledge_base_upload_file_info IS '知识库上传文件信息表';
 COMMENT ON COLUMN qianxun_knowledge_base_upload_file_info.file_id IS '文件记录的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_knowledge_base_upload_file_info.knowledge_id IS '关联的知识库 ID，对应 knowledge_base_info 表中的 knowledge_id';
@@ -4532,30 +4185,28 @@ COMMENT ON COLUMN qianxun_knowledge_base_upload_file_info.description IS '文件
 COMMENT ON COLUMN qianxun_knowledge_base_upload_file_info.file_flag IS '0:用户单个上传文件,1:用户知识库上传文件,2:用户单个上传文件+用户知识库上传文件';
 COMMENT ON COLUMN qianxun_knowledge_base_upload_file_info.parse_status IS E'文件解析状态: \\r\\nuploading - 上传中\\r\\nupload_failed - 上传失败\\r\\nuploaded_success - 上传成功\\r\\nparsing - 解析中\\r\\nparse_success - 解析成功\\r\\nparse_failed - 解析失败';
 COMMENT ON COLUMN qianxun_knowledge_base_upload_file_info.fail_count IS '失败次数';
-ALTER TABLE qianxun_knowledge_base_upload_file_info ADD CONSTRAINT qianxun_knowledge_base_upload_file_info_pkey PRIMARY KEY USING ubtree  (file_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_order_info (
-    order_id character varying(32) COLLATE "C" NOT NULL,
-    order_name character varying(32) COLLATE "C" NOT NULL,
-    org_id character varying(64) COLLATE "C" NOT NULL,
-    is_all_user smallint DEFAULT 0::smallint NOT NULL,
-    is_long_term smallint DEFAULT 0::smallint NOT NULL,
-    consumption_method character varying(50) COLLATE "C" NOT NULL,
-    count_limit bigint DEFAULT 0::bigint,
-    consumption_org_count bigint DEFAULT 0::bigint,
-    consumption_object character varying(50) COLLATE "C" NOT NULL,
-    is_online character varying(2) COLLATE "C" DEFAULT 'N'::character varying,
-    order_description text,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    expire_date character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    org_id_list character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    ai_component_display_format character varying(50) COLLATE "C" DEFAULT 'H5'::character varying,
-    is_resource character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    qianxun_version character varying(100) COLLATE "C" DEFAULT 'classic-经典版'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    order_id                    VARCHAR(32) NOT NULL,
+    order_name                  VARCHAR(32) NOT NULL,
+    org_id                      VARCHAR(64) NOT NULL,
+    is_all_user                 SMALLINT DEFAULT 0 NOT NULL,
+    is_long_term                SMALLINT DEFAULT 0 NOT NULL,
+    consumption_method          VARCHAR(50) NOT NULL,
+    count_limit                 BIGINT DEFAULT 0,
+    consumption_org_count       BIGINT DEFAULT 0,
+    consumption_object          VARCHAR(50) NOT NULL,
+    is_online                   VARCHAR(2) DEFAULT 'N',
+    order_description           TEXT,
+    create_time                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    expire_date                 VARCHAR(10),
+    org_id_list                 VARCHAR(500),
+    ai_component_display_format VARCHAR(50) DEFAULT 'H5',
+    is_resource                 VARCHAR(2) DEFAULT 'Y',
+    qianxun_version             VARCHAR(100) DEFAULT 'classic-经典版',
+    PRIMARY KEY (order_id)
+);
 COMMENT ON TABLE qianxun_order_info IS '千寻订单信息表';
 COMMENT ON COLUMN qianxun_order_info.order_id IS '订单的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_order_info.order_name IS '订单名称';
@@ -4575,25 +4226,23 @@ COMMENT ON COLUMN qianxun_order_info.org_id_list IS '所属机构层级';
 COMMENT ON COLUMN qianxun_order_info.ai_component_display_format IS '智能组件呈现格式: pdf,png,h5';
 COMMENT ON COLUMN qianxun_order_info.is_resource IS '是否需要溯源 Y 是 N否';
 COMMENT ON COLUMN qianxun_order_info.qianxun_version IS '千寻版本类型：classic经典版 simple-简约版';
-ALTER TABLE qianxun_order_info ADD CONSTRAINT qianxun_order_info_pkey PRIMARY KEY USING ubtree  (order_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_organization_info (
-    id character varying(64) COLLATE "C" NOT NULL,
-    org_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    org_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    parent_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    org_description text,
-    hub_account character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    sort_no integer,
-    ai_component_display_format character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    origin_org_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    app_key character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    app_key_expire_date character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                          VARCHAR(64) NOT NULL,
+    org_id                      VARCHAR(64),
+    org_name                    VARCHAR(255),
+    parent_id                   VARCHAR(64),
+    org_description             TEXT,
+    hub_account                 VARCHAR(100),
+    create_time                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    sort_no                     INT,
+    ai_component_display_format VARCHAR(50),
+    origin_org_id               VARCHAR(64),
+    app_key                     VARCHAR(500),
+    app_key_expire_date         VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_organization_info IS '千寻机构信息表';
 COMMENT ON COLUMN qianxun_organization_info.id IS '机构 ID，唯一标识每个机构';
 COMMENT ON COLUMN qianxun_organization_info.org_id IS '机构ID，用于第三方数据同步';
@@ -4608,21 +4257,19 @@ COMMENT ON COLUMN qianxun_organization_info.ai_component_display_format IS '智�
 COMMENT ON COLUMN qianxun_organization_info.origin_org_id IS '同步机构ID';
 COMMENT ON COLUMN qianxun_organization_info.app_key IS 'appkey值，登录使用';
 COMMENT ON COLUMN qianxun_organization_info.app_key_expire_date IS 'appkey到期日期';
-ALTER TABLE qianxun_organization_info ADD CONSTRAINT qianxun_organization_info_org_id_idx UNIQUE USING ubtree (org_id, hub_account) WITH (storage_type=USTORE);
-ALTER TABLE qianxun_organization_info ADD CONSTRAINT org_id UNIQUE USING ubtree (org_id) WITH (storage_type=USTORE);
-ALTER TABLE qianxun_organization_info ADD CONSTRAINT qianxun_organization_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX qianxun_organization_info_org_id_idx ON qianxun_organization_info (org_id, hub_account);
+CREATE UNIQUE INDEX org_id ON qianxun_organization_info (org_id);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_ai_component_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    ai_component_id integer,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    package_id             VARCHAR(32),
+    ai_component_id        INT,
+    status                 VARCHAR(2) DEFAULT 'Y',
+    sort_no                INT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_package_ai_component_relation IS '千寻套餐关联智能组件信息表';
 COMMENT ON COLUMN qianxun_package_ai_component_relation.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_package_ai_component_relation.package_id IS '套餐 ID，关联套餐信息表中的 package_id';
@@ -4631,21 +4278,19 @@ COMMENT ON COLUMN qianxun_package_ai_component_relation.status IS '关联状态�
 COMMENT ON COLUMN qianxun_package_ai_component_relation.sort_no IS '排序号';
 COMMENT ON COLUMN qianxun_package_ai_component_relation.create_time IS '关联关系创建时间';
 COMMENT ON COLUMN qianxun_package_ai_component_relation.update_time IS '关联关系更新时间';
-ALTER TABLE qianxun_package_ai_component_relation ADD CONSTRAINT qianxun_package_ai_component_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_index_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    index_id integer,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    is_visible character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    relate_index_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    package_id             VARCHAR(32),
+    index_id               INT,
+    status                 VARCHAR(2) DEFAULT 'Y',
+    is_visible             VARCHAR(2) DEFAULT 'Y',
+    sort_no                INT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    relate_index_id        VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_package_index_relation IS '千寻套餐关联组件信息表';
 COMMENT ON COLUMN qianxun_package_index_relation.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_package_index_relation.package_id IS '套餐 ID，关联套餐信息表中的 package_id';
@@ -4656,18 +4301,16 @@ COMMENT ON COLUMN qianxun_package_index_relation.sort_no IS '排序号';
 COMMENT ON COLUMN qianxun_package_index_relation.create_time IS '关联关系创建时间';
 COMMENT ON COLUMN qianxun_package_index_relation.update_time IS '关联关系更新时间';
 COMMENT ON COLUMN qianxun_package_index_relation.relate_index_id IS '组件信息关联ID（对应package_agent_index_config表ID）';
-ALTER TABLE qianxun_package_index_relation ADD CONSTRAINT qianxun_package_index_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_info (
-    package_id character varying(32) COLLATE "C" NOT NULL,
-    package_name character varying(255) COLLATE "C" NOT NULL,
-    package_desc text,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    package_id             VARCHAR(32) NOT NULL,
+    package_name           VARCHAR(255) NOT NULL,
+    package_desc           TEXT,
+    status                 VARCHAR(2) DEFAULT 'Y',
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (package_id)
+);
 COMMENT ON TABLE qianxun_package_info IS '套餐基本信息表';
 COMMENT ON COLUMN qianxun_package_info.package_id IS '套餐唯一标识';
 COMMENT ON COLUMN qianxun_package_info.package_name IS '套餐名称';
@@ -4675,19 +4318,17 @@ COMMENT ON COLUMN qianxun_package_info.package_desc IS '套餐详细描述';
 COMMENT ON COLUMN qianxun_package_info.status IS '套餐有效标志位，Y表示已上架，N表示已下架';
 COMMENT ON COLUMN qianxun_package_info.create_time IS '套餐信息创建时间';
 COMMENT ON COLUMN qianxun_package_info.update_time IS '套餐信息更新时间';
-ALTER TABLE qianxun_package_info ADD CONSTRAINT qianxun_package_info_pkey PRIMARY KEY USING ubtree  (package_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_knowledge_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    package_id             VARCHAR(32),
+    knowledge_id           VARCHAR(64),
+    status                 VARCHAR(2) DEFAULT 'Y',
+    sort_no                INT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_package_knowledge_relation IS '千寻套餐关联知识库信息表';
 COMMENT ON COLUMN qianxun_package_knowledge_relation.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_package_knowledge_relation.package_id IS '套餐 ID，关联套餐信息表中的 package_id';
@@ -4696,19 +4337,17 @@ COMMENT ON COLUMN qianxun_package_knowledge_relation.status IS '关联状态，Y
 COMMENT ON COLUMN qianxun_package_knowledge_relation.sort_no IS '排序号';
 COMMENT ON COLUMN qianxun_package_knowledge_relation.create_time IS '关联关系创建时间';
 COMMENT ON COLUMN qianxun_package_knowledge_relation.update_time IS '关联关系更新时间';
-ALTER TABLE qianxun_package_knowledge_relation ADD CONSTRAINT qianxun_package_knowledge_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_menu_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    menu_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    package_id             VARCHAR(32),
+    menu_id                VARCHAR(32),
+    status                 VARCHAR(2) DEFAULT 'Y',
+    sort_no                INT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_package_menu_relation IS '千寻套餐关联千寻菜单信息表';
 COMMENT ON COLUMN qianxun_package_menu_relation.id IS '关联记录的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_package_menu_relation.package_id IS '套餐 ID，关联套餐信息表中的 package_id';
@@ -4717,18 +4356,16 @@ COMMENT ON COLUMN qianxun_package_menu_relation.status IS '关联状态，Y有�
 COMMENT ON COLUMN qianxun_package_menu_relation.sort_no IS '排序号';
 COMMENT ON COLUMN qianxun_package_menu_relation.create_time IS '关联记录的创建时间';
 COMMENT ON COLUMN qianxun_package_menu_relation.update_time IS '关联记录的更新时间';
-ALTER TABLE qianxun_package_menu_relation ADD CONSTRAINT qianxun_package_menu_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_order_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    order_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    package_id             VARCHAR(32),
+    order_id               VARCHAR(32),
+    status                 VARCHAR(2) DEFAULT 'Y',
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_package_order_relation IS '订单关联套餐表';
 COMMENT ON COLUMN qianxun_package_order_relation.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_package_order_relation.package_id IS '套餐 ID，关联套餐信息表中的 package_id';
@@ -4736,19 +4373,17 @@ COMMENT ON COLUMN qianxun_package_order_relation.order_id IS '订单ID，关联�
 COMMENT ON COLUMN qianxun_package_order_relation.status IS '关联状态，Y有效，N无效';
 COMMENT ON COLUMN qianxun_package_order_relation.create_time IS '关联关系创建时间';
 COMMENT ON COLUMN qianxun_package_order_relation.update_time IS '关联关系更新时间';
-ALTER TABLE qianxun_package_order_relation ADD CONSTRAINT qianxun_package_order_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_package_space_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    package_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    space_id integer,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    sort_no integer,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    package_id             VARCHAR(32),
+    space_id               INT,
+    status                 VARCHAR(2) DEFAULT 'Y',
+    sort_no                INT,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_package_space_relation IS '千寻套餐关联空间信息表';
 COMMENT ON COLUMN qianxun_package_space_relation.id IS '关联记录的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_package_space_relation.package_id IS '套餐 ID，关联套餐信息表中的 package_id';
@@ -4757,39 +4392,35 @@ COMMENT ON COLUMN qianxun_package_space_relation.status IS '关联状态，Y有�
 COMMENT ON COLUMN qianxun_package_space_relation.sort_no IS '排序号';
 COMMENT ON COLUMN qianxun_package_space_relation.create_time IS '关联记录的创建时间';
 COMMENT ON COLUMN qianxun_package_space_relation.update_time IS '关联记录的更新时间';
-ALTER TABLE qianxun_package_space_relation ADD CONSTRAINT qianxun_package_space_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_source_cards (
-    session_msg_no character varying(200) COLLATE "C" NOT NULL,
-    source_card_content text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
-ALTER TABLE qianxun_source_cards ADD CONSTRAINT qianxun_source_cards_pkey PRIMARY KEY USING ubtree  (session_msg_no) WITH (storage_type=USTORE);
+    session_msg_no         VARCHAR(200) NOT NULL,
+    source_card_content    TEXT,
+    PRIMARY KEY (session_msg_no)
+);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_user_info (
-    id character varying(64) COLLATE "C" NOT NULL,
-    user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    user_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    org_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    phone_number character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    password character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    salt character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    label character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    email character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    last_active_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    user_source character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    remark character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    origin_user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    org_id_list character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    app_key character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    app_key_expire_date character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    user_id                VARCHAR(64),
+    user_name              VARCHAR(255),
+    org_id                 VARCHAR(64),
+    phone_number           VARCHAR(100),
+    password               VARCHAR(255),
+    salt                   VARCHAR(255),
+    label                  VARCHAR(1000),
+    email                  VARCHAR(100),
+    status                 VARCHAR(1) DEFAULT 'Y',
+    last_active_time       TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    user_source            VARCHAR(50),
+    remark                 VARCHAR(50),
+    origin_user_id         VARCHAR(64),
+    org_id_list            VARCHAR(500),
+    app_key                VARCHAR(500),
+    app_key_expire_date    VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_user_info IS '千寻用户信息表';
 COMMENT ON COLUMN qianxun_user_info.id IS '用户通用唯一识别码，用于唯一标识用户';
 COMMENT ON COLUMN qianxun_user_info.user_id IS '用户id，用于外部数据同步';
@@ -4810,34 +4441,32 @@ COMMENT ON COLUMN qianxun_user_info.origin_user_id IS '同步用户ID';
 COMMENT ON COLUMN qianxun_user_info.org_id_list IS '所属机构层级';
 COMMENT ON COLUMN qianxun_user_info.app_key IS 'appkey值，登录使用';
 COMMENT ON COLUMN qianxun_user_info.app_key_expire_date IS 'appkey到期日期';
-ALTER TABLE qianxun_user_info ADD CONSTRAINT qianxun_user_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_user_log (
-    id integer DEFAULT nextval('qianxun_user_log_id_seq'::regclass) NOT NULL,
-    user_id character varying(80) COLLATE "C" NOT NULL,
-    hub_account character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    org_id character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    env_type character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    version_type character varying(40) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    hub_source character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    session_no character varying(80) COLLATE "C" NOT NULL,
-    session_msg_no character varying(80) COLLATE "C" NOT NULL,
-    parent_session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    msg text,
-    session_msg_start_time timestamp without time zone,
-    first_session_msg_time timestamp without time zone,
-    session_msg_end_time timestamp without time zone,
-    phone_no character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    org_info character varying(200) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    answer_result text,
-    org_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    role_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    menu_name character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    menu_name_code character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    order_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    user_id                VARCHAR(80) NOT NULL,
+    hub_account            VARCHAR(80) DEFAULT '' NOT NULL,
+    org_id                 VARCHAR(80) DEFAULT '' NOT NULL,
+    env_type               VARCHAR(40) DEFAULT '' NOT NULL,
+    version_type           VARCHAR(40) DEFAULT '' NOT NULL,
+    hub_source             VARCHAR(80) DEFAULT '' NOT NULL,
+    session_no             VARCHAR(80) NOT NULL,
+    session_msg_no         VARCHAR(80) NOT NULL,
+    parent_session_msg_no  VARCHAR(64) DEFAULT '' NOT NULL,
+    msg                    TEXT,
+    session_msg_start_time TIMESTAMP,
+    first_session_msg_time TIMESTAMP,
+    session_msg_end_time   TIMESTAMP,
+    phone_no               VARCHAR(200),
+    org_info               VARCHAR(200) DEFAULT '' NOT NULL,
+    answer_result          TEXT,
+    org_name               VARCHAR(1000),
+    role_name              VARCHAR(1000),
+    menu_name              VARCHAR(500),
+    menu_name_code         VARCHAR(500),
+    order_id               VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_user_log IS '千寻提问处理时间埋点信息表';
 COMMENT ON COLUMN qianxun_user_log.id IS '自增主键';
 COMMENT ON COLUMN qianxun_user_log.user_id IS '用户id';
@@ -4857,20 +4486,18 @@ COMMENT ON COLUMN qianxun_user_log.org_info IS '所属机构';
 COMMENT ON COLUMN qianxun_user_log.answer_result IS '问答给最终用户的输出';
 COMMENT ON COLUMN qianxun_user_log.menu_name_code IS '菜单名称编码';
 COMMENT ON COLUMN qianxun_user_log.order_id IS '订单编号';
-ALTER TABLE qianxun_user_log ADD CONSTRAINT session_msg_no_2_unique UNIQUE USING ubtree (session_msg_no) WITH (storage_type=USTORE);
-ALTER TABLE qianxun_user_log ADD CONSTRAINT qianxun_user_log_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX session_msg_no_2_unique ON qianxun_user_log (session_msg_no);
 
-SET search_path = bosz_test;
 CREATE TABLE qianxun_user_order_relation (
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    order_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    update_time timestamp without time zone DEFAULT pg_systimestamp() NOT NULL,
-    consumption_user_count bigint DEFAULT 0::bigint
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(64),
+    order_id               VARCHAR(32),
+    status                 VARCHAR(2) DEFAULT 'Y',
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    consumption_user_count BIGINT DEFAULT 0,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE qianxun_user_order_relation IS '订单关联用户表';
 COMMENT ON COLUMN qianxun_user_order_relation.id IS '关联关系的唯一标识，自增主键';
 COMMENT ON COLUMN qianxun_user_order_relation.user_id IS '用户通用唯一识别码，关联用户信息表中的 user_uuid';
@@ -4879,55 +4506,51 @@ COMMENT ON COLUMN qianxun_user_order_relation.status IS '关联状态，Y有效�
 COMMENT ON COLUMN qianxun_user_order_relation.create_time IS '关联关系创建时间';
 COMMENT ON COLUMN qianxun_user_order_relation.update_time IS '关联关系更新时间';
 COMMENT ON COLUMN qianxun_user_order_relation.consumption_user_count IS '订单按用户可用消费次数';
-ALTER TABLE qianxun_user_order_relation ADD CONSTRAINT qianxun_user_order_relation_user_id_idx UNIQUE USING ubtree (user_id, order_id) WITH (storage_type=USTORE);
-ALTER TABLE qianxun_user_order_relation ADD CONSTRAINT qianxun_user_order_relation_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX qianxun_user_order_relation_user_id_idx ON qianxun_user_order_relation (user_id, order_id);
 
-SET search_path = bosz_test;
 CREATE TABLE rasa_agent_logs (
-    session_msg_no character varying(64) COLLATE "C" NOT NULL,
-    agent_code character varying(256) COLLATE "C" NOT NULL,
-    start_time character varying(40) COLLATE "C" NOT NULL,
-    hub_account character varying(80) COLLATE "C" NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    session_msg_no         VARCHAR(64) NOT NULL,
+    agent_code             VARCHAR(256) NOT NULL,
+    start_time             VARCHAR(40) NOT NULL,
+    hub_account            VARCHAR(80) NOT NULL,
+    PRIMARY KEY (session_msg_no, agent_code, hub_account)
+);
 COMMENT ON COLUMN rasa_agent_logs.session_msg_no IS '问题id';
 COMMENT ON COLUMN rasa_agent_logs.agent_code IS 'Agent code';
 COMMENT ON COLUMN rasa_agent_logs.start_time IS '问答时间';
 COMMENT ON COLUMN rasa_agent_logs.hub_account IS 'hub账号';
-ALTER TABLE rasa_agent_logs ADD CONSTRAINT rasa_agent_logs_pkey PRIMARY KEY USING ubtree  (session_msg_no, agent_code, hub_account) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE rasa_chat_detail_info (
-    id integer DEFAULT nextval('rasa_chat_detail_info_id_seq'::regclass) NOT NULL,
-    session_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    report_no character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    hub_account character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    role_type character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    plugin_name character varying(200) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    knowledge_ids character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    question text,
-    start_time timestamp without time zone,
-    end_time timestamp without time zone,
-    intent text,
-    question_cls text,
-    nlu text,
-    ner text,
-    statistics_info text,
-    intent_info text,
-    content_match_info text,
-    agent_code text,
-    agent_info text,
-    fallback_info text,
-    results text,
-    actions_time_cost character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    rewrite_question text,
-    question_topic character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    question_answer_validation_class character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    question_answer_validation_original_reault text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                                         BIGINT NOT NULL AUTO_INCREMENT,
+    session_no                                 VARCHAR(64) DEFAULT '' NOT NULL,
+    session_msg_no                             VARCHAR(64) DEFAULT '' NOT NULL,
+    report_no                                  VARCHAR(64),
+    user_id                                    VARCHAR(64) DEFAULT '' NOT NULL,
+    hub_account                                VARCHAR(64) DEFAULT '' NOT NULL,
+    role_type                                  VARCHAR(64) DEFAULT '' NOT NULL,
+    plugin_name                                VARCHAR(200) DEFAULT '' NOT NULL,
+    knowledge_ids                              VARCHAR(200),
+    question                                   TEXT,
+    start_time                                 TIMESTAMP,
+    end_time                                   TIMESTAMP,
+    intent                                     TEXT,
+    question_cls                               TEXT,
+    nlu                                        TEXT,
+    ner                                        TEXT,
+    statistics_info                            TEXT,
+    intent_info                                TEXT,
+    content_match_info                         TEXT,
+    agent_code                                 TEXT,
+    agent_info                                 TEXT,
+    fallback_info                              TEXT,
+    results                                    TEXT,
+    actions_time_cost                          VARCHAR(256),
+    rewrite_question                           TEXT,
+    question_topic                             VARCHAR(100),
+    question_answer_validation_class           VARCHAR(200),
+    question_answer_validation_original_reault TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE rasa_chat_detail_info IS 'rasa问答记录表';
 COMMENT ON COLUMN rasa_chat_detail_info.id IS '主键';
 COMMENT ON COLUMN rasa_chat_detail_info.session_no IS '会话no';
@@ -4954,94 +4577,84 @@ COMMENT ON COLUMN rasa_chat_detail_info.results IS '问题结果';
 COMMENT ON COLUMN rasa_chat_detail_info.question_topic IS '问题分类主题';
 COMMENT ON COLUMN rasa_chat_detail_info.question_answer_validation_class IS '问答结果分类';
 COMMENT ON COLUMN rasa_chat_detail_info.question_answer_validation_original_reault IS '问答结果分类原始结果';
-ALTER TABLE rasa_chat_detail_info ADD CONSTRAINT session_msg_no UNIQUE USING ubtree (session_msg_no) WITH (storage_type=USTORE);
-ALTER TABLE rasa_chat_detail_info ADD CONSTRAINT rasa_chat_detail_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX session_msg_no ON rasa_chat_detail_info (session_msg_no);
 
-SET search_path = bosz_test;
 CREATE TABLE rasa_index_logs (
-    session_msg_no character varying(64) COLLATE "C" NOT NULL,
-    index_name character varying(256) COLLATE "C" NOT NULL,
-    source_type character varying(256) COLLATE "C" NOT NULL,
-    start_time character varying(40) COLLATE "C" NOT NULL,
-    index_classification character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    hub_account character varying(80) COLLATE "C" NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    session_msg_no         VARCHAR(64) NOT NULL,
+    index_name             VARCHAR(256) NOT NULL,
+    source_type            VARCHAR(256) NOT NULL,
+    start_time             VARCHAR(40) NOT NULL,
+    index_classification   VARCHAR(40),
+    hub_account            VARCHAR(80) NOT NULL,
+    PRIMARY KEY (session_msg_no, index_name, source_type, hub_account)
+);
 COMMENT ON COLUMN rasa_index_logs.session_msg_no IS '问题id';
 COMMENT ON COLUMN rasa_index_logs.index_name IS '组件名';
 COMMENT ON COLUMN rasa_index_logs.source_type IS 'source_type';
 COMMENT ON COLUMN rasa_index_logs.start_time IS '问答时间';
 COMMENT ON COLUMN rasa_index_logs.hub_account IS 'hub账号';
-ALTER TABLE rasa_index_logs ADD CONSTRAINT rasa_index_logs_pkey PRIMARY KEY USING ubtree  (session_msg_no, index_name, source_type, hub_account) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE rasa_question_time_cost_percent_line (
-    hour_str character varying(64) COLLATE "C" NOT NULL,
-    line_80 numeric NOT NULL,
-    line_85 numeric NOT NULL,
-    line_90 numeric NOT NULL,
-    line_95 numeric NOT NULL,
-    line_99 numeric NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    hour_str               VARCHAR(64) NOT NULL,
+    line_80                DECIMAL(38,18) NOT NULL,
+    line_85                DECIMAL(38,18) NOT NULL,
+    line_90                DECIMAL(38,18) NOT NULL,
+    line_95                DECIMAL(38,18) NOT NULL,
+    line_99                DECIMAL(38,18) NOT NULL,
+    PRIMARY KEY (hour_str)
+);
 COMMENT ON COLUMN rasa_question_time_cost_percent_line.hour_str IS '小时';
 COMMENT ON COLUMN rasa_question_time_cost_percent_line.line_80 IS '80%line';
 COMMENT ON COLUMN rasa_question_time_cost_percent_line.line_85 IS '85%line';
 COMMENT ON COLUMN rasa_question_time_cost_percent_line.line_90 IS '90%line';
 COMMENT ON COLUMN rasa_question_time_cost_percent_line.line_95 IS '95%line';
 COMMENT ON COLUMN rasa_question_time_cost_percent_line.line_99 IS '99%line';
-ALTER TABLE rasa_question_time_cost_percent_line ADD CONSTRAINT rasa_question_time_cost_percent_line_pkey PRIMARY KEY USING ubtree  (hour_str) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE rasa_user_by_day (
-    day_str character varying(20) COLLATE "C" NOT NULL,
-    day_new_user bigint DEFAULT 0::bigint NOT NULL,
-    day_user bigint DEFAULT 0::bigint NOT NULL,
-    hub_account character varying(80) COLLATE "C" NOT NULL,
-    day_count_user bigint DEFAULT 0::bigint NOT NULL,
-    day_qa integer DEFAULT 0 NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    day_str                VARCHAR(20) NOT NULL,
+    day_new_user           BIGINT DEFAULT 0 NOT NULL,
+    day_user               BIGINT DEFAULT 0 NOT NULL,
+    hub_account            VARCHAR(80) NOT NULL,
+    day_count_user         BIGINT DEFAULT 0 NOT NULL,
+    day_qa                 INT DEFAULT 0 NOT NULL,
+    PRIMARY KEY (day_str, hub_account)
+);
 COMMENT ON COLUMN rasa_user_by_day.day_str IS '天';
 COMMENT ON COLUMN rasa_user_by_day.day_new_user IS '新用户';
 COMMENT ON COLUMN rasa_user_by_day.day_user IS '用户';
 COMMENT ON COLUMN rasa_user_by_day.hub_account IS 'hub账号';
 COMMENT ON COLUMN rasa_user_by_day.day_count_user IS '累计用户';
 COMMENT ON COLUMN rasa_user_by_day.day_qa IS '当天问答次数';
-ALTER TABLE rasa_user_by_day ADD CONSTRAINT rasa_user_by_day_pkey PRIMARY KEY USING ubtree  (day_str, hub_account) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE rela_index_config (
-    id integer DEFAULT nextval('rela_index_config_id_seq'::regclass) NOT NULL,
-    index_id integer,
-    rela_index_id integer,
-    rela_index_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    index_id               INT,
+    rela_index_id          INT,
+    rela_index_status      VARCHAR(2) DEFAULT 'Y',
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE rela_index_config IS '关联指标配置表';
 COMMENT ON COLUMN rela_index_config.id IS '主键ID';
 COMMENT ON COLUMN rela_index_config.index_id IS '指标ID';
 COMMENT ON COLUMN rela_index_config.rela_index_id IS '关联指标ID';
 COMMENT ON COLUMN rela_index_config.rela_index_status IS '关联指标状态';
-ALTER TABLE rela_index_config ADD CONSTRAINT idx_rela_index_code UNIQUE USING ubtree (index_id, rela_index_id) WITH (storage_type=USTORE);
-ALTER TABLE rela_index_config ADD CONSTRAINT rela_index_config_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX idx_rela_index_code ON rela_index_config (index_id, rela_index_id);
 
-SET search_path = bosz_test;
 CREATE TABLE report_version (
-    reportversion character varying(32) COLLATE "C" NOT NULL,
-    versionno character varying(10) COLLATE "C" NOT NULL,
-    label character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    mark character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    createtime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    creatorid character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    creatorname character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    modifytime character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    modifierid character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    modifiername character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    sortno character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    operation character varying(10) COLLATE "C" DEFAULT '1'::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    reportversion          VARCHAR(32) NOT NULL,
+    versionno              VARCHAR(10) NOT NULL,
+    label                  VARCHAR(200),
+    mark                   VARCHAR(200),
+    createtime             VARCHAR(32),
+    creatorid              VARCHAR(20),
+    creatorname            VARCHAR(20),
+    modifytime             VARCHAR(32),
+    modifierid             VARCHAR(20),
+    modifiername           VARCHAR(20),
+    sortno                 VARCHAR(10),
+    operation              VARCHAR(10) DEFAULT '1' NOT NULL,
+    PRIMARY KEY (reportversion, versionno)
+);
 COMMENT ON TABLE report_version IS '报告版本信息';
 COMMENT ON COLUMN report_version.reportversion IS '报告版本';
 COMMENT ON COLUMN report_version.versionno IS '版本号';
@@ -5055,23 +4668,21 @@ COMMENT ON COLUMN report_version.modifierid IS '修改人ID';
 COMMENT ON COLUMN report_version.modifiername IS '修改人人名字';
 COMMENT ON COLUMN report_version.sortno IS '排序号';
 COMMENT ON COLUMN report_version.operation IS '是否可操作标识1是0否';
-ALTER TABLE report_version ADD CONSTRAINT report_version_pkey PRIMARY KEY USING ubtree  (reportversion, versionno) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE rule_check_upload_report_files (
-    id character varying(40) COLLATE "C" NOT NULL,
-    session_no character varying(50) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" NOT NULL,
-    ent_name character varying(256) COLLATE "C" NOT NULL,
-    file_name character varying(256) COLLATE "C" NOT NULL,
-    markdown_content text,
-    segments json,
-    upload_time character varying(40) COLLATE "C" NOT NULL,
-    update_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(20) COLLATE "C" NOT NULL,
-    local_path character varying(256) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(40) NOT NULL,
+    session_no             VARCHAR(50) NOT NULL,
+    user_id                VARCHAR(32) NOT NULL,
+    ent_name               VARCHAR(256) NOT NULL,
+    file_name              VARCHAR(256) NOT NULL,
+    markdown_content       TEXT,
+    segments               json,
+    upload_time            VARCHAR(40) NOT NULL,
+    update_time            VARCHAR(40),
+    status                 VARCHAR(20) NOT NULL,
+    local_path             VARCHAR(256),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE rule_check_upload_report_files IS '规则检查上传的报告文件表';
 COMMENT ON COLUMN rule_check_upload_report_files.id IS 'ID';
 COMMENT ON COLUMN rule_check_upload_report_files.session_no IS '会话编号';
@@ -5084,23 +4695,21 @@ COMMENT ON COLUMN rule_check_upload_report_files.upload_time IS '上传时间';
 COMMENT ON COLUMN rule_check_upload_report_files.update_time IS '更新时间';
 COMMENT ON COLUMN rule_check_upload_report_files.status IS '状态：init(初始化), uploading(上传中), upload_success(上传成功), upload_failed(上传失败), parsing(解析中), parse_success(解析成功), parse_failed(解析失败)';
 COMMENT ON COLUMN rule_check_upload_report_files.local_path IS '本地路径';
-ALTER TABLE rule_check_upload_report_files ADD CONSTRAINT rule_check_upload_report_files_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE rule_check_upload_rule_files (
-    id character varying(40) COLLATE "C" NOT NULL,
-    session_no character varying(50) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" NOT NULL,
-    file_name character varying(256) COLLATE "C" NOT NULL,
-    markdown_content text,
-    rules json,
-    upload_time character varying(40) COLLATE "C" NOT NULL,
-    update_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(20) COLLATE "C" NOT NULL,
-    local_path character varying(256) COLLATE "C" DEFAULT NULL::character varying,
-    segments json
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(40) NOT NULL,
+    session_no             VARCHAR(50) NOT NULL,
+    user_id                VARCHAR(32) NOT NULL,
+    file_name              VARCHAR(256) NOT NULL,
+    markdown_content       TEXT,
+    rules                  json,
+    upload_time            VARCHAR(40) NOT NULL,
+    update_time            VARCHAR(40),
+    status                 VARCHAR(20) NOT NULL,
+    local_path             VARCHAR(256),
+    segments               json,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE rule_check_upload_rule_files IS '规则检查上传的制度文件表';
 COMMENT ON COLUMN rule_check_upload_rule_files.id IS 'ID';
 COMMENT ON COLUMN rule_check_upload_rule_files.session_no IS '会话编号';
@@ -5113,80 +4722,72 @@ COMMENT ON COLUMN rule_check_upload_rule_files.update_time IS '更新时间';
 COMMENT ON COLUMN rule_check_upload_rule_files.status IS '状态：init(初始化), uploading(上传中), upload_success(上传成功), upload_failed(上传失败), parsing(解析中), parse_success(解析成功), parse_failed(解析失败)';
 COMMENT ON COLUMN rule_check_upload_rule_files.local_path IS '本地路径';
 COMMENT ON COLUMN rule_check_upload_rule_files.segments IS '切分文档';
-ALTER TABLE rule_check_upload_rule_files ADD CONSTRAINT rule_check_upload_rule_files_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE scene_inflect_info (
-    _id bigint DEFAULT nextval('scene_inflect_info__id_seq'::regclass) NOT NULL,
-    scenename character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    prompt text,
-    largemodelcode character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    expectformat character varying(255) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    scenename              VARCHAR(255),
+    prompt                 TEXT,
+    largemodelcode         VARCHAR(255),
+    expectformat           VARCHAR(255),
+    PRIMARY KEY (_id)
+);
 COMMENT ON COLUMN scene_inflect_info._id IS '主键ID';
-ALTER TABLE scene_inflect_info ADD CONSTRAINT scene_inflect_info_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sence_relate_info (
-    _id bigint DEFAULT nextval('sence_relate_info__id_seq'::regclass) NOT NULL,
-    id numeric(22,0) DEFAULT NULL::numeric,
-    knowledge_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_code character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_desc character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    parent_group_value character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    parent_group_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    group_value character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    group_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    scenename character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    prompt text,
-    largemodelcode character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    expectformat character varying(255) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    id                     DECIMAL(22,0),
+    knowledge_name         VARCHAR(255),
+    knowledge_code         VARCHAR(255),
+    knowledge_desc         VARCHAR(255),
+    parent_group_value     VARCHAR(255),
+    parent_group_name      VARCHAR(255),
+    group_value            VARCHAR(255),
+    group_name             VARCHAR(255),
+    scenename              VARCHAR(255),
+    prompt                 TEXT,
+    largemodelcode         VARCHAR(255),
+    expectformat           VARCHAR(255),
+    PRIMARY KEY (_id)
+);
 COMMENT ON COLUMN sence_relate_info._id IS '主键ID';
-ALTER TABLE sence_relate_info ADD CONSTRAINT sence_relate_info_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sync_knowledge_info (
-    id integer DEFAULT nextval('sync_knowledge_info_id_seq'::regclass) NOT NULL,
-    knowledge_code character varying(100) COLLATE "C" NOT NULL,
-    sync_flag character varying(2) COLLATE "C" DEFAULT 'Y'::character varying NOT NULL
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    knowledge_code         VARCHAR(100) NOT NULL,
+    sync_flag              VARCHAR(2) DEFAULT 'Y' NOT NULL,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sync_knowledge_info IS '知识库同步信息表';
 COMMENT ON COLUMN sync_knowledge_info.id IS '主键ID';
 COMMENT ON COLUMN sync_knowledge_info.knowledge_code IS '知识库编码';
 COMMENT ON COLUMN sync_knowledge_info.sync_flag IS '同步标记 Y-同步 N-不同步';
-ALTER TABLE sync_knowledge_info ADD CONSTRAINT sync_knowledge_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_announcement (
-    id character varying(32) COLLATE "C" NOT NULL,
-    titile character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    msg_content text,
-    start_time timestamp without time zone,
-    end_time timestamp without time zone,
-    sender character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    priority character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    msg_category character varying(10) COLLATE "C" DEFAULT '2'::character varying NOT NULL,
-    send_status character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    send_time timestamp without time zone,
-    cancel_time timestamp without time zone,
-    del_flag character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    bus_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    bus_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    open_type character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    open_page character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    user_ids text,
-    msg_abstract text,
-    dt_task_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    titile                 VARCHAR(100),
+    msg_content            TEXT,
+    start_time             TIMESTAMP,
+    end_time               TIMESTAMP,
+    sender                 VARCHAR(100),
+    priority               VARCHAR(255),
+    msg_category           VARCHAR(10) DEFAULT '2' NOT NULL,
+    send_status            VARCHAR(10),
+    send_time              TIMESTAMP,
+    cancel_time            TIMESTAMP,
+    del_flag               VARCHAR(1),
+    bus_type               VARCHAR(20),
+    bus_id                 VARCHAR(50),
+    open_type              VARCHAR(20),
+    open_page              VARCHAR(255),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    user_ids               TEXT,
+    msg_abstract           TEXT,
+    dt_task_id             VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_announcement IS '系统通告表';
 COMMENT ON COLUMN sys_announcement.titile IS '标题';
 COMMENT ON COLUMN sys_announcement.msg_content IS '内容';
@@ -5210,22 +4811,20 @@ COMMENT ON COLUMN sys_announcement.update_time IS '更新时间';
 COMMENT ON COLUMN sys_announcement.user_ids IS '指定用户';
 COMMENT ON COLUMN sys_announcement.msg_abstract IS '摘要';
 COMMENT ON COLUMN sys_announcement.dt_task_id IS '钉钉task_id，用于撤回消息';
-ALTER TABLE sys_announcement ADD CONSTRAINT sys_announcement_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_announcement_send (
-    _id bigint DEFAULT nextval('sys_announcement_send__id_seq'::regclass) NOT NULL,
-    id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    annt_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    read_flag character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    read_time timestamp without time zone,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    _id                    BIGINT NOT NULL AUTO_INCREMENT,
+    id                     VARCHAR(32),
+    annt_id                VARCHAR(32),
+    user_id                VARCHAR(32),
+    read_flag              VARCHAR(10),
+    read_time              TIMESTAMP,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (_id)
+);
 COMMENT ON TABLE sys_announcement_send IS '用户通告阅读标记表';
 COMMENT ON COLUMN sys_announcement_send._id IS '主键ID';
 COMMENT ON COLUMN sys_announcement_send.annt_id IS '通告ID';
@@ -5236,20 +4835,18 @@ COMMENT ON COLUMN sys_announcement_send.create_by IS '创建人';
 COMMENT ON COLUMN sys_announcement_send.create_time IS '创建时间';
 COMMENT ON COLUMN sys_announcement_send.update_by IS '更新人';
 COMMENT ON COLUMN sys_announcement_send.update_time IS '更新时间';
-ALTER TABLE sys_announcement_send ADD CONSTRAINT sys_announcement_send_pkey PRIMARY KEY USING ubtree  (_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_api_info (
-    id character varying(32) COLLATE "C" NOT NULL,
-    api_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    api_des character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    api_path character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    perm_code character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    perm_desc character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp()
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    api_name               VARCHAR(200),
+    api_des                VARCHAR(200),
+    api_path               VARCHAR(200),
+    perm_code              VARCHAR(200),
+    perm_desc              VARCHAR(200),
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_api_info IS '接口信息表';
 COMMENT ON COLUMN sys_api_info.id IS '主键id';
 COMMENT ON COLUMN sys_api_info.api_name IS '接口名称';
@@ -5259,34 +4856,32 @@ COMMENT ON COLUMN sys_api_info.perm_code IS '权限编码';
 COMMENT ON COLUMN sys_api_info.perm_desc IS '接口描述';
 COMMENT ON COLUMN sys_api_info.create_time IS '创建时间';
 COMMENT ON COLUMN sys_api_info.update_time IS '更新时间';
-ALTER TABLE sys_api_info ADD CONSTRAINT sys_api_info_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_category (
-    id character varying(36) COLLATE "C" NOT NULL,
-    pid character varying(36) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    has_child character varying(3) COLLATE "C" DEFAULT '0'::character varying,
-    param_value character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    param_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    synonym_word character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    key_word character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    rela_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    field_attr character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    remark character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    hit_independently character varying(32) COLLATE "C" DEFAULT 'N'::character varying,
-    source_type_detail character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_field_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    param_desc character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    sample_question character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    pid                    VARCHAR(36),
+    name                   VARCHAR(100),
+    code                   VARCHAR(100),
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    has_child              VARCHAR(3) DEFAULT '0',
+    param_value            VARCHAR(100),
+    param_status           VARCHAR(1) DEFAULT 'Y',
+    synonym_word           VARCHAR(100),
+    key_word               VARCHAR(1000),
+    rela_table             VARCHAR(100),
+    field_attr             VARCHAR(100),
+    remark                 VARCHAR(500),
+    hit_independently      VARCHAR(32) DEFAULT 'N',
+    source_type_detail     VARCHAR(100),
+    source_field_type      VARCHAR(100),
+    param_desc             VARCHAR(1000),
+    sample_question        VARCHAR(1000),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_category.pid IS '父级节点';
 COMMENT ON COLUMN sys_category.name IS '类型名称';
 COMMENT ON COLUMN sys_category.code IS '类型编码';
@@ -5308,21 +4903,19 @@ COMMENT ON COLUMN sys_category.source_type_detail IS '细类类型';
 COMMENT ON COLUMN sys_category.source_field_type IS '细类字段类型';
 COMMENT ON COLUMN sys_category.param_desc IS '参数描述';
 COMMENT ON COLUMN sys_category.sample_question IS '示例问题描述';
-ALTER TABLE sys_category ADD CONSTRAINT sys_category_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_check_rule (
-    id character varying(32) COLLATE "C" NOT NULL,
-    rule_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    rule_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    rule_json character varying(1024) COLLATE "C" DEFAULT NULL::character varying,
-    rule_description character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    rule_name              VARCHAR(100),
+    rule_code              VARCHAR(100),
+    rule_json              VARCHAR(1024),
+    rule_description       VARCHAR(200),
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_check_rule.id IS '主键id';
 COMMENT ON COLUMN sys_check_rule.rule_name IS '规则名称';
 COMMENT ON COLUMN sys_check_rule.rule_code IS '规则Code';
@@ -5332,22 +4925,20 @@ COMMENT ON COLUMN sys_check_rule.update_by IS '更新人';
 COMMENT ON COLUMN sys_check_rule.update_time IS '更新时间';
 COMMENT ON COLUMN sys_check_rule.create_by IS '创建人';
 COMMENT ON COLUMN sys_check_rule.create_time IS '创建时间';
-ALTER TABLE sys_check_rule ADD CONSTRAINT uni_sys_check_rule_code UNIQUE USING ubtree (rule_code) WITH (storage_type=USTORE);
-ALTER TABLE sys_check_rule ADD CONSTRAINT sys_check_rule_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX uni_sys_check_rule_code ON sys_check_rule (rule_code);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_data_log (
-    id character varying(32) COLLATE "C" NOT NULL,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    data_table character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_content text,
-    data_version integer
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    data_table             VARCHAR(32),
+    data_id                VARCHAR(32),
+    data_content           TEXT,
+    data_version           INT,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_data_log.id IS 'id';
 COMMENT ON COLUMN sys_data_log.create_by IS '创建人登录名称';
 COMMENT ON COLUMN sys_data_log.create_time IS '创建日期';
@@ -5357,27 +4948,25 @@ COMMENT ON COLUMN sys_data_log.data_table IS '表名';
 COMMENT ON COLUMN sys_data_log.data_id IS '数据ID';
 COMMENT ON COLUMN sys_data_log.data_content IS '数据内容';
 COMMENT ON COLUMN sys_data_log.data_version IS '版本号';
-ALTER TABLE sys_data_log ADD CONSTRAINT sys_data_log_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_data_source (
-    id character varying(36) COLLATE "C" NOT NULL,
-    code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    remark character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    db_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    db_driver character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    db_url character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    db_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    db_username character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    db_password character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    code                   VARCHAR(100),
+    name                   VARCHAR(100),
+    remark                 VARCHAR(200),
+    db_type                VARCHAR(10),
+    db_driver              VARCHAR(100),
+    db_url                 VARCHAR(500),
+    db_name                VARCHAR(100),
+    db_username            VARCHAR(100),
+    db_password            VARCHAR(100),
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_data_source.code IS '数据源编码';
 COMMENT ON COLUMN sys_data_source.name IS '数据源名称';
 COMMENT ON COLUMN sys_data_source.remark IS '备注';
@@ -5392,35 +4981,33 @@ COMMENT ON COLUMN sys_data_source.create_time IS '创建日期';
 COMMENT ON COLUMN sys_data_source.update_by IS '更新人';
 COMMENT ON COLUMN sys_data_source.update_time IS '更新日期';
 COMMENT ON COLUMN sys_data_source.sys_org_code IS '所属部门';
-ALTER TABLE sys_data_source ADD CONSTRAINT sys_data_source_code_uni UNIQUE USING ubtree (code) WITH (storage_type=USTORE);
-ALTER TABLE sys_data_source ADD CONSTRAINT sys_data_source_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX sys_data_source_code_uni ON sys_data_source (code);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_depart (
-    id character varying(32) COLLATE "C" NOT NULL,
-    parent_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    depart_name character varying(100) COLLATE "C" NOT NULL,
-    depart_name_en character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    depart_name_abbr character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    depart_order integer DEFAULT 0,
-    description character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    org_category character varying(10) COLLATE "C" DEFAULT '1'::character varying NOT NULL,
-    org_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    org_code character varying(64) COLLATE "C" NOT NULL,
-    mobile character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    fax character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    address character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    memo character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    del_flag character varying(1) COLLATE "C" DEFAULT NULL::character varying,
-    qywx_identifier character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    datadate character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    parent_id              VARCHAR(32),
+    depart_name            VARCHAR(100) NOT NULL,
+    depart_name_en         VARCHAR(500),
+    depart_name_abbr       VARCHAR(500),
+    depart_order           INT DEFAULT 0,
+    description            VARCHAR(500),
+    org_category           VARCHAR(10) DEFAULT '1' NOT NULL,
+    org_type               VARCHAR(10),
+    org_code               VARCHAR(64) NOT NULL,
+    mobile                 VARCHAR(32),
+    fax                    VARCHAR(32),
+    address                VARCHAR(100),
+    memo                   VARCHAR(500),
+    status                 VARCHAR(1),
+    del_flag               VARCHAR(1),
+    qywx_identifier        VARCHAR(100),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    datadate               VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_depart IS '组织机构表';
 COMMENT ON COLUMN sys_depart.id IS 'ID';
 COMMENT ON COLUMN sys_depart.parent_id IS '父机构ID';
@@ -5443,35 +5030,31 @@ COMMENT ON COLUMN sys_depart.create_by IS '创建人';
 COMMENT ON COLUMN sys_depart.create_time IS '创建日期';
 COMMENT ON COLUMN sys_depart.update_by IS '更新人';
 COMMENT ON COLUMN sys_depart.update_time IS '更新日期';
-ALTER TABLE sys_depart ADD CONSTRAINT sys_depart_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_depart_permission (
-    id character varying(32) COLLATE "C" NOT NULL,
-    depart_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    depart_id              VARCHAR(32),
+    permission_id          VARCHAR(32),
+    data_rule_ids          VARCHAR(1000),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_depart_permission IS '部门权限表';
 COMMENT ON COLUMN sys_depart_permission.depart_id IS '部门id';
 COMMENT ON COLUMN sys_depart_permission.permission_id IS '权限id';
 COMMENT ON COLUMN sys_depart_permission.data_rule_ids IS '数据规则id';
-ALTER TABLE sys_depart_permission ADD CONSTRAINT sys_depart_permission_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_depart_role (
-    id character varying(32) COLLATE "C" NOT NULL,
-    depart_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    role_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    role_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    depart_id              VARCHAR(32),
+    role_name              VARCHAR(200),
+    role_code              VARCHAR(100),
+    description            VARCHAR(255),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_depart_role IS '部门角色表';
 COMMENT ON COLUMN sys_depart_role.depart_id IS '部门id';
 COMMENT ON COLUMN sys_depart_role.role_name IS '部门角色名称';
@@ -5481,19 +5064,17 @@ COMMENT ON COLUMN sys_depart_role.create_by IS '创建人';
 COMMENT ON COLUMN sys_depart_role.create_time IS '创建时间';
 COMMENT ON COLUMN sys_depart_role.update_by IS '更新人';
 COMMENT ON COLUMN sys_depart_role.update_time IS '更新时间';
-ALTER TABLE sys_depart_role ADD CONSTRAINT sys_depart_role_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_depart_role_permission (
-    id character varying(32) COLLATE "C" NOT NULL,
-    depart_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    depart_id              VARCHAR(32),
+    role_id                VARCHAR(32),
+    permission_id          VARCHAR(32),
+    data_rule_ids          VARCHAR(1000),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_depart_role_permission IS '部门角色权限表';
 COMMENT ON COLUMN sys_depart_role_permission.depart_id IS '部门id';
 COMMENT ON COLUMN sys_depart_role_permission.role_id IS '角色id';
@@ -5501,35 +5082,31 @@ COMMENT ON COLUMN sys_depart_role_permission.permission_id IS '权限id';
 COMMENT ON COLUMN sys_depart_role_permission.data_rule_ids IS '数据权限ids';
 COMMENT ON COLUMN sys_depart_role_permission.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_depart_role_permission.operate_ip IS '操作ip';
-ALTER TABLE sys_depart_role_permission ADD CONSTRAINT sys_depart_role_permission_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_depart_role_user (
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    drole_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(32),
+    drole_id               VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_depart_role_user IS '部门角色用户表';
 COMMENT ON COLUMN sys_depart_role_user.id IS '主键id';
 COMMENT ON COLUMN sys_depart_role_user.user_id IS '用户id';
 COMMENT ON COLUMN sys_depart_role_user.drole_id IS '角色id';
-ALTER TABLE sys_depart_role_user ADD CONSTRAINT sys_depart_role_user_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_dict (
-    id character varying(32) COLLATE "C" NOT NULL,
-    dict_name character varying(100) COLLATE "C" NOT NULL,
-    dict_code character varying(100) COLLATE "C" NOT NULL,
-    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    del_flag integer,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    type integer DEFAULT 0
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    dict_name              VARCHAR(100) NOT NULL,
+    dict_code              VARCHAR(100) NOT NULL,
+    description            VARCHAR(255),
+    del_flag               INT,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    type                   INT DEFAULT 0,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_dict.dict_name IS '字典名称';
 COMMENT ON COLUMN sys_dict.dict_code IS '字典编码';
 COMMENT ON COLUMN sys_dict.description IS '描述';
@@ -5539,29 +5116,27 @@ COMMENT ON COLUMN sys_dict.create_time IS '创建时间';
 COMMENT ON COLUMN sys_dict.update_by IS '更新人';
 COMMENT ON COLUMN sys_dict.update_time IS '更新时间';
 COMMENT ON COLUMN sys_dict.type IS '字典类型0为string,1为number';
-ALTER TABLE sys_dict ADD CONSTRAINT indextable_dict_code UNIQUE USING ubtree (dict_code) WITH (storage_type=USTORE);
-ALTER TABLE sys_dict ADD CONSTRAINT sys_dict_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX indextable_dict_code ON sys_dict (dict_code);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_dict_item (
-    id character varying(32) COLLATE "C" NOT NULL,
-    dict_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    item_text character varying(100) COLLATE "C" NOT NULL,
-    item_value character varying(100) COLLATE "C" NOT NULL,
-    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    sort_order integer,
-    status integer,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    synonym_word character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    key_word character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    rela_table character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    field_attr character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    remark character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    dict_id                VARCHAR(32),
+    item_text              VARCHAR(100) NOT NULL,
+    item_value             VARCHAR(100) NOT NULL,
+    description            VARCHAR(255),
+    sort_order             INT,
+    status                 INT,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    synonym_word           VARCHAR(100),
+    key_word               VARCHAR(500),
+    rela_table             VARCHAR(100),
+    field_attr             VARCHAR(400),
+    remark                 VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_dict_item.dict_id IS '字典id';
 COMMENT ON COLUMN sys_dict_item.item_text IS '字典项文本';
 COMMENT ON COLUMN sys_dict_item.item_value IS '字典项值';
@@ -5573,21 +5148,19 @@ COMMENT ON COLUMN sys_dict_item.key_word IS '关键词';
 COMMENT ON COLUMN sys_dict_item.rela_table IS '关联表';
 COMMENT ON COLUMN sys_dict_item.field_attr IS '字段属性';
 COMMENT ON COLUMN sys_dict_item.remark IS '备注';
-ALTER TABLE sys_dict_item ADD CONSTRAINT sys_dict_item_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_fill_rule (
-    id character varying(32) COLLATE "C" NOT NULL,
-    rule_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    rule_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    rule_class character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    rule_params character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    rule_name              VARCHAR(100),
+    rule_code              VARCHAR(100),
+    rule_class             VARCHAR(100),
+    rule_params            VARCHAR(200),
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_fill_rule.id IS '主键ID';
 COMMENT ON COLUMN sys_fill_rule.rule_name IS '规则名称';
 COMMENT ON COLUMN sys_fill_rule.rule_code IS '规则Code';
@@ -5597,29 +5170,27 @@ COMMENT ON COLUMN sys_fill_rule.update_by IS '修改人';
 COMMENT ON COLUMN sys_fill_rule.update_time IS '修改时间';
 COMMENT ON COLUMN sys_fill_rule.create_by IS '创建人';
 COMMENT ON COLUMN sys_fill_rule.create_time IS '创建时间';
-ALTER TABLE sys_fill_rule ADD CONSTRAINT uni_sys_fill_rule_code UNIQUE USING ubtree (rule_code) WITH (storage_type=USTORE);
-ALTER TABLE sys_fill_rule ADD CONSTRAINT sys_fill_rule_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX uni_sys_fill_rule_code ON sys_fill_rule (rule_code);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_gateway_route (
-    id character varying(36) COLLATE "C" NOT NULL,
-    router_id character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    uri character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    predicates text,
-    filters text,
-    retryable integer,
-    strip_prefix integer,
-    persistable integer,
-    show_api integer,
-    status integer,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(36) NOT NULL,
+    router_id              VARCHAR(50),
+    name                   VARCHAR(32),
+    uri                    VARCHAR(32),
+    predicates             TEXT,
+    filters                TEXT,
+    retryable              INT,
+    strip_prefix           INT,
+    persistable            INT,
+    show_api               INT,
+    status                 INT,
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(64),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_gateway_route.router_id IS '路由ID';
 COMMENT ON COLUMN sys_gateway_route.name IS '服务名';
 COMMENT ON COLUMN sys_gateway_route.uri IS '服务地址';
@@ -5635,28 +5206,26 @@ COMMENT ON COLUMN sys_gateway_route.create_time IS '创建日期';
 COMMENT ON COLUMN sys_gateway_route.update_by IS '更新人';
 COMMENT ON COLUMN sys_gateway_route.update_time IS '更新日期';
 COMMENT ON COLUMN sys_gateway_route.sys_org_code IS '所属部门';
-ALTER TABLE sys_gateway_route ADD CONSTRAINT sys_gateway_route_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_log (
-    id character varying(32) COLLATE "C" NOT NULL,
-    log_type integer,
-    log_content character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_type integer,
-    userid character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    username character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    ip character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    method character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    request_url character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    request_param text,
-    request_type character varying(10) COLLATE "C" DEFAULT NULL::character varying,
-    cost_time bigint,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    log_type               INT,
+    log_content            VARCHAR(1000),
+    operate_type           INT,
+    userid                 VARCHAR(32),
+    username               VARCHAR(100),
+    ip                     VARCHAR(100),
+    method                 VARCHAR(500),
+    request_url            VARCHAR(255),
+    request_param          TEXT,
+    request_type           VARCHAR(10),
+    cost_time              BIGINT,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_log IS '系统日志表';
 COMMENT ON COLUMN sys_log.log_type IS '日志类型（1登录日志，2操作日志）';
 COMMENT ON COLUMN sys_log.log_content IS '日志内容';
@@ -5673,36 +5242,34 @@ COMMENT ON COLUMN sys_log.create_by IS '创建人';
 COMMENT ON COLUMN sys_log.create_time IS '创建时间';
 COMMENT ON COLUMN sys_log.update_by IS '更新人';
 COMMENT ON COLUMN sys_log.update_time IS '更新时间';
-ALTER TABLE sys_log ADD CONSTRAINT sys_log_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_page_view_log (
-    id integer DEFAULT nextval('sys_page_view_log_id_seq'::regclass) NOT NULL,
-    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    source_first_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    source_second_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    source_hash character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    source_page_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source_page_url character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    source_page_param text,
-    dest_first_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    dest_second_level_module character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    dest_hash character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    dest_page_name character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    dest_page_url character varying(400) COLLATE "C" DEFAULT NULL::character varying,
-    dest_page_param text,
-    user_agent character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    user_ip character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    access_time character varying(20) COLLATE "C" DEFAULT NULL::character varying,
-    session_msg_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    hub_account character varying(80) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    org_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    role_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    menu_name character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    menu_name_code character varying(500) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                         BIGINT NOT NULL AUTO_INCREMENT,
+    user_id                    VARCHAR(32),
+    source_first_level_module  VARCHAR(20),
+    source_second_level_module VARCHAR(20),
+    source_hash                VARCHAR(50),
+    source_page_name           VARCHAR(100),
+    source_page_url            VARCHAR(400),
+    source_page_param          TEXT,
+    dest_first_level_module    VARCHAR(20),
+    dest_second_level_module   VARCHAR(20),
+    dest_hash                  VARCHAR(50),
+    dest_page_name             VARCHAR(400),
+    dest_page_url              VARCHAR(400),
+    dest_page_param            TEXT,
+    user_agent                 VARCHAR(200),
+    user_ip                    VARCHAR(32),
+    create_time                VARCHAR(20),
+    access_time                VARCHAR(20),
+    session_msg_no             VARCHAR(100),
+    hub_account                VARCHAR(80) DEFAULT '' NOT NULL,
+    org_name                   VARCHAR(1000),
+    role_name                  VARCHAR(1000),
+    menu_name                  VARCHAR(500),
+    menu_name_code             VARCHAR(500),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_page_view_log IS '系统页面访问记录表';
 COMMENT ON COLUMN sys_page_view_log.user_id IS '用户id';
 COMMENT ON COLUMN sys_page_view_log.source_first_level_module IS '来源页面所属一级模块';
@@ -5726,39 +5293,37 @@ COMMENT ON COLUMN sys_page_view_log.org_name IS '机构名称';
 COMMENT ON COLUMN sys_page_view_log.role_name IS '角色名称';
 COMMENT ON COLUMN sys_page_view_log.menu_name IS '菜单名称';
 COMMENT ON COLUMN sys_page_view_log.menu_name_code IS '菜单名称码值';
-ALTER TABLE sys_page_view_log ADD CONSTRAINT sys_page_view_log_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_permission (
-    id character varying(32) COLLATE "C" NOT NULL,
-    parent_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    url character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    component character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    component_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    redirect character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    menu_type integer,
-    perms character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    perms_type character varying(10) COLLATE "C" DEFAULT '0'::character varying,
-    sort_no numeric(8,2) DEFAULT NULL::numeric,
-    always_show smallint,
-    icon character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    is_route smallint DEFAULT 1::smallint,
-    is_leaf smallint,
-    keep_alive smallint,
-    hidden integer DEFAULT 0,
-    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    del_flag integer DEFAULT 0,
-    rule_flag integer DEFAULT 0,
-    status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    internal_or_external smallint,
-    is_show numeric(11,0) DEFAULT NULL::numeric
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    parent_id              VARCHAR(32),
+    name                   VARCHAR(100),
+    url                    VARCHAR(255),
+    component              VARCHAR(255),
+    component_name         VARCHAR(100),
+    redirect               VARCHAR(255),
+    menu_type              INT,
+    perms                  VARCHAR(255),
+    perms_type             VARCHAR(10) DEFAULT '0',
+    sort_no                DECIMAL(8,2),
+    always_show            SMALLINT,
+    icon                   VARCHAR(100),
+    is_route               SMALLINT DEFAULT 1,
+    is_leaf                SMALLINT,
+    keep_alive             SMALLINT,
+    hidden                 INT DEFAULT 0,
+    description            VARCHAR(255),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    del_flag               INT DEFAULT 0,
+    rule_flag              INT DEFAULT 0,
+    status                 VARCHAR(2),
+    internal_or_external   SMALLINT,
+    is_show                DECIMAL(11,0),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_permission IS '菜单权限表';
 COMMENT ON COLUMN sys_permission.id IS '主键id';
 COMMENT ON COLUMN sys_permission.parent_id IS '父id';
@@ -5786,23 +5351,21 @@ COMMENT ON COLUMN sys_permission.del_flag IS '删除状态 0正常 1已删除';
 COMMENT ON COLUMN sys_permission.rule_flag IS '是否添加数据权限1是0否';
 COMMENT ON COLUMN sys_permission.status IS '按钮权限状态(0无效1有效)';
 COMMENT ON COLUMN sys_permission.internal_or_external IS '外链菜单打开方式 0/内部打开 1/外部打开';
-ALTER TABLE sys_permission ADD CONSTRAINT sys_permission_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_permission_data_rule (
-    id character varying(32) COLLATE "C" NOT NULL,
-    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    rule_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    rule_column character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    rule_conditions character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    rule_value character varying(300) COLLATE "C" DEFAULT NULL::character varying,
-    status character varying(3) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    permission_id          VARCHAR(32),
+    rule_name              VARCHAR(50),
+    rule_column            VARCHAR(50),
+    rule_conditions        VARCHAR(50),
+    rule_value             VARCHAR(300),
+    status                 VARCHAR(3),
+    create_time            TIMESTAMP,
+    create_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_permission_data_rule.id IS 'ID';
 COMMENT ON COLUMN sys_permission_data_rule.permission_id IS '菜单ID';
 COMMENT ON COLUMN sys_permission_data_rule.rule_name IS '规则名称';
@@ -5813,22 +5376,20 @@ COMMENT ON COLUMN sys_permission_data_rule.status IS '权限有效状态1有0否
 COMMENT ON COLUMN sys_permission_data_rule.create_time IS '创建时间';
 COMMENT ON COLUMN sys_permission_data_rule.update_time IS '修改时间';
 COMMENT ON COLUMN sys_permission_data_rule.update_by IS '修改人';
-ALTER TABLE sys_permission_data_rule ADD CONSTRAINT sys_permission_data_rule_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_position (
-    id character varying(32) COLLATE "C" NOT NULL,
-    code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    post_rank character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    company_id character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(50) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    code                   VARCHAR(100),
+    name                   VARCHAR(100),
+    post_rank              VARCHAR(2),
+    company_id             VARCHAR(255),
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(50),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_position.code IS '职务编码';
 COMMENT ON COLUMN sys_position.name IS '职务名称';
 COMMENT ON COLUMN sys_position.post_rank IS '职级';
@@ -5838,24 +5399,22 @@ COMMENT ON COLUMN sys_position.create_time IS '创建时间';
 COMMENT ON COLUMN sys_position.update_by IS '修改人';
 COMMENT ON COLUMN sys_position.update_time IS '修改时间';
 COMMENT ON COLUMN sys_position.sys_org_code IS '组织机构编码';
-ALTER TABLE sys_position ADD CONSTRAINT uniq_code UNIQUE USING ubtree (code) WITH (storage_type=USTORE);
-ALTER TABLE sys_position ADD CONSTRAINT sys_position_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX uniq_code ON sys_position (code);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_quartz_job (
-    id character varying(32) COLLATE "C" NOT NULL,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    del_flag integer,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    job_class_name character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    cron_expression character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    parameter character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    status integer
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    del_flag               INT,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    job_class_name         VARCHAR(255),
+    cron_expression        VARCHAR(255),
+    parameter              VARCHAR(255),
+    description            VARCHAR(255),
+    status                 INT,
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_quartz_job.create_by IS '创建人';
 COMMENT ON COLUMN sys_quartz_job.create_time IS '创建时间';
 COMMENT ON COLUMN sys_quartz_job.del_flag IS '删除状态';
@@ -5866,20 +5425,18 @@ COMMENT ON COLUMN sys_quartz_job.cron_expression IS 'cron表达式';
 COMMENT ON COLUMN sys_quartz_job.parameter IS '参数';
 COMMENT ON COLUMN sys_quartz_job.description IS '描述';
 COMMENT ON COLUMN sys_quartz_job.status IS '状态 0正常 -1停止';
-ALTER TABLE sys_quartz_job ADD CONSTRAINT sys_quartz_job_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role (
-    id character varying(32) COLLATE "C" NOT NULL,
-    role_name character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    role_code character varying(100) COLLATE "C" NOT NULL,
-    description character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    role_name              VARCHAR(200),
+    role_code              VARCHAR(100) NOT NULL,
+    description            VARCHAR(255),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role IS '角色表';
 COMMENT ON COLUMN sys_role.id IS '主键id';
 COMMENT ON COLUMN sys_role.role_name IS '角色名称';
@@ -5889,128 +5446,114 @@ COMMENT ON COLUMN sys_role.create_by IS '创建人';
 COMMENT ON COLUMN sys_role.create_time IS '创建时间';
 COMMENT ON COLUMN sys_role.update_by IS '更新人';
 COMMENT ON COLUMN sys_role.update_time IS '更新时间';
-ALTER TABLE sys_role ADD CONSTRAINT uniq_sys_role_role_code UNIQUE USING ubtree (role_code) WITH (storage_type=USTORE);
-ALTER TABLE sys_role ADD CONSTRAINT sys_role_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX uniq_sys_role_role_code ON sys_role (role_code);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role_ai_user (
-    id character varying(100) COLLATE "C" NOT NULL,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(100) NOT NULL,
+    role_id                VARCHAR(32),
+    user_id                VARCHAR(100),
+    data_rule_ids          VARCHAR(1000),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role_ai_user IS '角色ai用户权限表';
 COMMENT ON COLUMN sys_role_ai_user.role_id IS '角色id';
 COMMENT ON COLUMN sys_role_ai_user.user_id IS '权限id';
 COMMENT ON COLUMN sys_role_ai_user.data_rule_ids IS '数据权限ids';
 COMMENT ON COLUMN sys_role_ai_user.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_role_ai_user.operate_ip IS '操作ip';
-ALTER TABLE sys_role_ai_user ADD CONSTRAINT sys_role_ai_user_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role_index (
-    id character varying(32) COLLATE "C" NOT NULL,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    index_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    role_id                VARCHAR(32),
+    index_id               VARCHAR(32),
+    data_rule_ids          VARCHAR(1000),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role_index IS '角色指标权限表';
 COMMENT ON COLUMN sys_role_index.role_id IS '角色id';
 COMMENT ON COLUMN sys_role_index.index_id IS '权限id';
 COMMENT ON COLUMN sys_role_index.data_rule_ids IS '数据权限ids';
 COMMENT ON COLUMN sys_role_index.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_role_index.operate_ip IS '操作ip';
-ALTER TABLE sys_role_index ADD CONSTRAINT sys_role_index_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role_knowledge (
-    id character varying(32) COLLATE "C" NOT NULL,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    role_id                VARCHAR(32),
+    knowledge_id           VARCHAR(32),
+    data_rule_ids          VARCHAR(1000),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role_knowledge IS '角色知识库权限表';
 COMMENT ON COLUMN sys_role_knowledge.role_id IS '角色id';
 COMMENT ON COLUMN sys_role_knowledge.knowledge_id IS '权限id';
 COMMENT ON COLUMN sys_role_knowledge.data_rule_ids IS '数据权限ids';
 COMMENT ON COLUMN sys_role_knowledge.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_role_knowledge.operate_ip IS '操作ip';
-ALTER TABLE sys_role_knowledge ADD CONSTRAINT sys_role_knowledge_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role_knowledge_output (
-    id character varying(32) COLLATE "C" NOT NULL,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    group_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    role_id                VARCHAR(32),
+    group_id               VARCHAR(32),
+    knowledge_id           VARCHAR(32),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role_knowledge_output IS '角色知识库输出要求权限表';
 COMMENT ON COLUMN sys_role_knowledge_output.role_id IS '角色id';
 COMMENT ON COLUMN sys_role_knowledge_output.group_id IS '知识库分组ID';
 COMMENT ON COLUMN sys_role_knowledge_output.knowledge_id IS '知识库ID';
 COMMENT ON COLUMN sys_role_knowledge_output.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_role_knowledge_output.operate_ip IS '操作ip';
-ALTER TABLE sys_role_knowledge_output ADD CONSTRAINT sys_role_knowledge_output_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role_module (
-    id character varying(32) COLLATE "C" NOT NULL,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    module_source integer,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    role_id                VARCHAR(32),
+    module_source          INT,
+    data_rule_ids          VARCHAR(1000),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role_module IS '角色组件权限表';
 COMMENT ON COLUMN sys_role_module.role_id IS '角色id';
 COMMENT ON COLUMN sys_role_module.module_source IS '权限id';
 COMMENT ON COLUMN sys_role_module.data_rule_ids IS '数据权限ids';
 COMMENT ON COLUMN sys_role_module.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_role_module.operate_ip IS '操作ip';
-ALTER TABLE sys_role_module ADD CONSTRAINT sys_role_module_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_role_permission (
-    id character varying(32) COLLATE "C" NOT NULL,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    permission_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    data_rule_ids character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    operate_date timestamp without time zone,
-    operate_ip character varying(20) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    role_id                VARCHAR(32),
+    permission_id          VARCHAR(32),
+    data_rule_ids          VARCHAR(1000),
+    operate_date           TIMESTAMP,
+    operate_ip             VARCHAR(20),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_role_permission IS '角色权限表';
 COMMENT ON COLUMN sys_role_permission.role_id IS '角色id';
 COMMENT ON COLUMN sys_role_permission.permission_id IS '权限id';
 COMMENT ON COLUMN sys_role_permission.data_rule_ids IS '数据权限ids';
 COMMENT ON COLUMN sys_role_permission.operate_date IS '操作时间';
 COMMENT ON COLUMN sys_role_permission.operate_ip IS '操作ip';
-ALTER TABLE sys_role_permission ADD CONSTRAINT sys_role_permission_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_tenant (
-    id integer NOT NULL,
-    name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    create_by character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    begin_date timestamp without time zone,
-    end_date timestamp without time zone,
-    status integer
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     INT NOT NULL,
+    name                   VARCHAR(100),
+    create_time            TIMESTAMP,
+    create_by              VARCHAR(100),
+    begin_date             TIMESTAMP,
+    end_date               TIMESTAMP,
+    status                 INT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_tenant IS '多租户信息表';
 COMMENT ON COLUMN sys_tenant.id IS '租户编码';
 COMMENT ON COLUMN sys_tenant.name IS '租户名称';
@@ -6019,21 +5562,19 @@ COMMENT ON COLUMN sys_tenant.create_by IS '创建人';
 COMMENT ON COLUMN sys_tenant.begin_date IS '开始时间';
 COMMENT ON COLUMN sys_tenant.end_date IS '结束时间';
 COMMENT ON COLUMN sys_tenant.status IS '状态 1正常 0冻结';
-ALTER TABLE sys_tenant ADD CONSTRAINT sys_tenant_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_third_account (
-    id character varying(32) COLLATE "C" NOT NULL,
-    sys_user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    third_type character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    avatar character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    status smallint,
-    del_flag smallint,
-    realname character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    third_user_uuid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    third_user_id character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    sys_user_id            VARCHAR(32),
+    third_type             VARCHAR(255),
+    avatar                 VARCHAR(255),
+    status                 SMALLINT,
+    del_flag               SMALLINT,
+    realname               VARCHAR(100),
+    third_user_uuid        VARCHAR(100),
+    third_user_id          VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_third_account.id IS '编号';
 COMMENT ON COLUMN sys_third_account.sys_user_id IS '第三方登录id';
 COMMENT ON COLUMN sys_third_account.third_type IS '登录来源';
@@ -6043,41 +5584,39 @@ COMMENT ON COLUMN sys_third_account.del_flag IS '删除状态(0-正常,1-已删�
 COMMENT ON COLUMN sys_third_account.realname IS '真实姓名';
 COMMENT ON COLUMN sys_third_account.third_user_uuid IS '第三方账号';
 COMMENT ON COLUMN sys_third_account.third_user_id IS '第三方app用户账号';
-ALTER TABLE sys_third_account ADD CONSTRAINT sys_third_account_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_user (
-    id character varying(64) COLLATE "C" NOT NULL,
-    username character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    realname character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    password character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    salt character varying(45) COLLATE "C" DEFAULT NULL::character varying,
-    avatar character varying(255) COLLATE "C" DEFAULT NULL::character varying,
-    birthday timestamp without time zone,
-    sex smallint,
-    email character varying(45) COLLATE "C" DEFAULT NULL::character varying,
-    phone character varying(45) COLLATE "C" DEFAULT NULL::character varying,
-    org_code character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    status smallint,
-    del_flag smallint,
-    third_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    third_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    activiti_sync smallint,
-    work_no character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    post character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    telephone character varying(45) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_by character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    user_identity smallint,
-    depart_ids text,
-    rel_tenant_ids character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    client_id character varying(64) COLLATE "C" DEFAULT NULL::character varying,
-    datadate character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    user_login_name character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(64) NOT NULL,
+    username               VARCHAR(100),
+    realname               VARCHAR(100),
+    password               VARCHAR(255),
+    salt                   VARCHAR(45),
+    avatar                 VARCHAR(255),
+    birthday               TIMESTAMP,
+    sex                    SMALLINT,
+    email                  VARCHAR(45),
+    phone                  VARCHAR(45),
+    org_code               VARCHAR(64),
+    status                 SMALLINT,
+    del_flag               SMALLINT,
+    third_id               VARCHAR(100),
+    third_type             VARCHAR(100),
+    activiti_sync          SMALLINT,
+    work_no                VARCHAR(100),
+    post                   VARCHAR(100),
+    telephone              VARCHAR(45),
+    create_by              VARCHAR(32),
+    create_time            TIMESTAMP,
+    update_by              VARCHAR(32),
+    update_time            TIMESTAMP,
+    user_identity          SMALLINT,
+    depart_ids             TEXT,
+    rel_tenant_ids         VARCHAR(100),
+    client_id              VARCHAR(64),
+    datadate               VARCHAR(200),
+    user_login_name        VARCHAR(100),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_user IS '用户表';
 COMMENT ON COLUMN sys_user.id IS '主键id';
 COMMENT ON COLUMN sys_user.username IS '登录账号';
@@ -6107,26 +5646,24 @@ COMMENT ON COLUMN sys_user.depart_ids IS '负责部门';
 COMMENT ON COLUMN sys_user.rel_tenant_ids IS '多租户标识';
 COMMENT ON COLUMN sys_user.client_id IS '设备ID';
 COMMENT ON COLUMN sys_user.user_login_name IS '登录账号';
-ALTER TABLE sys_user ADD CONSTRAINT sys_user_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_user_agent (
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    agent_user_name character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    start_time timestamp without time zone,
-    end_time timestamp without time zone,
-    status character varying(2) COLLATE "C" DEFAULT NULL::character varying,
-    create_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    create_time timestamp without time zone,
-    update_name character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_by character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    update_time timestamp without time zone,
-    sys_org_code character varying(50) COLLATE "C" DEFAULT NULL::character varying,
-    sys_company_code character varying(50) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    user_name              VARCHAR(100),
+    agent_user_name        VARCHAR(100),
+    start_time             TIMESTAMP,
+    end_time               TIMESTAMP,
+    status                 VARCHAR(2),
+    create_name            VARCHAR(50),
+    create_by              VARCHAR(50),
+    create_time            TIMESTAMP,
+    update_name            VARCHAR(50),
+    update_by              VARCHAR(50),
+    update_time            TIMESTAMP,
+    sys_org_code           VARCHAR(50),
+    sys_company_code       VARCHAR(50),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_user_agent IS '用户代理人设置';
 COMMENT ON COLUMN sys_user_agent.id IS '序号';
 COMMENT ON COLUMN sys_user_agent.user_name IS '用户名';
@@ -6142,86 +5679,76 @@ COMMENT ON COLUMN sys_user_agent.update_by IS '更新人登录名称';
 COMMENT ON COLUMN sys_user_agent.update_time IS '更新日期';
 COMMENT ON COLUMN sys_user_agent.sys_org_code IS '所属部门';
 COMMENT ON COLUMN sys_user_agent.sys_company_code IS '所属公司';
-ALTER TABLE sys_user_agent ADD CONSTRAINT uniq_username UNIQUE USING ubtree (user_name) WITH (storage_type=USTORE);
-ALTER TABLE sys_user_agent ADD CONSTRAINT sys_user_agent_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX uniq_username ON sys_user_agent (user_name);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_user_api (
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    api_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(32),
+    api_id                 VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_user_api IS '用户接口表';
 COMMENT ON COLUMN sys_user_api.id IS '主键id';
 COMMENT ON COLUMN sys_user_api.user_id IS '用户id';
 COMMENT ON COLUMN sys_user_api.api_id IS '接口id';
-ALTER TABLE sys_user_api ADD CONSTRAINT sys_user_api_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_user_depart (
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    dep_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    datadate character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(32),
+    dep_id                 VARCHAR(32),
+    datadate               VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON COLUMN sys_user_depart.id IS 'id';
 COMMENT ON COLUMN sys_user_depart.user_id IS '用户id';
 COMMENT ON COLUMN sys_user_depart.dep_id IS '部门id';
-ALTER TABLE sys_user_depart ADD CONSTRAINT sys_user_depart_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE sys_user_role (
-    id character varying(32) COLLATE "C" NOT NULL,
-    user_id character varying(32) COLLATE "C" DEFAULT NULL::character varying,
-    role_id character varying(32) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    user_id                VARCHAR(32),
+    role_id                VARCHAR(32),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE sys_user_role IS '用户角色表';
 COMMENT ON COLUMN sys_user_role.id IS '主键id';
 COMMENT ON COLUMN sys_user_role.user_id IS '用户id';
 COMMENT ON COLUMN sys_user_role.role_id IS '角色id';
-ALTER TABLE sys_user_role ADD CONSTRAINT sys_user_role_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE tasks_qa_industry_parse (
-    task_id character varying(100) COLLATE "C" NOT NULL,
-    notice_title character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    url character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    file_name character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    file_type character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    pubdate character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    source character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    inputtime timestamp without time zone DEFAULT pg_systimestamp(),
-    updatetime timestamp without time zone DEFAULT pg_systimestamp(),
-    status character varying(100) COLLATE "C" DEFAULT 'init'::character varying,
-    userid character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    error_info text,
-    ftp_url character varying(1000) COLLATE "C" DEFAULT NULL::character varying,
-    original_no character varying(100) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    task_id                VARCHAR(100) NOT NULL,
+    notice_title           VARCHAR(1000),
+    url                    VARCHAR(1000),
+    file_name              VARCHAR(1000),
+    file_type              VARCHAR(100),
+    pubdate                VARCHAR(100),
+    source                 VARCHAR(1000),
+    inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updatetime             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status                 VARCHAR(100) DEFAULT 'init',
+    userid                 VARCHAR(100),
+    error_info             TEXT,
+    ftp_url                VARCHAR(1000),
+    original_no            VARCHAR(100),
+    PRIMARY KEY (task_id)
+);
 COMMENT ON COLUMN tasks_qa_industry_parse.task_id IS 'md5';
-ALTER TABLE tasks_qa_industry_parse ADD CONSTRAINT tasks_qa_industry_parse_pkey PRIMARY KEY USING ubtree  (task_id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE tool_management (
-    id character varying(32) COLLATE "C" NOT NULL,
-    tool_category character varying(50) COLLATE "C" NOT NULL,
-    tool_name character varying(100) COLLATE "C" NOT NULL,
-    tool_description character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    tool_parameters text,
-    impl_type character varying(20) COLLATE "C" DEFAULT 'custom'::character varying,
-    module_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    module_code_parameters text,
-    tool_status character varying(2) COLLATE "C" DEFAULT 'Y'::character varying,
-    create_time timestamp without time zone DEFAULT pg_systimestamp(),
-    update_time timestamp without time zone DEFAULT pg_systimestamp(),
-    cn_label character varying(200) COLLATE "C" DEFAULT NULL::character varying,
-    en_label character varying(200) COLLATE "C" DEFAULT NULL::character varying
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     VARCHAR(32) NOT NULL,
+    tool_category          VARCHAR(50) NOT NULL,
+    tool_name              VARCHAR(100) NOT NULL,
+    tool_description       VARCHAR(500),
+    tool_parameters        TEXT,
+    impl_type              VARCHAR(20) DEFAULT 'custom',
+    module_code            VARCHAR(100),
+    module_code_parameters TEXT,
+    tool_status            VARCHAR(2) DEFAULT 'Y',
+    create_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cn_label               VARCHAR(200),
+    en_label               VARCHAR(200),
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE tool_management IS '大模型工具管理表';
 COMMENT ON COLUMN tool_management.id IS '主键ID';
 COMMENT ON COLUMN tool_management.tool_category IS '工具大类';
@@ -6236,26 +5763,24 @@ COMMENT ON COLUMN tool_management.create_time IS '创建时间';
 COMMENT ON COLUMN tool_management.update_time IS '更新时间';
 COMMENT ON COLUMN tool_management.cn_label IS '工具中文展示名';
 COMMENT ON COLUMN tool_management.en_label IS '工具英文展示名';
-ALTER TABLE tool_management ADD CONSTRAINT idx_type_tool UNIQUE USING ubtree (tool_name, tool_category, impl_type) WITH (storage_type=USTORE);
-ALTER TABLE tool_management ADD CONSTRAINT tool_management_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
+CREATE UNIQUE INDEX idx_type_tool ON tool_management (tool_name, tool_category, impl_type);
 
-SET search_path = bosz_test;
 CREATE TABLE trace_query_result (
-    id integer DEFAULT nextval('trace_query_result_id_seq'::regclass) NOT NULL,
-    trace_id character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    knowledge_code character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    query_status character varying(1) COLLATE "C" DEFAULT 'Y'::character varying,
-    query_result text,
-    query_time character varying(40) COLLATE "C" DEFAULT NULL::character varying,
-    cost_time integer,
-    comment character varying(500) COLLATE "C" DEFAULT NULL::character varying,
-    app_source_query_result character varying(100) COLLATE "C" DEFAULT NULL::character varying,
-    image_query_result text,
-    whole_source_query_result text,
-    image_cost_time integer,
-    whole_source_cost_time integer
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                        BIGINT NOT NULL AUTO_INCREMENT,
+    trace_id                  VARCHAR(100),
+    knowledge_code            VARCHAR(100),
+    query_status              VARCHAR(1) DEFAULT 'Y',
+    query_result              TEXT,
+    query_time                VARCHAR(40),
+    cost_time                 INT,
+    comment                   VARCHAR(500),
+    app_source_query_result   VARCHAR(100),
+    image_query_result        TEXT,
+    whole_source_query_result TEXT,
+    image_cost_time           INT,
+    whole_source_cost_time    INT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE trace_query_result IS '溯源查询记录表';
 COMMENT ON COLUMN trace_query_result.trace_id IS '追踪ID';
 COMMENT ON COLUMN trace_query_result.knowledge_code IS '关联知识库编码';
@@ -6269,25 +5794,23 @@ COMMENT ON COLUMN trace_query_result.image_query_result IS '图片配置请求�
 COMMENT ON COLUMN trace_query_result.whole_source_query_result IS '全部来源配置请求结果';
 COMMENT ON COLUMN trace_query_result.image_cost_time IS '图片配置请求结果';
 COMMENT ON COLUMN trace_query_result.whole_source_cost_time IS '全部来源配置话费时间(单位毫秒)';
-ALTER TABLE trace_query_result ADD CONSTRAINT trace_query_result_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
-SET search_path = bosz_test;
 CREATE TABLE workflow_return_records (
-    id integer DEFAULT nextval('workflow_return_records_id_seq'::regclass) NOT NULL,
-    session_msg_no character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    user_id character varying(64) COLLATE "C" DEFAULT ''::character varying NOT NULL,
-    question text,
-    question_rewrite text,
-    start_time text,
-    end_time text,
-    content text,
-    "desc" text,
-    source_site text,
-    site_url text,
-    "date" text,
-    data_source text
-)
-WITH (orientation=row, compression=no, storage_type=USTORE, segment=off);
+    id                     BIGINT NOT NULL AUTO_INCREMENT,
+    session_msg_no         VARCHAR(64) DEFAULT '' NOT NULL,
+    user_id                VARCHAR(64) DEFAULT '' NOT NULL,
+    question               TEXT,
+    question_rewrite       TEXT,
+    start_time             TEXT,
+    end_time               TEXT,
+    content                TEXT,
+    "desc"                 TEXT,
+    source_site            TEXT,
+    site_url               TEXT,
+    "date"                 TEXT,
+    data_source            TEXT,
+    PRIMARY KEY (id)
+);
 COMMENT ON TABLE workflow_return_records IS 'workflow返回记录表';
 COMMENT ON COLUMN workflow_return_records.id IS '主键';
 COMMENT ON COLUMN workflow_return_records.session_msg_no IS '会话中问题no';
@@ -6302,28 +5825,7 @@ COMMENT ON COLUMN workflow_return_records.source_site IS '来源网站';
 COMMENT ON COLUMN workflow_return_records.site_url IS '来源网站';
 COMMENT ON COLUMN workflow_return_records."date" IS '时间';
 COMMENT ON COLUMN workflow_return_records.data_source IS '数据来源';
-ALTER TABLE workflow_return_records ADD CONSTRAINT workflow_return_records_pkey PRIMARY KEY USING ubtree  (id) WITH (storage_type=USTORE);
 
--- ============================================================
--- 特定贷款检查表（openGauss B 模式 / GaussDB 兼容 MySQL 版）
--- 适配说明：本库编码 SQL_ASCII + C collation，openGauss B 模式
---           隐式建 VARCHAR 会报 "varchar cannot be set to binary
---           collation"，因此所有 VARCHAR/CHAR 列显式加
---           COLLATE pg_catalog."C"（与迁移工具生成一致）
--- 适用库：bosz_test（localhost:5432 / 172.20.2.19:8000）
--- ============================================================
-
--- ------------------------------------------------------------
--- 1. 特定贷款检查表-经营收入类
---    （经营性物业贷款/厂房通贷款：租金经营收入/租户/出租预期/抵押物/监管）
--- ------------------------------------------------------------
-
--- ------------------------------------------------------------
--- 2. 特定贷款检查表-项目类
---    （固定资产贷款/房地产开发贷款：项目资本金/建设进度/资金开票使用/超投/预售）
--- ------------------------------------------------------------
-
-ALTER TABLE agent_rule ALTER COLUMN rule_text TYPE text;
-ALTER TABLE agent_rule ALTER COLUMN parsed_expression TYPE text;
-ALTER TABLE index_params ALTER COLUMN columncomment TYPE varchar(1000);
-
+ALTER TABLE agent_rule MODIFY COLUMN rule_text TEXT;
+ALTER TABLE agent_rule MODIFY COLUMN parsed_expression TEXT;
+ALTER TABLE index_params MODIFY COLUMN columncomment VARCHAR(1000);
