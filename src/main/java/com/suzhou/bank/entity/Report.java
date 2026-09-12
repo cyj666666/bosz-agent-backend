@@ -45,6 +45,9 @@ public class Report {
     /** 日检任务编号（日检流水号，同一流水号下可有多个版本） */
     private String checkTaskNo;
 
+    /** 用户编号（用户账号，上游预生成报告时写入） */
+    private String userNo;
+
     /** 报告版本号（1/2/3…，同一 checkTaskNo 下区分历史版本；数字存储便于排序，"V"前缀由前端拼接） */
     private Integer version;
 

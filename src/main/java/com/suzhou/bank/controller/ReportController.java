@@ -5,8 +5,10 @@ import com.suzhou.bank.common.Result;
 import com.suzhou.bank.entity.Report;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
+import com.suzhou.bank.service.report.model.ReportBlockContentRequest;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportRiskStatusRequest;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -123,6 +125,40 @@ public class ReportController {
     public Result<ReportVersionVO> renewInstance(@RequestParam String checkTaskNo) {
         try {
             return Result.ok(reportService.renew(checkTaskNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 更新 AI 风险处置状态（采纳 / 无效 / 待处理）
+     * <p>行身份为 (reportNo, blockCode)。只改 app_report_ai_risk.status，不动正文。</p>
+     *
+     * @param request 请求体（reportNo / blockCode / status）
+     * @return 空响应体
+     */
+    @PostMapping("/instance/risk/status")
+    public Result<Void> updateRiskStatus(@RequestBody ReportRiskStatusRequest request) {
+        try {
+            reportService.updateRiskStatus(request.getReportNo(), request.getBlockCode(), request.getStatus());
+            return Result.ok();
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 修改规则类正文内容
+     * <p>同事务更新内容实例的 content 与对应 AI 风险的 riskDesc，并把风险状态置为已采纳。</p>
+     *
+     * @param request 请求体（reportNo / blockCode / content）
+     * @return 空响应体
+     */
+    @PostMapping("/instance/block/content")
+    public Result<Void> updateBlockContent(@RequestBody ReportBlockContentRequest request) {
+        try {
+            reportService.updateBlockContent(request.getReportNo(), request.getBlockCode(), request.getContent());
+            return Result.ok();
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }

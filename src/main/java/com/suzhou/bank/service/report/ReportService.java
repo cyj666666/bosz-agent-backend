@@ -84,6 +84,32 @@ public interface ReportService {
     ReportVersionVO renew(String checkTaskNo);
 
     /**
+     * 更新 AI 风险处置状态（采纳 / 无效 / 待处理）
+     * <p>行身份为 (reportNo, blockCode)——一条 analysisType=RULE 的内容块 ↔ 一条风险。
+     * 只更新 {@code app_report_ai_risk.status}；正文与 riskDesc 均不变
+     * （"无效"表示该风险不参与报告，前端渲染时整块隐藏）。</p>
+     *
+     * @param reportNo  报告编号
+     * @param blockCode 内容块编号
+     * @param status    ADOPTED-已采纳 / INVALID-已无效 / PENDING-待处理（其它值按 PENDING 处理）
+     */
+    void updateRiskStatus(String reportNo, String blockCode, String status);
+
+    /**
+     * 修改规则类正文内容（同事务同步风险列表文案）
+     * <p>更新 {@code app_report_content_instance.content}，并同步
+     * {@code app_report_ai_risk.riskDesc}（两者为同一份文案，必须同步，
+     * 否则列表文案与正文不一致、且前端正文定位会失配），
+     * 同时把该风险状态置为 ADOPTED-已采纳。</p>
+     * <p>本方法声明事务：正文与列表副本必须同时成功或同时失败。</p>
+     *
+     * @param reportNo  报告编号
+     * @param blockCode 内容块编号
+     * @param content   新的正文内容（HTML 片段，不允许为空）
+     */
+    void updateBlockContent(String reportNo, String blockCode, String content);
+
+    /**
      * 报告记录分页查询（报告列表页用）
      * <p>直接查 report，供列表页展示并跳转到详情。</p>
      *

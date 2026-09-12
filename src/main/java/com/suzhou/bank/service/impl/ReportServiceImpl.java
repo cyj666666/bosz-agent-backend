@@ -26,6 +26,7 @@ import com.suzhou.bank.service.report.spi.ReportGenerateContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.text.SimpleDateFormat;
@@ -402,6 +403,69 @@ public class ReportServiceImpl implements ReportService {
         vo.setStatus(report.getStatus());
         vo.setUpdatedAt(report.getUpdatedAt());
         return vo;
+    }
+
+    @Override
+    public void updateRiskStatus(String reportNo, String blockCode, String status) {
+        requireReportNoAndBlock(reportNo, blockCode);
+        String normalized = normalizeRiskStatus(status);
+        int updated = riskMapper.update(null, Wrappers.<AppReportAiRisk>lambdaUpdate()
+                .eq(AppReportAiRisk::getReportNo, reportNo)
+                .eq(AppReportAiRisk::getBlockCode, blockCode)
+                .set(AppReportAiRisk::getStatus, normalized));
+        if (updated == 0) {
+            throw new ReportGenerateException("未找到对应的 AI 风险记录（reportNo=" + reportNo
+                    + "，blockCode=" + blockCode + "）");
+        }
+        log.info("AI 风险状态更新：reportNo={} blockCode={} status={}", reportNo, blockCode, normalized);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateBlockContent(String reportNo, String blockCode, String content) {
+        requireReportNoAndBlock(reportNo, blockCode);
+        String text = content == null ? "" : content.trim();
+        if (text.isEmpty()) {
+            throw new ReportGenerateException("正文内容不能为空");
+        }
+        // 1) 正文：更新内容实例的 content
+        int updated = instanceMapper.update(null, Wrappers.<AppReportContentInstance>lambdaUpdate()
+                .eq(AppReportContentInstance::getReportNo, reportNo)
+                .eq(AppReportContentInstance::getBlockCode, blockCode)
+                .set(AppReportContentInstance::getContent, text));
+        if (updated == 0) {
+            throw new ReportGenerateException("未找到对应的内容块实例（reportNo=" + reportNo
+                    + "，blockCode=" + blockCode + "）");
+        }
+        // 2) 列表副本 + 处置状态：正文与 riskDesc 是同一份文案，必须同事务同步
+        //    （只改正文不改 riskDesc，会导致列表文案与正文不一致、前端正文定位失配）
+        riskMapper.update(null, Wrappers.<AppReportAiRisk>lambdaUpdate()
+                .eq(AppReportAiRisk::getReportNo, reportNo)
+                .eq(AppReportAiRisk::getBlockCode, blockCode)
+                .set(AppReportAiRisk::getRiskDesc, text)
+                .set(AppReportAiRisk::getStatus, RISK_ADOPTED));
+        log.info("正文修改并同步风险文案：reportNo={} blockCode={} 长度={}", reportNo, blockCode, text.length());
+    }
+
+    /** 参数校验：报告编号与内容块编号均必填（两者共同构成实例层的行身份） */
+    private void requireReportNoAndBlock(String reportNo, String blockCode) {
+        if (!StringUtils.hasText(reportNo)) {
+            throw new ReportGenerateException("报告编号（reportNo）不能为空");
+        }
+        if (!StringUtils.hasText(blockCode)) {
+            throw new ReportGenerateException("内容块编号（blockCode）不能为空");
+        }
+    }
+
+    /** 归一化风险处置状态：仅接受 ADOPTED / INVALID，其它一律按 PENDING（待处理） */
+    private String normalizeRiskStatus(String status) {
+        if (RISK_ADOPTED.equalsIgnoreCase(status)) {
+            return RISK_ADOPTED;
+        }
+        if (RISK_INVALID.equalsIgnoreCase(status)) {
+            return RISK_INVALID;
+        }
+        return RISK_PENDING;
     }
 
     /** 生成随机报告编号：RPT + yyyyMMddHHmmss + 4 位随机数 */
