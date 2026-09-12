@@ -115,7 +115,7 @@ COMMENT ON COLUMN report.customer_id IS '客户编号';
 COMMENT ON COLUMN report.customer_name IS '客户名称';
 COMMENT ON COLUMN report.check_task_no IS '日检任务编号（日检流水号）';
 COMMENT ON COLUMN report.user_no IS '用户编号';
-COMMENT ON COLUMN report.version IS '报告版本号（V1/V2/V3，同一日检流水号下区分历史版本；仅已完成（888）时赋予，失败/未完成可为空）';
+COMMENT ON COLUMN report.version IS '报告版本号（整数 1/2/3…，同一日检流水号下区分历史版本；仅已完成（888）时赋予，失败/未完成可为空；展示时由前端拼 V 前缀）';
 COMMENT ON COLUMN report.report_title IS '报告标题';
 COMMENT ON COLUMN report.report_type IS '报告类型';
 COMMENT ON COLUMN report.status IS '报告状态（111-待开始 000-进行中 888-已完成 999-失败）';

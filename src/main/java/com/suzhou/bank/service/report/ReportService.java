@@ -53,8 +53,9 @@ public interface ReportService {
     ReportDetailVO detail(String reportNo);
 
     /**
-     * 查询某日检流水号（checkTaskNo）下的所有版本（供版本下拉框）
-     * <p>按报告编号倒序（最新插入的版本在前），返回每个版本的
+     * 查询某日检流水号（checkTaskNo）下的版本列表（供版本下拉框）
+     * <p>包含：进行中（000，即"新报告生成中"）与已完成（888 且已赋予版本号）的版本；
+     * 按 id 倒序（最新插入的在前，故进行中的新版本排最前），返回每个版本的
      * reportNo / version / status / updatedAt。</p>
      *
      * @param checkTaskNo 日检流水号
@@ -70,6 +71,17 @@ public interface ReportService {
      * @return 最新版本报告详情
      */
     ReportDetailVO latest(String checkTaskNo);
+
+    /**
+     * 更新报告：在指定日检流水号下新建一份报告（新版本）
+     * <p>复制该流水号下最新已完成版本的字段，自动生成随机报告编号，版本号自增 1，
+     * 状态置为 000-进行中，并异步触发报告生成（完成后置 888）。</p>
+     * <p>若该流水号下已有进行中的报告，直接拒绝（避免重复生成）。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 新建的进行中版本（reportNo / version / status）
+     */
+    ReportVersionVO renew(String checkTaskNo);
 
     /**
      * 报告记录分页查询（报告列表页用）

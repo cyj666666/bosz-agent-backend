@@ -28,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -35,7 +36,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static com.suzhou.bank.service.report.model.ReportConstants.*;
@@ -320,18 +324,23 @@ public class ReportServiceImpl implements ReportService {
         if (!StringUtils.hasText(checkTaskNo)) {
             return new ArrayList<>();
         }
-        // 最新版本在前：id 自增即版本递增顺序，倒序取最新；
-        // 只返回「已完成（888）且已赋予版本号」的版本（失败/未完成的报告没有版本号）
+        // 返回：进行中（000，"新报告生成中"）+ 已完成（888 且已赋予版本号）+ 失败（999，供前端提示生成失败）；
+        // 失败记录由前端过滤、不进入版本下拉。
+        // version 为整数列，倒序即"版本从新到旧"（进行中的新版本号最大，自然排最前），同版本号按 id 倒序。
         List<Report> list = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
                 .eq(Report::getCheckTaskNo, checkTaskNo)
-                .eq(Report::getStatus, REPORT_STATUS_DONE)
-                .isNotNull(Report::getVersion)
-                .orderByDesc(Report::getVersion));
+                .and(w -> w
+                        .eq(Report::getStatus, REPORT_STATUS_RUNNING)
+                        .or(o -> o.eq(Report::getStatus, REPORT_STATUS_DONE).isNotNull(Report::getVersion))
+                        .or(o -> o.eq(Report::getStatus, REPORT_STATUS_FAILED)))
+                .orderByDesc(Report::getVersion)
+                .orderByDesc(Report::getId));
         return list.stream().map(r -> {
             ReportVersionVO vo = new ReportVersionVO();
             vo.setReportNo(r.getReportNo());
             vo.setVersion(r.getVersion());
             vo.setStatus(r.getStatus());
+            vo.setFailReason(r.getFailReason());
             vo.setUpdatedAt(r.getUpdatedAt());
             return vo;
         }).collect(Collectors.toList());
@@ -342,17 +351,90 @@ public class ReportServiceImpl implements ReportService {
         if (!StringUtils.hasText(checkTaskNo)) {
             throw new ReportGenerateException("日检流水号（checkTaskNo）不能为空");
         }
-        // 最新版本 = 已完成（888）且已赋予版本号 的版本中version版本最新的一条
-        List<Report> list = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
+        // 最新版本 = 已完成（888）且已赋予版本号 的版本中版本号最大的一条（按数字比较）
+        Report latest = latestDoneReport(checkTaskNo);
+        if (latest == null) {
+            throw new ReportGenerateException("该日检流水号下不存在已完成（含版本号）的报告：" + checkTaskNo);
+        }
+        return detail(latest.getReportNo());
+    }
+
+    @Override
+    public ReportVersionVO renew(String checkTaskNo) {
+        if (!StringUtils.hasText(checkTaskNo)) {
+            throw new ReportGenerateException("日检流水号（checkTaskNo）不能为空");
+        }
+        // 1) 防重复：该流水号下已有进行中的报告则拒绝
+        Long runningCount = reportMapper.selectCount(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getCheckTaskNo, checkTaskNo)
+                .eq(Report::getStatus, REPORT_STATUS_RUNNING));
+        if (runningCount != null && runningCount > 0) {
+            throw new ReportGenerateException("该日检流水号下已有报告正在生成中，请稍后再试");
+        }
+        // 2) 取最新已完成版本作模板（复制客户、标题、类型等字段），版本号按数字比较取最大
+        Report template = latestDoneReport(checkTaskNo);
+        if (template == null) {
+            throw new ReportGenerateException("该日检流水号下暂无已完成版本，无法更新报告");
+        }
+        // 3) 新建报告记录：复制模板字段 + 随机编号 + 版本号自增 +1 + 状态置进行中
+        Report report = new Report();
+        report.setReportNo(generateReportNo());
+        report.setCustomerId(template.getCustomerId());
+        report.setCustomerName(template.getCustomerName());
+        report.setReportTitle(template.getReportTitle());
+        report.setReportType(template.getReportType());
+        report.setCheckTaskNo(checkTaskNo);
+        report.setVersion(nextVersionOf(checkTaskNo));
+        report.setStatus(REPORT_STATUS_RUNNING);
+        report.setFailReason(null);
+        reportMapper.insert(report);
+        log.info("更新报告：新建版本 reportNo={} version={} checkTaskNo={}",
+                report.getReportNo(), report.getVersion(), checkTaskNo);
+
+        // 4) 异步触发生成（不阻塞接口返回；生成失败由 generate 内部置 999 并落 failReason）
+        final String newReportNo = report.getReportNo();
+        CompletableFuture.runAsync(() -> generate(newReportNo));
+
+        // 5) 返回新版本信息（前端据此提示"新报告生成中"）
+        ReportVersionVO vo = new ReportVersionVO();
+        vo.setReportNo(report.getReportNo());
+        vo.setVersion(report.getVersion());
+        vo.setStatus(report.getStatus());
+        vo.setUpdatedAt(report.getUpdatedAt());
+        return vo;
+    }
+
+    /** 生成随机报告编号：RPT + yyyyMMddHHmmss + 4 位随机数 */
+    private String generateReportNo() {
+        String ts = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        int rand = ThreadLocalRandom.current().nextInt(1000, 10000);
+        return "RPT" + ts + rand;
+    }
+
+    /** 取该流水号下版本号最大的「已完成（888）且已赋版本号」报告，作为最新版本 / 更新报告的复制模板 */
+    private Report latestDoneReport(String checkTaskNo) {
+        return reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
                 .eq(Report::getCheckTaskNo, checkTaskNo)
                 .eq(Report::getStatus, REPORT_STATUS_DONE)
                 .isNotNull(Report::getVersion)
                 .orderByDesc(Report::getVersion)
+                .orderByDesc(Report::getId)
                 .last("LIMIT 1"));
-        if (list.isEmpty()) {
-            throw new ReportGenerateException("该日检流水号下不存在已完成（含版本号）的报告：" + checkTaskNo);
-        }
-        return detail(list.get(0).getReportNo());
+    }
+
+    /**
+     * 下一个版本号：取该流水号下所有已赋版本号记录的最大值 +1（含失败记录，避免失败后版本号被复用）
+     */
+    private Integer nextVersionOf(String checkTaskNo) {
+        List<Report> all = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getCheckTaskNo, checkTaskNo)
+                .isNotNull(Report::getVersion));
+        int max = all.stream()
+                .map(Report::getVersion)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(0);
+        return max + 1;
     }
 
     /* ==================== 单块实例化 ==================== */

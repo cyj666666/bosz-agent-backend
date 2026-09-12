@@ -45,8 +45,8 @@ public class Report {
     /** 日检任务编号（日检流水号，同一流水号下可有多个版本） */
     private String checkTaskNo;
 
-    /** 报告版本号（如 V1/V2/V3，同一 checkTaskNo 下区分历史版本） */
-    private String version;
+    /** 报告版本号（1/2/3…，同一 checkTaskNo 下区分历史版本；数字存储便于排序，"V"前缀由前端拼接） */
+    private Integer version;
 
     /** 报告状态：111-待开始 000-进行中 888-已完成 999-失败 */
     private String status;

@@ -18,11 +18,14 @@ public class ReportVersionVO {
     /** 报告编号（详情接口入参） */
     private String reportNo;
 
-    /** 版本号（如 V1/V2/V3，可能为空） */
-    private String version;
+    /** 版本号（1/2/3…，可能为空；"V"前缀由前端拼接） */
+    private Integer version;
 
     /** 报告状态：111-待开始 000-进行中 888-已完成 999-失败 */
     private String status;
+
+    /** 失败原因（status=999 时有值，供前端提示"新报告生成失败"） */
+    private String failReason;
 
     /** 更新时间（生成完成/失败时刷新） */
     private Date updatedAt;

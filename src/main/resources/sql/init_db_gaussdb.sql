@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS report (
     customer_name VARCHAR(200),
     check_task_no VARCHAR(64),
     user_no VARCHAR(64),
-    version VARCHAR(16),
+    version INTEGER,
     report_title VARCHAR(300) NOT NULL,
     report_type VARCHAR(50) NOT NULL,
     status VARCHAR(20) DEFAULT '111',

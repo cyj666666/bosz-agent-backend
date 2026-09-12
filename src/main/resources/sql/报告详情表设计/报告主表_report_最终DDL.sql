@@ -8,7 +8,7 @@
 -- 关键字段：
 --   · report_no    报告编号（业务唯一键，VARCHAR(64)）
 --   · check_task_no 日检流水号（同一流水号下多个版本）
---   · version      报告版本号（V1/V2/V3，区分历史版本，NOT NULL 必填）
+--   · version      报告版本号（整数 1/2/3…，区分历史版本；"V"前缀由前端拼接）
 --   · status       111-待开始 / 000-进行中 / 888-已完成 / 999-失败
 --   · fail_reason  生成失败时记录技术/业务异常详情（成功为空）
 -- 已建库环境：直接执行文件「二、已建库补丁（ALTER）」段即可，无需重建表。
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS report (
     customer_name   VARCHAR(200),
     check_task_no   VARCHAR(64),
     user_no         VARCHAR(64),
-    version         VARCHAR(16),
+    version         INTEGER,
     report_title    VARCHAR(300) NOT NULL,
     report_type     VARCHAR(50) NOT NULL,
     status          VARCHAR(20) DEFAULT '111',
@@ -48,7 +48,7 @@ COMMENT ON COLUMN report.report_no IS '报告编号（业务唯一键，VARCHAR(
 COMMENT ON COLUMN report.customer_id IS '客户编号';
 COMMENT ON COLUMN report.customer_name IS '客户名称';
 COMMENT ON COLUMN report.check_task_no IS '日检任务编号（日检流水号）';
-COMMENT ON COLUMN report.version IS '报告版本号（V1/V2/V3，同一日检流水号下区分历史版本；仅已完成（888）时赋予，失败/未完成可为空）';
+COMMENT ON COLUMN report.version IS '报告版本号（整数 1/2/3…，同一日检流水号下区分历史版本；仅已完成（888）时赋予，失败/未完成可为空；展示时由前端拼 V 前缀）';
 COMMENT ON COLUMN report.report_title IS '报告标题';
 COMMENT ON COLUMN report.report_type IS '报告类型';
 COMMENT ON COLUMN report.status IS '报告状态：111-待开始 000-进行中 888-已完成 999-失败';
@@ -69,7 +69,6 @@ ALTER TABLE report ADD COLUMN report_no VARCHAR(64);
 ALTER TABLE report ADD COLUMN customer_name VARCHAR(200);
 ALTER TABLE report ADD COLUMN check_task_no VARCHAR(64);
 ALTER TABLE report ADD COLUMN user_no VARCHAR(64);
-ALTER TABLE report ADD COLUMN version VARCHAR(16);
 ALTER TABLE report ADD COLUMN fail_reason VARCHAR(1024);
 -- 2) customer_id 类型统一为 VARCHAR(64)（旧表可能为 BIGINT）
 ALTER TABLE report MODIFY COLUMN customer_id VARCHAR(64);
@@ -77,6 +76,17 @@ ALTER TABLE report MODIFY COLUMN customer_id VARCHAR(64);
 ALTER TABLE report MODIFY COLUMN status VARCHAR(20) DEFAULT '111';
 -- 4) report_no 唯一索引（已存在则跳过）
 CREATE UNIQUE INDEX uk_report_no ON report (report_no);
+
+-- 5) version 列：最终为整数（INTEGER），二选一执行
+--    5.1 若 report 表【没有】version 列 → 直接新增整数列：
+ALTER TABLE report ADD COLUMN version INTEGER;
+--    5.2 若 report 表【已有】version 列且是字符串（VARCHAR，值形如 'V1'/'V2'）→ 执行迁移，
+--        此时【不要】执行 5.1；迁移后 version 由 'V1' 变为 1，历史数据不丢：
+-- ALTER TABLE report ADD COLUMN version_num INTEGER;
+-- UPDATE report SET version_num = CAST(REGEXP_REPLACE(version, '[^0-9]', '', 'g') AS INTEGER)
+--  WHERE version IS NOT NULL AND REGEXP_REPLACE(version, '[^0-9]', '', 'g') <> '';
+-- ALTER TABLE report DROP COLUMN version;
+-- ALTER TABLE report RENAME COLUMN version_num TO version;
 
 
 -- ---------------------------------------------------------------------

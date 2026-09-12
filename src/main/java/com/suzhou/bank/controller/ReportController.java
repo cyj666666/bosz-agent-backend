@@ -112,6 +112,23 @@ public class ReportController {
     }
 
     /**
+     * 更新报告：在某日检流水号下新建一份报告（新版本）
+     * <p>复制最新已完成版本字段 + 随机报告编号 + 版本号自增 1，状态置 000-进行中，
+     * 后端异步触发生成；生成完成后该版本变为 888。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 新建的进行中版本（reportNo / version / status）
+     */
+    @PostMapping("/instance/renew")
+    public Result<ReportVersionVO> renewInstance(@RequestParam String checkTaskNo) {
+        try {
+            return Result.ok(reportService.renew(checkTaskNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
      * 查询模板化报告详情（三栏式渲染数据源）
      * <p>返回报告头内容块、目录树（含各目录内容块与空数据策略）、AI 风险列表与风险统计，
      * 前端按 block.emptyStrategy 决定整块隐藏或显示占位。</p>
