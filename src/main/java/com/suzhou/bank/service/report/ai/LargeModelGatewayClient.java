@@ -27,13 +27,25 @@ import java.util.Arrays;
 /**
  * 大模型网关客户端（OpenAI 兼容协议，非流式）
  *
- * <p>从 {@code large_model_config} 按 {@code lm_code} 取地址与密钥，POST chat completions，
- * 取 {@code choices[0].message.content}。全文分析在后台线程里跑，因此这里用阻塞式调用即可。</p>
+ * <p><b>本工程自定义 {@code large_model_config} 的字段语义</b>（不沿用其它工程的口径）。
+ * 代码按 {@code report.ai-analysis.lm-code} 指定的 {@code lm_code} 取一行。与调用相关的列：</p>
+ * <ul>
+ *   <li>{@code url} —— <b>完整的 chat completions 地址</b>（如
+ *       {@code http://host:1035/v1/chat/completions}），代码原样请求、不做拼接</li>
+ *   <li>{@code api_key} —— <b>明文</b> key，作为 {@code Authorization: Bearer}；留空则不带该头</li>
+ *   <li>{@code model} —— 请求体里的 {@code model}</li>
+ *   <li>{@code default_think_flag} —— {@code Y} 开启深度思考；默认关闭
+ *       （另见 {@link #applyThinkingParams}）</li>
+ *   <li>{@code max_tokens} —— {@code > 0} 才传，否则交给网关默认值</li>
+ *   <li>{@code model_config} —— 可选，<b>额外请求参数</b>（JSON 对象），原样并入请求体，
+ *       用于 temperature / top_p 等微调</li>
+ *   <li>{@code use_flag} —— {@code Y} 可用；非 Y 直接报「大模型配置已停用」</li>
+ *   <li>{@code lm_name} / {@code lm_desc} / {@code with_think} / {@code create_time} /
+ *       {@code update_time} —— <b>不参与调用逻辑</b>（{@code with_think} 保留列但不用）</li>
+ * </ul>
  *
- * <p>关于 {@code with_think / default_think_flag}：各网关开启「深度思考」的字段名并不统一
- * （enable_thinking / thinking / enable_search …），因此本类**只取 model_config 里的额外参数原样并入请求体**，
- * 需要开启思考就在该大模型配置行的 {@code model_config} 里写对应 JSON，例如
- * {@code {"enable_thinking": true}}。这样换网关不用改代码。</p>
+ * <p>调用实现按本工程场景定：后台非流式一次性调用，{@link RestTemplate} 同步请求即可，
+ * 超时见 {@code report.ai-analysis.timeout-millis}。</p>
  *
  * @author cyj666666
  * @since 1.3.0
@@ -43,8 +55,11 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class LargeModelGatewayClient {
 
-    /** 这些键由代码统一装配，不允许被 model_config 覆盖 */
+    /** 由代码统一装配，不允许被 model_config 覆盖 */
     private static final String[] RESERVED_KEYS = {"model", "messages", "stream"};
+
+    /** 思考块标记：模型可能把思考过程混在正文里，需要剥掉 */
+    private static final String THINK_OPEN = "<think";
 
     private final LargeModelConfigMapper configMapper;
     private final ReportAiAnalysisProperties properties;
@@ -58,13 +73,12 @@ public class LargeModelGatewayClient {
      */
     public LlmResult chat(String systemPrompt, String userPrompt) {
         LargeModelConfig config = loadConfig();
-        String url = config.getUrl();
-        if (!StringUtils.hasText(url)) {
-            throw new ReportGenerateException("大模型配置未填写地址（lmCode=" + config.getLmCode() + "）");
-        }
+        String url = config.getUrl().trim();
 
         JSONObject body = new JSONObject();
-        body.put("model", config.getModel());
+        if (StringUtils.hasText(config.getModel())) {
+            body.put("model", config.getModel());
+        }
         JSONArray messages = new JSONArray();
         messages.add(message("system", systemPrompt));
         messages.add(message("user", userPrompt));
@@ -73,13 +87,14 @@ public class LargeModelGatewayClient {
         if (config.getMaxTokens() != null && config.getMaxTokens() > 0) {
             body.put("max_tokens", config.getMaxTokens());
         }
+        applyThinkingParams(body, config);
         mergeExtraParams(body, config.getModelConfig());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON, MediaType.ALL));
         if (StringUtils.hasText(config.getApiKey())) {
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + config.getApiKey());
+            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + config.getApiKey().trim());
         }
 
         long start = System.currentTimeMillis();
@@ -88,23 +103,22 @@ public class LargeModelGatewayClient {
             responseText = buildRestTemplate().postForObject(
                     url, new HttpEntity<>(body.toJSONString(), headers), String.class);
         } catch (RestClientResponseException e) {
-            // 网关返回 4xx/5xx：带上响应体片段，便于在 failReason 里看清原因
             throw new ReportGenerateException("大模型调用失败：HTTP " + e.getRawStatusCode()
-                    + " " + truncate(e.getResponseBodyAsString(), 400));
+                    + urlHint(e.getRawStatusCode()) + " " + truncate(e.getResponseBodyAsString(), 400));
         } catch (Exception e) {
             throw new ReportGenerateException("大模型调用异常：" + e.getMessage());
         }
         long cost = System.currentTimeMillis() - start;
 
-        String content = extractContent(responseText);
+        String content = cleanContent(extractContent(responseText));
         if (!StringUtils.hasText(content)) {
             throw new ReportGenerateException("大模型返回内容为空：" + truncate(responseText, 300));
         }
-        log.info("大模型调用成功：lmCode={} model={} 耗时={}ms 返回长度={}",
-                config.getLmCode(), config.getModel(), cost, content.length());
+        log.info("大模型调用成功：lmCode={} model={} url={} 耗时={}ms 返回长度={}",
+                config.getLmCode(), config.getModel(), url, cost, content.length());
 
         LlmResult result = new LlmResult();
-        result.setContent(content.trim());
+        result.setContent(content);
         result.setModelName(StringUtils.hasText(config.getModel()) ? config.getModel() : config.getLmCode());
         result.setLmCode(config.getLmCode());
         result.setCostMillis(cost);
@@ -123,12 +137,52 @@ public class LargeModelGatewayClient {
                         .last("LIMIT 1"));
         if (config == null) {
             throw new ReportGenerateException("未找到大模型配置（lm_code=" + lmCode
-                    + "），请先在 large_model_config 中维护");
+                    + "），请先在 large_model_config 中插入该行");
         }
         if (StringUtils.hasText(config.getUseFlag()) && !"Y".equalsIgnoreCase(config.getUseFlag())) {
             throw new ReportGenerateException("大模型配置已停用（lm_code=" + lmCode + "）");
         }
+        if (!StringUtils.hasText(config.getUrl())) {
+            throw new ReportGenerateException("大模型配置未填写 url（lm_code=" + lmCode + "）");
+        }
         return config;
+    }
+
+    /**
+     * 思考参数：由 {@code default_think_flag} 决定，字段放请求体顶层。
+     * <p>为什么两个字段都要传：Qwen3 这类模型靠 {@code chat_template_kwargs.enable_thinking}
+     * 控制思考开关，只传顶层 {@code enable_thinking} 在部分推理后端上不生效 ——
+     * 关不掉思考就会把思考过程混进正文（{@link #cleanContent} 是兜底，不是替代）。</p>
+     */
+    private void applyThinkingParams(JSONObject body, LargeModelConfig config) {
+        boolean enableThink = "Y".equalsIgnoreCase(config.getDefaultThinkFlag());
+        body.put("enable_thinking", enableThink);
+
+        JSONObject kwargs = new JSONObject();
+        kwargs.put("enable_thinking", enableThink);
+        kwargs.put("thinking", enableThink);
+        body.put("chat_template_kwargs", kwargs);
+    }
+
+    /** 把 model_config 里的额外参数并入请求体（代码装配的键不覆盖） */
+    private void mergeExtraParams(JSONObject body, String modelConfig) {
+        if (!StringUtils.hasText(modelConfig)) {
+            return;
+        }
+        try {
+            JSONObject extra = JSON.parseObject(modelConfig.trim());
+            if (extra == null) {
+                return;
+            }
+            for (String key : extra.keySet()) {
+                if (Arrays.asList(RESERVED_KEYS).contains(key)) {
+                    continue;
+                }
+                body.put(key, extra.get(key));
+            }
+        } catch (Exception e) {
+            log.warn("大模型配置的 model_config 不是合法 JSON 对象，已忽略：{}", truncate(modelConfig, 120));
+        }
     }
 
     private RestTemplate buildRestTemplate() {
@@ -148,25 +202,12 @@ public class LargeModelGatewayClient {
         return message;
     }
 
-    /** 把 model_config 里的额外参数并入请求体（已保留键不覆盖） */
-    private void mergeExtraParams(JSONObject body, String modelConfig) {
-        if (!StringUtils.hasText(modelConfig)) {
-            return;
-        }
-        try {
-            JSONObject extra = JSON.parseObject(modelConfig);
-            if (extra == null) {
-                return;
-            }
-            for (String key : extra.keySet()) {
-                if (Arrays.asList(RESERVED_KEYS).contains(key)) {
-                    continue;
-                }
-                body.put(key, extra.get(key));
-            }
-        } catch (Exception e) {
-            log.warn("大模型配置的 model_config 不是合法 JSON，已忽略：{}", truncate(modelConfig, 120));
-        }
+    /** 404 基本都是 url 没写全，给一句明确提示，省一轮排查 */
+    private static String urlHint(int status) {
+        return status == 404
+                ? "（请确认 large_model_config.url 是完整的 chat completions 地址，"
+                + "例如 http://host:1035/v1/chat/completions）"
+                : "";
     }
 
     /** 兼容 OpenAI 标准响应，取 choices[0].message.content */
@@ -208,6 +249,30 @@ public class LargeModelGatewayClient {
             return sb.toString();
         }
         return content == null ? null : String.valueOf(content);
+    }
+
+    /**
+     * 清洗模型输出，保证拿到的是能直接塞进详情页的 HTML 片段：
+     * ① 去掉思考块（模型自带 {@code <think>…</think>}，否则会原样渲染到报告里）；
+     * ② 去掉可能被包上的 ``` 代码围栏（提示词已要求只输出 HTML，但模型常不听话）。
+     */
+    private String cleanContent(String content) {
+        if (!StringUtils.hasText(content)) {
+            return content;
+        }
+        String text = content.trim();
+        if (text.contains(THINK_OPEN)) {
+            text = text.replaceAll("(?s)<think[^>]*>.*?</think[^>]*>", "").trim();
+        }
+        if (text.startsWith("```")) {
+            text = text.replaceFirst("^```[a-zA-Z]*\\s*", "");
+            int lastFence = text.lastIndexOf("```");
+            if (lastFence >= 0) {
+                text = text.substring(0, lastFence);
+            }
+            text = text.trim();
+        }
+        return text;
     }
 
     private static String truncate(String value, int max) {

@@ -42,9 +42,10 @@ report:
   # AI 全文分析（前端手动触发，后台独立线程池执行，前端按状态轮询）
   ai-analysis:
     # 使用 large_model_config 里哪一行配置（按 lm_code 匹配）
-    lm-code: default
-    # 调用大模型的超时（毫秒）
-    timeout-millis: 300000
+    # 本工程自定义该表字段语义（api_key 明文、url 完整地址），故用专属编码，不与其它工程的行混用
+    lm-code: bosz-report-ai
+    # 调用大模型的超时（毫秒）：后台非流式一次性调用，10 分钟足够且不长时间占线程
+    timeout-millis: 600000
     # 送进模型的素材字符上限，超出截断
     max-material-chars: 60000
     # 独立线程池（全文分析是长耗时 IO，与报告生成/Web 请求隔离）
