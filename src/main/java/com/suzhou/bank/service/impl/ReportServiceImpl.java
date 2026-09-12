@@ -519,15 +519,32 @@ public class ReportServiceImpl implements ReportService {
         if (!StringUtils.hasText(checkTaskNo) || !StringUtils.hasText(blockCode)) {
             return new ArrayList<>();
         }
+        // 时间正序（最早在上）：首位是「原始版本」，其后按修改时间从早到晚，
+        // 整条列表就是一条顺着往下读的时间轴（最新一条落在末尾）
         List<AppReportRiskEditLog> rows = editLogMapper.selectList(
                 Wrappers.<AppReportRiskEditLog>lambdaQuery()
                         .eq(AppReportRiskEditLog::getCheckTaskNo, checkTaskNo)
                         .eq(AppReportRiskEditLog::getBlockCode, blockCode)
-                        .orderByDesc(AppReportRiskEditLog::getInputtime)
-                        .orderByDesc(AppReportRiskEditLog::getId));
-        List<ReportRiskEditLogVO> list = new ArrayList<>(rows.size());
+                        .orderByAsc(AppReportRiskEditLog::getInputtime)
+                        .orderByAsc(AppReportRiskEditLog::getId));
+        List<ReportRiskEditLogVO> list = new ArrayList<>(rows.size() + 1);
+
+        // 置顶补一条「原始版本」：正文 content 是原地覆盖的，AI 生成的第一版只能由
+        // 最早一条归档的 contentBefore 反推（已按 inputtime asc 排，故最早一条就是第一条）。
+        // 它不在归档表里，是纯粹为了展示而造出来的条目：不参与「N 次修改」计数与序号编号。
+        if (!rows.isEmpty()) {
+            String origin = rows.get(0).getContentBefore();
+            if (StringUtils.hasText(origin)) {
+                ReportRiskEditLogVO first = new ReportRiskEditLogVO();
+                first.setOriginal(Boolean.TRUE);
+                first.setContentAfter(origin);
+                list.add(first);
+            }
+        }
+
         for (AppReportRiskEditLog row : rows) {
             ReportRiskEditLogVO vo = new ReportRiskEditLogVO();
+            vo.setOriginal(Boolean.FALSE);
             vo.setOperatorName(StringUtils.hasText(row.getOperatorName())
                     ? row.getOperatorName() : row.getOperatorNo());
             vo.setOperatorNo(row.getOperatorNo());
