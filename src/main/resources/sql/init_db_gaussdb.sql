@@ -229,27 +229,8 @@ CREATE TABLE IF NOT EXISTS app_report_risk_edit_log (
 CREATE INDEX idx_editlog_task_block ON app_report_risk_edit_log (checkTaskNo, blockCode, inputtime);
 CREATE INDEX idx_editlog_report_no ON app_report_risk_edit_log (reportNo);
 
--- 大模型配置表（平台级：各模块按 lm_code 取网关地址与密钥）
-CREATE TABLE IF NOT EXISTS large_model_config (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    lm_code VARCHAR(100) NOT NULL,
-    model VARCHAR(100),
-    lm_name VARCHAR(256),
-    url VARCHAR(2000),
-    api_key VARCHAR(5000),
-    lm_desc TEXT,
-    use_flag VARCHAR(2) DEFAULT 'Y' NOT NULL,
-    with_think VARCHAR(10) DEFAULT 'N',
-    default_think_flag VARCHAR(4) DEFAULT 'N',
-    max_tokens INT DEFAULT 0,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    model_config TEXT
-);
-CREATE UNIQUE INDEX uk_large_model_config_lm_code ON large_model_config (lm_code);
-CREATE INDEX idx_large_model_config_use_flag ON large_model_config (use_flag);
-
 -- 报告AI全文分析表（挂在报告编号上、保留多次；同一报告同时只允许一次进行中）
+-- 注意：large_model_config 不在此处建表，它的建表语句在 sql/agent/agent_gauss_ddl.sql
 CREATE TABLE IF NOT EXISTS app_report_ai_analysis (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     reportNo VARCHAR(64) NOT NULL,

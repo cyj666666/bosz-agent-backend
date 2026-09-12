@@ -6,6 +6,7 @@ import com.suzhou.bank.mapper.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.jdbc.ScriptRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,8 +20,18 @@ import java.util.Date;
 
 /**
  * 应用初始化
- * <p>启动时先 DROP 旧业务表 → 执行 DDL 建表 → 加载示例数据 → 创建默认管理员。
- * DROP 后重建确保每次表结构都是最新的。</p>
+ * <p><b>启动期 SQL 自动执行默认关闭</b>（{@code app.init-sql-on-startup=false}）：
+ * DDL/DML 一律人工执行，应用启动不再改库 —— 库结构由人工/发布流程掌控。</p>
+ * <p>确需在空库上快速拉起时，把该配置置 true，会依次执行：
+ * 认证表 DDL → 业务表 DDL → 示例数据 DML → 创建默认管理员。</p>
+ *
+ * <p>相关脚本（均需人工执行）：</p>
+ * <ul>
+ *   <li>{@code sql/init_auth_gaussdb.sql} —— 认证权限表</li>
+ *   <li>{@code sql/init_db_gaussdb.sql} —— 平台与业务表（含列迁移补齐）</li>
+ *   <li>{@code sql/init_db_comments.sql} —— 表/列注释</li>
+ *   <li>{@code sql/init_sample_data.sql} —— 示例数据</li>
+ * </ul>
  *
  * @author cyj666666
  * @since 1.0.0
@@ -35,12 +46,24 @@ public class AuthInitializer implements CommandLineRunner {
     private final SysUserRoleMapper sysUserRoleMapper;
     private final DataSource dataSource;
 
+    /** 是否在启动时自动执行 SQL 初始化（DDL/DML）；默认 false，不随启动跑 */
+    @Value("${app.init-sql-on-startup:false}")
+    private boolean initSqlOnStartup;
+
     @Override
     public void run(String... args) {
+        if (!initSqlOnStartup) {
+            log.info("启动期 SQL 初始化已关闭（app.init-sql-on-startup=false）—— "
+                    + "DDL/DML 请人工执行：sql/init_auth_gaussdb.sql、sql/init_db_gaussdb.sql、"
+                    + "sql/init_db_comments.sql、sql/init_sample_data.sql");
+            return;
+        }
+        log.warn("已开启启动期 SQL 初始化（app.init-sql-on-startup=true），即将执行 DDL/DML");
+
         // 1. 认证权限表 DDL
         runSqlScript("sql/init_auth_gaussdb.sql", false, "认证相关表");
 
-        // 2. 业务表 DDL（含列迁移补齐）
+        // 2. 平台与业务表 DDL（含列迁移补齐）
         runSqlScript("sql/init_db_gaussdb.sql", false, "业务表");
 
         // 3. 示例数据 DML

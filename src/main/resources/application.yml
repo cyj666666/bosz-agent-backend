@@ -1,6 +1,12 @@
 server:
   port: 8080
 
+app:
+  # 启动时是否自动执行 SQL 初始化（init_auth_gaussdb / init_db_gaussdb / init_sample_data）
+  # 默认 false：应用启动不改库，DDL/DML 一律人工执行（含 init_db_comments.sql）
+  # 仅在空库快速拉起时才临时置 true
+  init-sql-on-startup: false
+
 spring:
   profiles:
     active: dev

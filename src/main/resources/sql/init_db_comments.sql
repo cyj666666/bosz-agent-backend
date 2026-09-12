@@ -125,6 +125,7 @@ COMMENT ON COLUMN know_kit_task.error_msg IS '错误信息';
 COMMENT ON COLUMN know_kit_task.completed_at IS '完成时间';
 
 -- ====== large_model_config (大模型配置表) ======
+-- 说明：该表的建表语句在 sql/agent/agent_gauss_ddl.sql（第 3499 行），此处只补注释
 COMMENT ON TABLE large_model_config IS '大模型配置表';
 COMMENT ON COLUMN large_model_config.id IS '大模型唯一ID';
 COMMENT ON COLUMN large_model_config.lm_code IS '大模型唯一CODE';
