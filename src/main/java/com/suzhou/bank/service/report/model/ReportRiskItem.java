@@ -32,4 +32,10 @@ public class ReportRiskItem {
 
     /** 所属目录编号（自内容实例带出，供列表展示"对应章节"） */
     private String catalogCode;
+
+    /**
+     * 该风险要点在当前日检流水号下的修改记录条数（跨版本累计）。
+     * <p>供前端决定是否显示「修改记录(N)」按钮，避免每行单独发一次查询请求。</p>
+     */
+    private Integer editCount;
 }

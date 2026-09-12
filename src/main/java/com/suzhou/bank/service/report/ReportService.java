@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
 
 import java.util.List;
@@ -103,11 +104,27 @@ public interface ReportService {
      * 同时把该风险状态置为 ADOPTED-已采纳。</p>
      * <p>本方法声明事务：正文与列表副本必须同时成功或同时失败。</p>
      *
-     * @param reportNo  报告编号
-     * @param blockCode 内容块编号
-     * @param content   新的正文内容（HTML 片段，不允许为空）
+     * @param reportNo     报告编号
+     * @param blockCode    内容块编号
+     * @param content      新的正文内容（HTML 片段，不允许为空）
+     * @param operatorNo   操作人账号（写入修改记录）
+     * @param operatorName 操作人姓名（写入修改记录；为空时回落账号）
      */
-    void updateBlockContent(String reportNo, String blockCode, String content);
+    void updateBlockContent(String reportNo, String blockCode, String content,
+                            String operatorNo, String operatorName);
+
+    /**
+     * 查询某风险要点的修改记录（归档维度：同日检流水号 + 同风险要点）
+     * <p>按修改时间<b>倒序</b>返回（最新在上），前端按 1、2、3… 编号展示为
+     * 「N、{修改人} {修改时间} 修改为：{修改后文案}」。</p>
+     * <p>归档维度为 checkTaskNo + blockCode（而非 reportNo），故同一日检流水号下
+     * 各版本的修改历史会累计展示，跨版本可追溯。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @param blockCode   风险要点编号（= 内容块编号）
+     * @return 修改记录列表（无记录返回空列表）
+     */
+    List<ReportRiskEditLogVO> editHistory(String checkTaskNo, String blockCode);
 
     /**
      * 报告记录分页查询（报告列表页用）

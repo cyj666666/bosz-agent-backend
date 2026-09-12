@@ -5,6 +5,22 @@
 -- 执行方式：通过 GaussDBInit 或 psql 连接后执行
 -- =============================================
 
+-- ====== app_report_risk_edit_log (报告风险要点修改记录表) ======
+COMMENT ON TABLE app_report_risk_edit_log IS '报告详情-风险要点修改记录表（归档维度：同日检流水号 + 同风险要点）';
+COMMENT ON COLUMN app_report_risk_edit_log.id IS '主键（自增）';
+COMMENT ON COLUMN app_report_risk_edit_log.checkTaskNo IS '日检流水号（归档维度①，跨版本追溯用）';
+COMMENT ON COLUMN app_report_risk_edit_log.blockCode IS '风险要点编号（=内容块编号，归档维度②）';
+COMMENT ON COLUMN app_report_risk_edit_log.reportNo IS '产生本次修改的报告编号（追溯是哪一版改的）';
+COMMENT ON COLUMN app_report_risk_edit_log.blockName IS '风险要点名称（冗余，便于单独展示）';
+COMMENT ON COLUMN app_report_risk_edit_log.catalogCode IS '所属目录编号（冗余）';
+COMMENT ON COLUMN app_report_risk_edit_log.customerId IS '客户编号（冗余）';
+COMMENT ON COLUMN app_report_risk_edit_log.customerName IS '客户名称（冗余）';
+COMMENT ON COLUMN app_report_risk_edit_log.contentBefore IS '修改前文案（审计对比用）';
+COMMENT ON COLUMN app_report_risk_edit_log.contentAfter IS '修改后文案（列表展示用）';
+COMMENT ON COLUMN app_report_risk_edit_log.operatorNo IS '修改人账号';
+COMMENT ON COLUMN app_report_risk_edit_log.operatorName IS '修改人姓名（取 sys_user.real_name，取不到回落账号）';
+COMMENT ON COLUMN app_report_risk_edit_log.inputtime IS '修改时间（默认当前时间）';
+
 -- ====== collector_config (采集器配置表) ======
 COMMENT ON TABLE collector_config IS '采集器配置表';
 COMMENT ON COLUMN collector_config.id IS '主键ID';

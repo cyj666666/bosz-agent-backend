@@ -1,18 +1,24 @@
 package com.suzhou.bank.controller;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.common.Result;
 import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.entity.SysUser;
+import com.suzhou.bank.mapper.SysUserMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
 import com.suzhou.bank.service.report.model.ReportBlockContentRequest;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportRiskStatusRequest;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
@@ -30,6 +36,9 @@ public class ReportController {
 
     /** 报告服务（模板驱动的报告实例生成） */
     private final ReportService reportService;
+
+    /** 用户表 Mapper：仅用于把操作账号解析成姓名，写进修改记录 */
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 生成报告实例（含状态流转，定时任务调用本接口）
@@ -155,13 +164,60 @@ public class ReportController {
      * @return 空响应体
      */
     @PostMapping("/instance/block/content")
-    public Result<Void> updateBlockContent(@RequestBody ReportBlockContentRequest request) {
+    public Result<Void> updateBlockContent(@RequestBody ReportBlockContentRequest request,
+                                           HttpServletRequest httpRequest) {
         try {
-            reportService.updateBlockContent(request.getReportNo(), request.getBlockCode(), request.getContent());
+            reportService.updateBlockContent(request.getReportNo(), request.getBlockCode(), request.getContent(),
+                    currentUsername(httpRequest), currentRealName(httpRequest));
             return Result.ok();
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    /**
+     * 查询某风险要点的修改记录（详情页「修改记录」弹窗数据源）
+     * <p>归档维度为「同日检流水号 + 同风险要点」而非单个报告编号，
+     * 因此同一日检流水号下各版本的修改历史会累计返回，跨版本可追溯；
+     * 按修改时间倒序（最新在上），前端按 1、2、3… 编号展示。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @param blockCode   风险要点编号（= 内容块编号）
+     * @return 修改记录列表（无记录返回空列表）
+     */
+    @GetMapping("/instance/block/edit-history")
+    public Result<List<ReportRiskEditLogVO>> blockEditHistory(@RequestParam String checkTaskNo,
+                                                              @RequestParam String blockCode) {
+        try {
+            return Result.ok(reportService.editHistory(checkTaskNo, blockCode));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /** 取当前登录账号（AuthInterceptor 已写入 request attribute） */
+    private String currentUsername(HttpServletRequest request) {
+        Object username = request == null ? null : request.getAttribute("username");
+        return username == null ? null : String.valueOf(username);
+    }
+
+    /** 取当前登录用户姓名：优先 sys_user.real_name，取不到回落账号 */
+    private String currentRealName(HttpServletRequest request) {
+        Object userId = request == null ? null : request.getAttribute("userId");
+        if (userId == null) {
+            return null;
+        }
+        try {
+            SysUser user = sysUserMapper.selectOne(Wrappers.<SysUser>lambdaQuery()
+                    .eq(SysUser::getId, Long.valueOf(String.valueOf(userId)))
+                    .last("LIMIT 1"));
+            if (user != null && StringUtils.hasText(user.getRealName())) {
+                return user.getRealName();
+            }
+        } catch (Exception e) {
+            // 解析姓名失败不影响主流程，回落到账号
+        }
+        return currentUsername(request);
     }
 
     /**

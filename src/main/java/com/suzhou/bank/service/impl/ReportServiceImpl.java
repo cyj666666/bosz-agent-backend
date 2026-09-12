@@ -7,17 +7,20 @@ import com.suzhou.bank.entity.report.AppReportAiRisk;
 import com.suzhou.bank.entity.report.AppReportCatalog;
 import com.suzhou.bank.entity.report.AppReportContentBlock;
 import com.suzhou.bank.entity.report.AppReportContentInstance;
+import com.suzhou.bank.entity.report.AppReportRiskEditLog;
 import com.suzhou.bank.mapper.ReportMapper;
 import com.suzhou.bank.mapper.report.AppReportAiRiskMapper;
 import com.suzhou.bank.mapper.report.AppReportCatalogMapper;
 import com.suzhou.bank.mapper.report.AppReportContentBlockMapper;
 import com.suzhou.bank.mapper.report.AppReportContentInstanceMapper;
+import com.suzhou.bank.mapper.report.AppReportRiskEditLogMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
 import com.suzhou.bank.service.report.model.ReportBlockVO;
 import com.suzhou.bank.service.report.model.ReportCatalogNode;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportRiskItem;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
 import com.suzhou.bank.service.report.spi.ContentPayload;
@@ -66,6 +69,7 @@ public class ReportServiceImpl implements ReportService {
     private final AppReportContentBlockMapper blockMapper;
     private final AppReportContentInstanceMapper instanceMapper;
     private final AppReportAiRiskMapper riskMapper;
+    private final AppReportRiskEditLogMapper editLogMapper;
     private final ReportContentProvider contentProvider;
 
     @Override
@@ -264,6 +268,19 @@ public class ReportServiceImpl implements ReportService {
         }
         roots.forEach(this::sortCatalogBlocks);
 
+        // 各风险要点在该日检流水号下的修改记录条数（跨版本累计）：一次 group 查询得出，
+        // 供前端决定是否显示「修改记录(N)」按钮，避免每行单独发一次请求
+        Map<String, Integer> editCountOfBlock = new HashMap<>();
+        if (StringUtils.hasText(reportInfo.getCheckTaskNo())) {
+            List<AppReportRiskEditLog> editLogs = editLogMapper.selectList(
+                    Wrappers.<AppReportRiskEditLog>lambdaQuery()
+                            .select(AppReportRiskEditLog::getBlockCode)
+                            .eq(AppReportRiskEditLog::getCheckTaskNo, reportInfo.getCheckTaskNo()));
+            for (AppReportRiskEditLog editLog : editLogs) {
+                editCountOfBlock.merge(editLog.getBlockCode(), 1, Integer::sum);
+            }
+        }
+
         List<AppReportAiRisk> riskRows = riskMapper.selectList(
                 Wrappers.<AppReportAiRisk>lambdaQuery()
                         .eq(AppReportAiRisk::getReportNo, reportNo)
@@ -283,6 +300,7 @@ public class ReportServiceImpl implements ReportService {
             item.setJumpAnchorCode(row.getJumpAnchorCode());
             item.setSortNo(row.getSortNo());
             item.setCatalogCode(catalogOfBlock.get(row.getBlockCode()));
+            item.setEditCount(editCountOfBlock.getOrDefault(row.getBlockCode(), 0));
             risks.add(item);
 
             if (RISK_ADOPTED.equalsIgnoreCase(row.getStatus())) {
@@ -422,21 +440,31 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void updateBlockContent(String reportNo, String blockCode, String content) {
+    public void updateBlockContent(String reportNo, String blockCode, String content,
+                                   String operatorNo, String operatorName) {
         requireReportNoAndBlock(reportNo, blockCode);
         String text = content == null ? "" : content.trim();
         if (text.isEmpty()) {
             throw new ReportGenerateException("正文内容不能为空");
         }
-        // 1) 正文：更新内容实例的 content
-        int updated = instanceMapper.update(null, Wrappers.<AppReportContentInstance>lambdaUpdate()
-                .eq(AppReportContentInstance::getReportNo, reportNo)
-                .eq(AppReportContentInstance::getBlockCode, blockCode)
-                .set(AppReportContentInstance::getContent, text));
-        if (updated == 0) {
+        // 0) 先取出该内容实例（旧文案用于归档对比；其余字段冗余进修改记录）
+        AppReportContentInstance instance = instanceMapper.selectOne(
+                Wrappers.<AppReportContentInstance>lambdaQuery()
+                        .eq(AppReportContentInstance::getReportNo, reportNo)
+                        .eq(AppReportContentInstance::getBlockCode, blockCode)
+                        .last("LIMIT 1"));
+        if (instance == null) {
             throw new ReportGenerateException("未找到对应的内容块实例（reportNo=" + reportNo
                     + "，blockCode=" + blockCode + "）");
         }
+        String before = instance.getContent() == null ? "" : instance.getContent();
+        boolean changed = !before.equals(text);
+
+        // 1) 正文：更新内容实例的 content
+        instanceMapper.update(null, Wrappers.<AppReportContentInstance>lambdaUpdate()
+                .eq(AppReportContentInstance::getReportNo, reportNo)
+                .eq(AppReportContentInstance::getBlockCode, blockCode)
+                .set(AppReportContentInstance::getContent, text));
         // 2) 列表副本 + 处置状态：正文与 riskDesc 是同一份文案，必须同事务同步
         //    （只改正文不改 riskDesc，会导致列表文案与正文不一致、前端正文定位失配）
         riskMapper.update(null, Wrappers.<AppReportAiRisk>lambdaUpdate()
@@ -444,7 +472,70 @@ public class ReportServiceImpl implements ReportService {
                 .eq(AppReportAiRisk::getBlockCode, blockCode)
                 .set(AppReportAiRisk::getRiskDesc, text)
                 .set(AppReportAiRisk::getStatus, RISK_ADOPTED));
-        log.info("正文修改并同步风险文案：reportNo={} blockCode={} 长度={}", reportNo, blockCode, text.length());
+
+        // 3) 修改记录归档（同事务）：仅当内容确实变化时写入，只记人工修改
+        if (changed) {
+            saveEditLog(instance, text, before, operatorNo, operatorName);
+        }
+        log.info("正文修改并同步风险文案：reportNo={} blockCode={} 长度={} 已归档={}",
+                reportNo, blockCode, text.length(), changed);
+    }
+
+    /**
+     * 写入一条风险要点修改记录
+     * <p>归档维度是 checkTaskNo + blockCode（而非 reportNo），故这里要把 reportNo 反查成 checkTaskNo，
+     * 这样同一日检流水号下各版本的修改历史才能累计、跨版本可追溯。</p>
+     */
+    private void saveEditLog(AppReportContentInstance instance, String after, String before,
+                             String operatorNo, String operatorName) {
+        Report report = reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getReportNo, instance.getReportNo())
+                .last("LIMIT 1"));
+        if (report == null || !StringUtils.hasText(report.getCheckTaskNo())) {
+            // 拿不到日检流水号就无法归到正确维度上，宁可记日志也不写脏数据
+            log.warn("跳过修改记录归档：reportNo={} 未找到日检流水号", instance.getReportNo());
+            return;
+        }
+        AppReportRiskEditLog logRow = new AppReportRiskEditLog();
+        logRow.setCheckTaskNo(report.getCheckTaskNo());
+        logRow.setBlockCode(instance.getBlockCode());
+        logRow.setReportNo(instance.getReportNo());
+        logRow.setBlockName(instance.getBlockName());
+        logRow.setCatalogCode(instance.getCatalogCode());
+        logRow.setCustomerId(instance.getCustomerId());
+        logRow.setCustomerName(instance.getCustomerName());
+        logRow.setContentBefore(before);
+        logRow.setContentAfter(after);
+        logRow.setOperatorNo(StringUtils.hasText(operatorNo) ? operatorNo : null);
+        logRow.setOperatorName(StringUtils.hasText(operatorName) ? operatorName : operatorNo);
+        // inputtime 不在此赋值：交给列默认值 CURRENT_TIMESTAMP，与其它表 inputtime 的取值口径一致
+        editLogMapper.insert(logRow);
+    }
+
+    @Override
+    public List<ReportRiskEditLogVO> editHistory(String checkTaskNo, String blockCode) {
+        if (!StringUtils.hasText(checkTaskNo) || !StringUtils.hasText(blockCode)) {
+            return new ArrayList<>();
+        }
+        List<AppReportRiskEditLog> rows = editLogMapper.selectList(
+                Wrappers.<AppReportRiskEditLog>lambdaQuery()
+                        .eq(AppReportRiskEditLog::getCheckTaskNo, checkTaskNo)
+                        .eq(AppReportRiskEditLog::getBlockCode, blockCode)
+                        .orderByDesc(AppReportRiskEditLog::getInputtime)
+                        .orderByDesc(AppReportRiskEditLog::getId));
+        List<ReportRiskEditLogVO> list = new ArrayList<>(rows.size());
+        for (AppReportRiskEditLog row : rows) {
+            ReportRiskEditLogVO vo = new ReportRiskEditLogVO();
+            vo.setOperatorName(StringUtils.hasText(row.getOperatorName())
+                    ? row.getOperatorName() : row.getOperatorNo());
+            vo.setOperatorNo(row.getOperatorNo());
+            vo.setInputtime(row.getInputtime());
+            vo.setContentAfter(row.getContentAfter());
+            vo.setContentBefore(row.getContentBefore());
+            vo.setReportNo(row.getReportNo());
+            list.add(vo);
+        }
+        return list;
     }
 
     /** 参数校验：报告编号与内容块编号均必填（两者共同构成实例层的行身份） */

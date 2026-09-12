@@ -209,3 +209,22 @@ CREATE TABLE IF NOT EXISTS report (
 CREATE INDEX idx_report_customer_id ON report (customer_id);
 CREATE INDEX idx_report_report_type ON report (report_type);
 CREATE INDEX idx_report_check_task_no ON report (check_task_no);
+
+-- 报告风险要点修改记录表（归档维度：同日检流水号 + 同风险要点；只记录人工修改正文）
+CREATE TABLE IF NOT EXISTS app_report_risk_edit_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    checkTaskNo VARCHAR(64) NOT NULL,
+    blockCode VARCHAR(64) NOT NULL,
+    reportNo VARCHAR(64) NOT NULL,
+    blockName VARCHAR(128),
+    catalogCode VARCHAR(64),
+    customerId VARCHAR(64),
+    customerName VARCHAR(128),
+    contentBefore TEXT,
+    contentAfter TEXT NOT NULL,
+    operatorNo VARCHAR(64),
+    operatorName VARCHAR(128),
+    inputtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_editlog_task_block ON app_report_risk_edit_log (checkTaskNo, blockCode, inputtime);
+CREATE INDEX idx_editlog_report_no ON app_report_risk_edit_log (reportNo);
