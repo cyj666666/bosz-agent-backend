@@ -3,14 +3,16 @@
 -- 数据库：高斯DB（GaussDB，风格同 20260819 建表脚本）
 -- 说明  ：报告实例生成模块的报告记录由上游预生成（初始 status=111-待开始），
 --         生成服务只负责状态流转（000 进行中 / 888 已完成 / 999 失败）与失败原因落库。
---         本表列名为下划线命名（snake_case），对应实体 AppReportInfo（@TableName("report")）。
--- 变更 ：
---   · report_no   VARCHAR(32) → VARCHAR(64)（报告编号改为 64 位）
---   · status      DEFAULT '000' → DEFAULT '111'（初始态 111-待开始）
---   · 新增 fail_reason VARCHAR(1024)（生成失败时记录技术/业务异常详情）
---   · report_date 不保留（已确认不要该字段）
--- 已建库环境：直接执行文件末尾「已建库补丁（ALTER）」段即可，无需重建表。
--- 日期  ：2026-09-11
+--         本表列名为下划线命名（snake_case），对应实体 com.suzhou.bank.entity.Report
+--         （@TableName("report")）。
+-- 关键字段：
+--   · report_no    报告编号（业务唯一键，VARCHAR(64)）
+--   · check_task_no 日检流水号（同一流水号下多个版本）
+--   · version      报告版本号（V1/V2/V3，区分历史版本，NOT NULL 必填）
+--   · status       111-待开始 / 000-进行中 / 888-已完成 / 999-失败
+--   · fail_reason  生成失败时记录技术/业务异常详情（成功为空）
+-- 已建库环境：直接执行文件「二、已建库补丁（ALTER）」段即可，无需重建表。
+-- 日期  ：2026-09-12
 -- =====================================================================
 
 
@@ -45,9 +47,10 @@ COMMENT ON TABLE report IS '贷后报告主表（报告实例入口，取代 app
 COMMENT ON COLUMN report.report_no IS '报告编号（业务唯一键，VARCHAR(64)，关联内容实例表与 AI 风险表）';
 COMMENT ON COLUMN report.customer_id IS '客户编号';
 COMMENT ON COLUMN report.customer_name IS '客户名称';
+COMMENT ON COLUMN report.check_task_no IS '日检任务编号（日检流水号）';
+COMMENT ON COLUMN report.version IS '报告版本号（V1/V2/V3，同一日检流水号下区分历史版本；仅已完成（888）时赋予，失败/未完成可为空）';
 COMMENT ON COLUMN report.report_title IS '报告标题';
 COMMENT ON COLUMN report.report_type IS '报告类型';
-COMMENT ON COLUMN report.check_task_no IS '日检任务编号';
 COMMENT ON COLUMN report.status IS '报告状态：111-待开始 000-进行中 888-已完成 999-失败';
 COMMENT ON COLUMN report.fail_reason IS '失败原因（生成过程发生技术类/业务类异常时记录详细信息，成功时为空）';
 COMMENT ON COLUMN report.created_at IS '入库时间';
@@ -55,14 +58,25 @@ COMMENT ON COLUMN report.updated_at IS '更新时间（状态流转/失败原因
 
 
 -- ---------------------------------------------------------------------
--- 二、已建库补丁（ALTER）：把旧 report 表升级为上述最终结构
+-- 二、已建库补丁（ALTER）：把"旧版 report 表"升级为上述最终结构
+--     适用：库中已存在旧版 report 表（缺 report_no / customer_name / check_task_no /
+--           user_no / version / fail_reason 等列）。
+--     说明：若某列已补过，对应 ADD COLUMN 会报"column already exists"，
+--           属正常现象，跳过该条继续执行即可。
 -- ---------------------------------------------------------------------
--- 1) report_no 32 → 64
-ALTER TABLE report MODIFY COLUMN report_no VARCHAR(64);
--- 2) 新增失败原因列（生成模块必需，否则失败无处落库）
+-- 1) 补缺失列
+ALTER TABLE report ADD COLUMN report_no VARCHAR(64);
+ALTER TABLE report ADD COLUMN customer_name VARCHAR(200);
+ALTER TABLE report ADD COLUMN check_task_no VARCHAR(64);
+ALTER TABLE report ADD COLUMN user_no VARCHAR(64);
+ALTER TABLE report ADD COLUMN version VARCHAR(16);
 ALTER TABLE report ADD COLUMN fail_reason VARCHAR(1024);
--- 3) status 默认值改为 111（待开始，与状态码模型一致）
+-- 2) customer_id 类型统一为 VARCHAR(64)（旧表可能为 BIGINT）
+ALTER TABLE report MODIFY COLUMN customer_id VARCHAR(64);
+-- 3) status 默认值改为 111（待开始）
 ALTER TABLE report MODIFY COLUMN status VARCHAR(20) DEFAULT '111';
+-- 4) report_no 唯一索引（已存在则跳过）
+CREATE UNIQUE INDEX uk_report_no ON report (report_no);
 
 
 -- ---------------------------------------------------------------------
@@ -71,4 +85,3 @@ ALTER TABLE report MODIFY COLUMN status VARCHAR(20) DEFAULT '111';
 --     执行前请确认无其他系统依赖该表。
 -- ---------------------------------------------------------------------
 -- DROP TABLE IF EXISTS app_report_info;
-
