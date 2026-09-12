@@ -402,6 +402,8 @@ public class ReportServiceImpl implements ReportService {
         report.setCustomerName(template.getCustomerName());
         report.setReportTitle(template.getReportTitle());
         report.setReportType(template.getReportType());
+        // 用户编号沿用上一版的操作人（user_no 后端只读不写，renew 新建的记录必须显式带上，否则为 NULL）
+        report.setUserNo(template.getUserNo());
         report.setCheckTaskNo(checkTaskNo);
         report.setVersion(nextVersionOf(checkTaskNo));
         report.setStatus(REPORT_STATUS_RUNNING);
