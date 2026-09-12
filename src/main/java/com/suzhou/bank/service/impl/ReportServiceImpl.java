@@ -3,12 +3,14 @@ package com.suzhou.bank.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.entity.report.AppReportAiAnalysis;
 import com.suzhou.bank.entity.report.AppReportAiRisk;
 import com.suzhou.bank.entity.report.AppReportCatalog;
 import com.suzhou.bank.entity.report.AppReportContentBlock;
 import com.suzhou.bank.entity.report.AppReportContentInstance;
 import com.suzhou.bank.entity.report.AppReportRiskEditLog;
 import com.suzhou.bank.mapper.ReportMapper;
+import com.suzhou.bank.mapper.report.AppReportAiAnalysisMapper;
 import com.suzhou.bank.mapper.report.AppReportAiRiskMapper;
 import com.suzhou.bank.mapper.report.AppReportCatalogMapper;
 import com.suzhou.bank.mapper.report.AppReportContentBlockMapper;
@@ -16,6 +18,8 @@ import com.suzhou.bank.mapper.report.AppReportContentInstanceMapper;
 import com.suzhou.bank.mapper.report.AppReportRiskEditLogMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
+import com.suzhou.bank.service.report.ai.ReportAiAnalysisTask;
+import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockVO;
 import com.suzhou.bank.service.report.model.ReportCatalogNode;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
@@ -28,10 +32,12 @@ import com.suzhou.bank.service.report.spi.ReportContentProvider;
 import com.suzhou.bank.service.report.spi.ReportGenerateContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -43,6 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -70,7 +77,20 @@ public class ReportServiceImpl implements ReportService {
     private final AppReportContentInstanceMapper instanceMapper;
     private final AppReportAiRiskMapper riskMapper;
     private final AppReportRiskEditLogMapper editLogMapper;
+    private final AppReportAiAnalysisMapper aiAnalysisMapper;
     private final ReportContentProvider contentProvider;
+    private final ReportAiAnalysisTask aiAnalysisTask;
+
+    /**
+     * 全文分析专用线程池。
+     * <p>用 {@code @Resource} 按名字注入：Spring Boot 自带一个 {@code applicationTaskExecutor}，
+     * 按类型注入会有两个候选，必须指定 bean 名。</p>
+     */
+    @Resource(name = "reportAiAnalysisExecutor")
+    private ThreadPoolTaskExecutor aiAnalysisExecutor;
+
+    /** 同一 reportNo 的触发互斥锁：避免两次点击并发通过「是否已有 RUNNING」的校验 */
+    private static final ConcurrentHashMap<String, Object> ANALYSIS_LOCKS = new ConcurrentHashMap<>();
 
     @Override
     public ReportGenerateResult generate(String reportNo) {
@@ -556,6 +576,136 @@ public class ReportServiceImpl implements ReportService {
         }
         return list;
     }
+
+    /* =========================================================================
+     * AI 全文分析（前端手动触发 / 后台独立线程池执行 / 前端按状态轮询）
+     * ====================================================================== */
+
+    @Override
+    public ReportAiAnalysisVO startAiAnalysis(String reportNo, String operatorNo, String operatorName) {
+        if (!StringUtils.hasText(reportNo)) {
+            throw new ReportGenerateException("报告编号（reportNo）不能为空");
+        }
+        Report report = reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getReportNo, reportNo)
+                .last("LIMIT 1"));
+        if (report == null) {
+            throw new ReportGenerateException("未找到报告记录（reportNo=" + reportNo + "）");
+        }
+        if (!StringUtils.hasText(report.getCheckTaskNo())) {
+            throw new ReportGenerateException("该报告缺少日检流水号，无法进行全文分析");
+        }
+
+        // 互斥：同一 reportNo 同时只允许一次进行中的分析。
+        // 按 reportNo 加锁，避免两次点击并发穿过「是否已有 RUNNING」的检查
+        Object lock = ANALYSIS_LOCKS.computeIfAbsent(reportNo, k -> new Object());
+        AppReportAiAnalysis record;
+        synchronized (lock) {
+            Long running = aiAnalysisMapper.selectCount(Wrappers.<AppReportAiAnalysis>lambdaQuery()
+                    .eq(AppReportAiAnalysis::getReportNo, reportNo)
+                    .eq(AppReportAiAnalysis::getStatus, ANALYSIS_STATUS_RUNNING));
+            if (running != null && running > 0) {
+                throw new ReportGenerateException("全文分析进行中，请稍后再试");
+            }
+            record = new AppReportAiAnalysis();
+            record.setReportNo(reportNo);
+            record.setCheckTaskNo(report.getCheckTaskNo());
+            record.setCustomerId(report.getCustomerId());
+            record.setCustomerName(report.getCustomerName());
+            record.setStatus(ANALYSIS_STATUS_RUNNING);
+            record.setOperatorNo(StringUtils.hasText(operatorNo) ? operatorNo : null);
+            record.setOperatorName(StringUtils.hasText(operatorName) ? operatorName : operatorNo);
+            // inputtime 交给列默认值 CURRENT_TIMESTAMP
+            aiAnalysisMapper.insert(record);
+        }
+
+        final Long analysisId = record.getId();
+        log.info("提交全文分析任务：id={} reportNo={} 触发人={}", analysisId, reportNo, operatorName);
+        try {
+            aiAnalysisExecutor.execute(() -> aiAnalysisTask.run(analysisId));
+        } catch (Throwable e) {
+            // 提交失败（如池已关闭）也要把状态收干净，不能让它永远停在 RUNNING
+            log.error("全文分析任务提交失败：id={}", analysisId, e);
+            AppReportAiAnalysis update = new AppReportAiAnalysis();
+            update.setId(analysisId);
+            update.setStatus(ANALYSIS_STATUS_FAILED);
+            update.setFailReason("任务提交失败：" + e.getMessage());
+            update.setGenerateTime(new Date());
+            aiAnalysisMapper.updateById(update);
+            throw new ReportGenerateException("全文分析任务提交失败，请重试");
+        }
+        return toAiAnalysisVO(record);
+    }
+
+    @Override
+    public ReportAiAnalysisVO latestAiAnalysis(String checkTaskNo) {
+        if (!StringUtils.hasText(checkTaskNo)) {
+            return null;
+        }
+        Report latest = latestDoneReport(checkTaskNo);
+        if (latest == null || !StringUtils.hasText(latest.getReportNo())) {
+            return null;
+        }
+        AppReportAiAnalysis row = aiAnalysisMapper.selectOne(
+                Wrappers.<AppReportAiAnalysis>lambdaQuery()
+                        .eq(AppReportAiAnalysis::getReportNo, latest.getReportNo())
+                        .orderByDesc(AppReportAiAnalysis::getId)
+                        .last("LIMIT 1"));
+        return row == null ? null : toAiAnalysisVO(row);
+    }
+
+    @Override
+    public List<ReportAiAnalysisVO> aiAnalysisList(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
+            return new ArrayList<>();
+        }
+        List<AppReportAiAnalysis> rows = aiAnalysisMapper.selectList(
+                Wrappers.<AppReportAiAnalysis>lambdaQuery()
+                        .eq(AppReportAiAnalysis::getReportNo, reportNo)
+                        .orderByDesc(AppReportAiAnalysis::getId));
+        List<ReportAiAnalysisVO> list = new ArrayList<>(rows.size());
+        for (AppReportAiAnalysis row : rows) {
+            list.add(toAiAnalysisVO(row));
+        }
+        return list;
+    }
+
+    @Override
+    public ReportAiAnalysisVO aiAnalysisDetail(Long id) {
+        if (id == null) {
+            return null;
+        }
+        AppReportAiAnalysis row = aiAnalysisMapper.selectById(id);
+        return row == null ? null : toAiAnalysisVO(row);
+    }
+
+    @Override
+    public ReportAiAnalysisVO retryAiAnalysis(String reportNo, String operatorNo, String operatorName) {
+        // 每次都新增一条记录、保留历史，语义与首次触发一致
+        return startAiAnalysis(reportNo, operatorNo, operatorName);
+    }
+
+    /** 分析记录 → VO（不暴露素材快照与提示词快照，避免把大字段带到前端） */
+    private ReportAiAnalysisVO toAiAnalysisVO(AppReportAiAnalysis row) {
+        ReportAiAnalysisVO vo = new ReportAiAnalysisVO();
+        vo.setId(row.getId());
+        vo.setReportNo(row.getReportNo());
+        vo.setCheckTaskNo(row.getCheckTaskNo());
+        vo.setStatus(row.getStatus());
+        vo.setAnalysisContent(row.getAnalysisContent());
+        vo.setSummary(row.getSummary());
+        vo.setRiskLevel(row.getRiskLevel());
+        vo.setModelName(row.getModelName());
+        vo.setOperatorNo(row.getOperatorNo());
+        vo.setOperatorName(StringUtils.hasText(row.getOperatorName())
+                ? row.getOperatorName() : row.getOperatorNo());
+        vo.setCostMillis(row.getCostMillis());
+        vo.setFailReason(row.getFailReason());
+        vo.setGenerateTime(row.getGenerateTime());
+        vo.setInputtime(row.getInputtime());
+        return vo;
+    }
+
 
     /** 参数校验：报告编号与内容块编号均必填（两者共同构成实例层的行身份） */
     private void requireReportNoAndBlock(String reportNo, String blockCode) {

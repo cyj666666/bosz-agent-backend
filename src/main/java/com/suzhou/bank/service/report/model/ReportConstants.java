@@ -73,4 +73,13 @@ public final class ReportConstants {
 
     /** 是否可用：可用 */
     public static final int ENABLED = 1;
+
+    /** AI全文分析状态：进行中（同一 reportNo 同时只允许一条该状态） */
+    public static final String ANALYSIS_STATUS_RUNNING = "RUNNING";
+
+    /** AI全文分析状态：已完成 */
+    public static final String ANALYSIS_STATUS_DONE = "DONE";
+
+    /** AI全文分析状态：失败 */
+    public static final String ANALYSIS_STATUS_FAILED = "FAILED";
 }

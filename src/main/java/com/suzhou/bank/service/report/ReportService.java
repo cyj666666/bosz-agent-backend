@@ -2,6 +2,7 @@ package com.suzhou.bank.service.report;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
@@ -127,6 +128,57 @@ public interface ReportService {
      * @return 修改记录列表（无记录返回空列表）
      */
     List<ReportRiskEditLogVO> editHistory(String checkTaskNo, String blockCode);
+
+    /**
+     * 触发一次 AI 全文分析（前端手动触发，后台异步执行）
+     * <p>先落一条 {@code RUNNING} 记录再交给独立线程池执行，
+     * 因此接口立刻返回、前端凭 status 轮询。</p>
+     * <p><b>并发约束</b>：同一 reportNo 同时只允许一条 RUNNING，
+     * 重复触发抛 {@link ReportGenerateException}（消息固定为「全文分析进行中，请稍后再试」）。</p>
+     *
+     * @param reportNo     报告编号
+     * @param operatorNo   触发人账号
+     * @param operatorName 触发人姓名（为空回落账号）
+     * @return 新建的分析记录（status=RUNNING）
+     */
+    ReportAiAnalysisVO startAiAnalysis(String reportNo, String operatorNo, String operatorName);
+
+    /**
+     * 取「某日检流水号下最新版本报告」的最新一次全文分析
+     * <p>前端打开面板时调用：该报告一次都没分析过则返回 {@code null}（前端显示空态 + 开始分析按钮）。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 最新一次分析；从未分析过返回 null
+     */
+    ReportAiAnalysisVO latestAiAnalysis(String checkTaskNo);
+
+    /**
+     * 查某份报告的全部全文分析记录（保留多次，按 id 倒序 —— 最新在上）
+     *
+     * @param reportNo 报告编号
+     * @return 分析记录列表（无记录返回空列表）
+     */
+    List<ReportAiAnalysisVO> aiAnalysisList(String reportNo);
+
+    /**
+     * 查单次全文分析详情
+     *
+     * @param id app_report_ai_analysis.id
+     * @return 分析记录；不存在返回 null
+     */
+    ReportAiAnalysisVO aiAnalysisDetail(Long id);
+
+    /**
+     * 重新分析（失败后重试或对同一报告再跑一次）
+     * <p>语义等同 {@link #startAiAnalysis} —— 每次都新增一条记录、保留历史，
+     * 不做原地覆盖。</p>
+     *
+     * @param reportNo     报告编号
+     * @param operatorNo   触发人账号
+     * @param operatorName 触发人姓名
+     * @return 新建的分析记录（status=RUNNING）
+     */
+    ReportAiAnalysisVO retryAiAnalysis(String reportNo, String operatorNo, String operatorName);
 
     /**
      * 报告记录分页查询（报告列表页用）

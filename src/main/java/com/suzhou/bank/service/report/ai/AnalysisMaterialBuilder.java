@@ -1,0 +1,274 @@
+package com.suzhou.bank.service.report.ai;
+
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.suzhou.bank.entity.report.AppReportAiRisk;
+import com.suzhou.bank.entity.report.AppReportCatalog;
+import com.suzhou.bank.entity.report.AppReportContentInstance;
+import com.suzhou.bank.mapper.report.AppReportAiRiskMapper;
+import com.suzhou.bank.mapper.report.AppReportCatalogMapper;
+import com.suzhou.bank.mapper.report.AppReportContentInstanceMapper;
+import com.suzhou.bank.service.report.config.ReportAiAnalysisProperties;
+import com.suzhou.bank.service.report.model.ReportConstants;
+import com.suzhou.bank.service.report.spi.ReportAnalysisDataSource;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 全文分析素材组装器
+ *
+ * <p>把「报告正文摘取 + 外部数据」拼成一段给大模型看的纯文本素材。正文摘取口径：</p>
+ * <ul>
+ *   <li>{@code analysisType=ANALYSIS}（分析类正文）—— <b>全量纳入</b>，是素材主体；</li>
+ *   <li>{@code fillType=TITLE} —— 作为章节标题纳入，给模型上下文；</li>
+ *   <li>{@code analysisType=RULE} —— <b>仅纳入 risk 状态为「已采纳」的要点</b>
+ *       （无效 INVALID、待处理 PENDING 都不纳入）；</li>
+ *   <li>{@code fillType=TABLE} —— 表格块纳入（HTML 表格会被转成「单元格 + 制表符」的文本）；</li>
+ *   <li>{@code fillType=SOURCE_LINK} —— 排除（块本身只是外链按钮，没有分析价值）。</li>
+ * </ul>
+ * <p>排序按目录树的真实层级（父级 sortNo 链 + 本级 sortNo），报告级内容块排在最前，
+ * 让模型读到的顺序与人工阅读顺序一致。</p>
+ *
+ * @author cyj666666
+ * @since 1.3.0
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class AnalysisMaterialBuilder {
+
+    private final AppReportContentInstanceMapper instanceMapper;
+    private final AppReportCatalogMapper catalogMapper;
+    private final AppReportAiRiskMapper riskMapper;
+    private final ReportAiAnalysisProperties properties;
+
+    /** 外部数据域（预留扩展点）：容器里没有实现时 provider 返回空列表，不影响主流程 */
+    private final ObjectProvider<ReportAnalysisDataSource> dataSources;
+
+    /**
+     * 组装素材
+     *
+     * @param reportNo     报告编号
+     * @param checkTaskNo  日检流水号
+     * @param customerId   客户编号
+     * @param customerName 客户名称
+     * @param reportTitle  报告标题
+     * @return 纯文本素材（已按上限截断）
+     */
+    public String build(String reportNo, String checkTaskNo, String customerId,
+                       String customerName, String reportTitle) {
+        StringBuilder sb = new StringBuilder(8192);
+
+        sb.append("【报告基本信息】\n");
+        sb.append("客户名称：").append(nvl(customerName)).append('\n');
+        sb.append("客户编号：").append(nvl(customerId)).append('\n');
+        sb.append("报告标题：").append(nvl(reportTitle)).append('\n');
+        sb.append("日检流水号：").append(nvl(checkTaskNo)).append('\n');
+        sb.append("报告编号：").append(nvl(reportNo)).append('\n');
+
+        appendReportBody(sb, reportNo);
+        appendExternalData(sb, customerId, customerName);
+
+        String material = sb.toString();
+        int limit = properties.getMaxMaterialChars();
+        if (limit > 0 && material.length() > limit) {
+            material = material.substring(0, limit) + "\n\n（素材过长，已按 " + limit + " 字符截断）";
+        }
+        return material;
+    }
+
+    /** 报告正文摘取：按目录树顺序输出 */
+    private void appendReportBody(StringBuilder sb, String reportNo) {
+        List<AppReportContentInstance> instances = instanceMapper.selectList(
+                Wrappers.<AppReportContentInstance>lambdaQuery()
+                        .eq(AppReportContentInstance::getReportNo, reportNo));
+
+        if (instances.isEmpty()) {
+            sb.append("\n【报告正文摘取】\n（该报告暂无内容实例）\n");
+            return;
+        }
+
+        // 已采纳的风险要点集合：只有命中这里的 RULE 块才纳入
+        List<AppReportAiRisk> risks = riskMapper.selectList(
+                Wrappers.<AppReportAiRisk>lambdaQuery()
+                        .eq(AppReportAiRisk::getReportNo, reportNo));
+        Map<String, String> riskStatusOfBlock = new HashMap<>();
+        for (AppReportAiRisk risk : risks) {
+            riskStatusOfBlock.put(risk.getBlockCode(), risk.getStatus());
+        }
+
+        // 目录顺序
+        List<AppReportCatalog> catalogs = catalogMapper.selectList(null);
+        Map<String, AppReportCatalog> catalogByCode = new HashMap<>();
+        for (AppReportCatalog c : catalogs) {
+            catalogByCode.put(c.getCatalogCode(), c);
+        }
+        Map<String, List<AppReportContentInstance>> blocksByCatalog = new LinkedHashMap<>();
+        List<AppReportContentInstance> reportLevel = new ArrayList<>();
+        for (AppReportContentInstance ins : instances) {
+            if (!StringUtils.hasText(ins.getCatalogCode())) {
+                reportLevel.add(ins);
+            } else {
+                blocksByCatalog.computeIfAbsent(ins.getCatalogCode(), k -> new ArrayList<>()).add(ins);
+            }
+        }
+        List<String> orderedCodes = new ArrayList<>(blocksByCatalog.keySet());
+        Map<String, String> orderKeyCache = new HashMap<>();
+        orderedCodes.sort(Comparator.comparing(code -> catalogOrderKey(code, catalogByCode, orderKeyCache)));
+
+        sb.append("\n【报告正文摘取】\n");
+
+        List<AppReportContentInstance> head = new ArrayList<>(reportLevel);
+        head.sort(Comparator.comparing(AppReportContentInstance::getSortNo,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        for (AppReportContentInstance ins : head) {
+            appendBlock(sb, ins, riskStatusOfBlock, "报告头");
+        }
+
+        for (String catalogCode : orderedCodes) {
+            AppReportCatalog catalog = catalogByCode.get(catalogCode);
+            String catalogName = catalog == null || !StringUtils.hasText(catalog.getCatalogName())
+                    ? catalogCode : catalog.getCatalogName();
+            sb.append("\n== ").append(catalogName).append(" ==\n");
+            List<AppReportContentInstance> blocks = blocksByCatalog.get(catalogCode);
+            blocks.sort(Comparator.comparing(AppReportContentInstance::getSortNo,
+                    Comparator.nullsLast(Comparator.naturalOrder())));
+            for (AppReportContentInstance ins : blocks) {
+                appendBlock(sb, ins, riskStatusOfBlock, catalogName);
+            }
+        }
+    }
+
+    /** 单个内容块的摘取规则 */
+    private void appendBlock(StringBuilder sb, AppReportContentInstance ins,
+                            Map<String, String> riskStatusOfBlock, String catalogName) {
+        String fillType = ins.getFillType();
+        String analysisType = ins.getAnalysisType();
+        String content = ins.getContent();
+        if (!StringUtils.hasText(content)) {
+            return;
+        }
+        // 外链按钮：无分析价值，排除
+        if (ReportConstants.FILL_SOURCE_LINK.equals(fillType)) {
+            return;
+        }
+        // 风险要点：只纳入「已采纳」，无效/待处理都不进素材
+        if (ReportConstants.ANALYSIS_RULE.equals(analysisType)) {
+            String status = riskStatusOfBlock.get(ins.getBlockCode());
+            if (!ReportConstants.RISK_ADOPTED.equals(status)) {
+                return;
+            }
+        }
+        String text = htmlToText(content);
+        if (!StringUtils.hasText(text)) {
+            return;
+        }
+        if (ReportConstants.FILL_TITLE.equals(fillType)) {
+            sb.append(text).append('\n');
+            return;
+        }
+        String name = StringUtils.hasText(ins.getBlockName()) ? ins.getBlockName() : ins.getBlockCode();
+        String tag = ReportConstants.ANALYSIS_RULE.equals(analysisType) ? "风险要点（已采纳）"
+                : (ReportConstants.FILL_TABLE.equals(fillType) ? "表格" : "分析内容");
+        sb.append("- [").append(tag).append("] ").append(name).append("：\n")
+                .append(indent(text)).append('\n');
+    }
+
+    /** 外部数据：由各 {@link ReportAnalysisDataSource} 实现提供，无实现时整节省略 */
+    private void appendExternalData(StringBuilder sb, String customerId, String customerName) {
+        List<ReportAnalysisDataSource> sources = new ArrayList<>();
+        dataSources.forEach(sources::add);
+        if (sources.isEmpty()) {
+            return;
+        }
+        StringBuilder section = new StringBuilder();
+        for (ReportAnalysisDataSource source : sources) {
+            String text;
+            try {
+                text = source.load(customerId, customerName);
+            } catch (Exception e) {
+                // 单个数据域取数失败不影响整篇分析
+                log.warn("全文分析外部数据域取数失败：code={} customerId={} 原因={}",
+                        source.code(), customerId, e.getMessage());
+                continue;
+            }
+            if (!StringUtils.hasText(text)) {
+                continue;
+            }
+            section.append("\n-- ").append(source.label()).append(" --\n")
+                    .append(indent(text)).append('\n');
+        }
+        if (section.length() > 0) {
+            sb.append("\n【外部数据】\n").append(section);
+        }
+    }
+
+    /** 目录排序键：父级链 + 本级 sortNo（零填充，保证字典序等于数值序） */
+    private String catalogOrderKey(String catalogCode, Map<String, AppReportCatalog> byCode,
+                                  Map<String, String> cache) {
+        String cached = cache.get(catalogCode);
+        if (cached != null) {
+            return cached;
+        }
+        AppReportCatalog catalog = byCode.get(catalogCode);
+        if (catalog == null) {
+            return "9999/" + catalogCode;
+        }
+        int sortNo = catalog.getSortNo() == null ? 9999 : catalog.getSortNo();
+        String self = String.format("%04d", sortNo);
+        String key = StringUtils.hasText(catalog.getParentCode())
+                ? catalogOrderKey(catalog.getParentCode(), byCode, cache) + "/" + self
+                : self;
+        cache.put(catalogCode, key);
+        return key;
+    }
+
+    /** 轻量 HTML → 文本：保留段落换行、表格单元格用制表符分隔，便于大模型理解 */
+    static String htmlToText(String html) {
+        String text = html
+                .replaceAll("(?i)<\\s*br\\s*/?>", "\n")
+                .replaceAll("(?i)</\\s*(p|div|li|tr|h[1-6]|table)\\s*>", "\n")
+                .replaceAll("(?i)</\\s*(td|th)\\s*>", "\t")
+                .replaceAll("(?i)<\\s*li\\s*>", "・")
+                .replaceAll("<[^>]*>", "")
+                .replace("&nbsp;", " ")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&amp;", "&");
+        // 去空行、去行首尾空白、合并多余空行
+        StringBuilder out = new StringBuilder(text.length());
+        boolean lastBlank = false;
+        for (String line : text.split("\n")) {
+            String trimmed = line.replaceAll("[ \t]+$", "").replaceAll("^[ \t]+", "");
+            if (trimmed.isEmpty()) {
+                if (!lastBlank && out.length() > 0) {
+                    out.append('\n');
+                }
+                lastBlank = true;
+                continue;
+            }
+            out.append(trimmed).append('\n');
+            lastBlank = false;
+        }
+        return out.toString().trim();
+    }
+
+    private static String indent(String text) {
+        return "    " + text.replace("\n", "\n    ");
+    }
+
+    private static String nvl(String value) {
+        return StringUtils.hasText(value) ? value : "-";
+    }
+}

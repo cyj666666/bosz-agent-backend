@@ -8,6 +8,7 @@ import com.suzhou.bank.entity.SysUser;
 import com.suzhou.bank.mapper.SysUserMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
+import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockContentRequest;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 贷后管理报告接口（模板驱动的报告实例生成）
@@ -191,6 +193,94 @@ public class ReportController {
                                                               @RequestParam String blockCode) {
         try {
             return Result.ok(reportService.editHistory(checkTaskNo, blockCode));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /* ===================== AI 全文分析（前端手动触发，后台异步执行） ===================== */
+
+    /**
+     * 取「某日检流水号下最新版本报告」的最新一次全文分析
+     * <p>前端打开「AI分析全文」面板时调用。从未分析过返回 data=null，
+     * 前端据此显示空态与「开始分析」按钮。</p>
+     *
+     * @param checkTaskNo 日检流水号
+     * @return 最新一次分析（RUNNING/DONE/FAILED）；从未分析过为 null
+     */
+    @GetMapping("/instance/ai-analysis")
+    public Result<ReportAiAnalysisVO> latestAiAnalysis(@RequestParam String checkTaskNo) {
+        try {
+            return Result.ok(reportService.latestAiAnalysis(checkTaskNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 查某份报告的全部全文分析记录（保留多次，最新在上）
+     *
+     * @param reportNo 报告编号
+     * @return 分析记录列表
+     */
+    @GetMapping("/instance/ai-analysis/list")
+    public Result<List<ReportAiAnalysisVO>> aiAnalysisList(@RequestParam String reportNo) {
+        try {
+            return Result.ok(reportService.aiAnalysisList(reportNo));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 触发一次全文分析（异步）
+     * <p><b>同一 reportNo 同时只允许一次进行中</b>：重复触发返回
+     * {@code code!=200}，message 为「全文分析进行中，请稍后再试」。</p>
+     *
+     * @param body { reportNo }
+     * @return 新建的分析记录（status=RUNNING）
+     */
+    @PostMapping("/instance/ai-analysis/generate")
+    public Result<ReportAiAnalysisVO> startAiAnalysis(@RequestBody Map<String, String> body,
+                                                     HttpServletRequest httpRequest) {
+        String reportNo = body == null ? null : body.get("reportNo");
+        try {
+            return Result.ok(reportService.startAiAnalysis(
+                    reportNo, currentUsername(httpRequest), currentRealName(httpRequest)));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 重新分析（失败重试 / 对同一报告再跑一次）
+     * <p>语义等同触发：新增一条记录、保留历史，不覆盖旧结果。</p>
+     *
+     * @param body { reportNo }
+     * @return 新建的分析记录（status=RUNNING）
+     */
+    @PostMapping("/instance/ai-analysis/retry")
+    public Result<ReportAiAnalysisVO> retryAiAnalysis(@RequestBody Map<String, String> body,
+                                                     HttpServletRequest httpRequest) {
+        String reportNo = body == null ? null : body.get("reportNo");
+        try {
+            return Result.ok(reportService.retryAiAnalysis(
+                    reportNo, currentUsername(httpRequest), currentRealName(httpRequest)));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 查单次全文分析详情
+     *
+     * @param id app_report_ai_analysis.id
+     * @return 分析记录；不存在返回 data=null
+     */
+    @GetMapping("/instance/ai-analysis/{id}")
+    public Result<ReportAiAnalysisVO> aiAnalysisDetail(@PathVariable Long id) {
+        try {
+            return Result.ok(reportService.aiAnalysisDetail(id));
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }

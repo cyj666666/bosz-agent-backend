@@ -228,3 +228,49 @@ CREATE TABLE IF NOT EXISTS app_report_risk_edit_log (
 );
 CREATE INDEX idx_editlog_task_block ON app_report_risk_edit_log (checkTaskNo, blockCode, inputtime);
 CREATE INDEX idx_editlog_report_no ON app_report_risk_edit_log (reportNo);
+
+-- 大模型配置表（平台级：各模块按 lm_code 取网关地址与密钥）
+CREATE TABLE IF NOT EXISTS large_model_config (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    lm_code VARCHAR(100) NOT NULL,
+    model VARCHAR(100),
+    lm_name VARCHAR(256),
+    url VARCHAR(2000),
+    api_key VARCHAR(5000),
+    lm_desc TEXT,
+    use_flag VARCHAR(2) DEFAULT 'Y' NOT NULL,
+    with_think VARCHAR(10) DEFAULT 'N',
+    default_think_flag VARCHAR(4) DEFAULT 'N',
+    max_tokens INT DEFAULT 0,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    model_config TEXT
+);
+CREATE UNIQUE INDEX uk_large_model_config_lm_code ON large_model_config (lm_code);
+CREATE INDEX idx_large_model_config_use_flag ON large_model_config (use_flag);
+
+-- 报告AI全文分析表（挂在报告编号上、保留多次；同一报告同时只允许一次进行中）
+CREATE TABLE IF NOT EXISTS app_report_ai_analysis (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    reportNo VARCHAR(64) NOT NULL,
+    checkTaskNo VARCHAR(64) NOT NULL,
+    customerId VARCHAR(64),
+    customerName VARCHAR(128),
+    status VARCHAR(16) NOT NULL,
+    analysisContent TEXT,
+    summary TEXT,
+    riskLevel VARCHAR(32),
+    lmCode VARCHAR(100),
+    modelName VARCHAR(100),
+    sourceSnapshot TEXT,
+    promptSnapshot TEXT,
+    operatorNo VARCHAR(64),
+    operatorName VARCHAR(128),
+    costMillis BIGINT,
+    failReason VARCHAR(1024),
+    generateTime TIMESTAMP,
+    inputtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_ai_analysis_report_no ON app_report_ai_analysis (reportNo, id);
+CREATE INDEX idx_ai_analysis_task_no ON app_report_ai_analysis (checkTaskNo, inputtime);
+CREATE INDEX idx_ai_analysis_status ON app_report_ai_analysis (status);

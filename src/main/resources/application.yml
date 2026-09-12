@@ -33,4 +33,16 @@ jwt:
 report:
   mock-content:
     enabled: true
+  # AI 全文分析（前端手动触发，后台独立线程池执行，前端按状态轮询）
+  ai-analysis:
+    # 使用 large_model_config 里哪一行配置（按 lm_code 匹配）
+    lm-code: default
+    # 调用大模型的超时（毫秒）
+    timeout-millis: 300000
+    # 送进模型的素材字符上限，超出截断
+    max-material-chars: 60000
+    # 独立线程池（全文分析是长耗时 IO，与报告生成/Web 请求隔离）
+    pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 50
 

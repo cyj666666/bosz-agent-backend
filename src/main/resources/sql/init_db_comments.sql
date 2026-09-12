@@ -5,6 +5,28 @@
 -- 执行方式：通过 GaussDBInit 或 psql 连接后执行
 -- =============================================
 
+-- ====== app_report_ai_analysis (报告AI全文分析表) ======
+COMMENT ON TABLE app_report_ai_analysis IS '报告详情-AI全文分析表（挂在报告编号上、保留多次，同一报告同时只允许一次进行中）';
+COMMENT ON COLUMN app_report_ai_analysis.id IS '主键（自增）';
+COMMENT ON COLUMN app_report_ai_analysis.reportNo IS '报告编号（归档维度，同一报告可保留多次分析记录）';
+COMMENT ON COLUMN app_report_ai_analysis.checkTaskNo IS '日检流水号（冗余，便于按流水号追溯）';
+COMMENT ON COLUMN app_report_ai_analysis.customerId IS '客户编号';
+COMMENT ON COLUMN app_report_ai_analysis.customerName IS '客户名称';
+COMMENT ON COLUMN app_report_ai_analysis.status IS '分析状态：RUNNING-进行中 / DONE-已完成 / FAILED-失败';
+COMMENT ON COLUMN app_report_ai_analysis.analysisContent IS '分析正文（成品HTML片段，前端直接渲染）';
+COMMENT ON COLUMN app_report_ai_analysis.summary IS '综合结论摘要';
+COMMENT ON COLUMN app_report_ai_analysis.riskLevel IS '大模型给出的总体风险等级';
+COMMENT ON COLUMN app_report_ai_analysis.lmCode IS '所用大模型配置编码（large_model_config.lm_code）';
+COMMENT ON COLUMN app_report_ai_analysis.modelName IS '实际调用的模型名';
+COMMENT ON COLUMN app_report_ai_analysis.sourceSnapshot IS '送进大模型的素材快照（正文摘取 + 外部数据，便于追溯与复算）';
+COMMENT ON COLUMN app_report_ai_analysis.promptSnapshot IS '实际使用的提示词快照';
+COMMENT ON COLUMN app_report_ai_analysis.operatorNo IS '触发人账号';
+COMMENT ON COLUMN app_report_ai_analysis.operatorName IS '触发人姓名';
+COMMENT ON COLUMN app_report_ai_analysis.costMillis IS '大模型调用耗时（毫秒）';
+COMMENT ON COLUMN app_report_ai_analysis.failReason IS '失败原因（超1000字符截断）';
+COMMENT ON COLUMN app_report_ai_analysis.generateTime IS '分析完成时间';
+COMMENT ON COLUMN app_report_ai_analysis.inputtime IS '创建时间（默认当前时间）';
+
 -- ====== app_report_risk_edit_log (报告风险要点修改记录表) ======
 COMMENT ON TABLE app_report_risk_edit_log IS '报告详情-风险要点修改记录表（归档维度：同日检流水号 + 同风险要点）';
 COMMENT ON COLUMN app_report_risk_edit_log.id IS '主键（自增）';
@@ -101,6 +123,23 @@ COMMENT ON COLUMN know_kit_task.response_json IS '响应JSON';
 COMMENT ON COLUMN know_kit_task.status IS '任务状态';
 COMMENT ON COLUMN know_kit_task.error_msg IS '错误信息';
 COMMENT ON COLUMN know_kit_task.completed_at IS '完成时间';
+
+-- ====== large_model_config (大模型配置表) ======
+COMMENT ON TABLE large_model_config IS '大模型配置表';
+COMMENT ON COLUMN large_model_config.id IS '大模型唯一ID';
+COMMENT ON COLUMN large_model_config.lm_code IS '大模型唯一CODE';
+COMMENT ON COLUMN large_model_config.model IS '模型';
+COMMENT ON COLUMN large_model_config.lm_name IS '大模型名称';
+COMMENT ON COLUMN large_model_config.url IS '大模型地址URL';
+COMMENT ON COLUMN large_model_config.api_key IS 'api key';
+COMMENT ON COLUMN large_model_config.lm_desc IS '大模型描述';
+COMMENT ON COLUMN large_model_config.use_flag IS '有效标志位';
+COMMENT ON COLUMN large_model_config.with_think IS '是否带思考';
+COMMENT ON COLUMN large_model_config.default_think_flag IS '默认是否开启思考, Y:开启,N:不开启';
+COMMENT ON COLUMN large_model_config.max_tokens IS '最大token数';
+COMMENT ON COLUMN large_model_config.create_time IS '创建时间';
+COMMENT ON COLUMN large_model_config.update_time IS '更新时间';
+COMMENT ON COLUMN large_model_config.model_config IS '模型配置';
 
 -- ====== parser_config (解析器配置表) ======
 COMMENT ON TABLE parser_config IS '解析器配置表';
