@@ -27,8 +27,10 @@ import com.suzhou.bank.service.report.ai.ReportWarningAdviceTask;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockVO;
 import com.suzhou.bank.service.report.model.ReportCatalogNode;
+import com.suzhou.bank.service.report.model.ReportCreateRequest;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportPageQuery;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportRiskItem;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
@@ -45,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -361,11 +364,121 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public Page<Report> page(int page, int size, String customerId) {
-        Page<Report> pager = new Page<>(page, size);
-        return reportMapper.selectPage(pager, Wrappers.<Report>lambdaQuery()
-                .eq(StringUtils.hasText(customerId), Report::getCustomerId, customerId)
-                .orderByDesc(Report::getUpdatedAt));
+    public Page<Report> page(ReportPageQuery query) {
+        ReportPageQuery q = query == null ? new ReportPageQuery() : query;
+        int pageNo = q.getPage() <= 0 ? 1 : q.getPage();
+        int pageSize = q.getSize() <= 0 ? 10 : q.getSize();
+        // ⚠️ 坑一：MyBatis-Plus 的 ge/le(condition, column, value) 里 value 是**无条件求值**的 ——
+        //    把 dayStart(...)/dayEnd(...) 写在 value 位，condition 为 false 时照样会执行，
+        //    入参为 null 就直接 NPE（2026-09-13 真实报错：dayStart 第 423 行）。
+        //    故一律先算成局部变量（空值 → null），条件位只判 null。
+        // ⚠️ 坑二：本工程连的是 openGauss（jdbc:opengauss://，PG 系）。时间条件必须传 Timestamp，
+        //    传 String 时驱动按 varchar 下发，`timestamp >= varchar` 在 PG 上会直接报
+        //    「operator does not exist: timestamp without time zone >= character varying」。
+        Timestamp createdBegin = dayStart(q.getCreatedBegin());
+        Timestamp createdEnd = dayEnd(q.getCreatedEnd());
+        Timestamp updatedBegin = dayStart(q.getUpdatedBegin());
+        Timestamp updatedEnd = dayEnd(q.getUpdatedEnd());
+        // 文本列「包含」匹配；状态精确匹配；时间列按日期闭区间（含当天）
+        return reportMapper.selectPage(new Page<>(pageNo, pageSize),
+                Wrappers.<Report>lambdaQuery()
+                        .like(StringUtils.hasText(q.getCheckTaskNo()), Report::getCheckTaskNo, q.getCheckTaskNo())
+                        .like(StringUtils.hasText(q.getCustomerId()), Report::getCustomerId, q.getCustomerId())
+                        .like(StringUtils.hasText(q.getCustomerName()), Report::getCustomerName, q.getCustomerName())
+                        .like(StringUtils.hasText(q.getReportNo()), Report::getReportNo, q.getReportNo())
+                        .like(StringUtils.hasText(q.getReportTitle()), Report::getReportTitle, q.getReportTitle())
+                        .eq(StringUtils.hasText(q.getStatus()), Report::getStatus, q.getStatus())
+                        .like(StringUtils.hasText(q.getUserNo()), Report::getUserNo, q.getUserNo())
+                        .ge(createdBegin != null, Report::getCreatedAt, createdBegin)
+                        .le(createdEnd != null, Report::getCreatedAt, createdEnd)
+                        .ge(updatedBegin != null, Report::getUpdatedAt, updatedBegin)
+                        .le(updatedEnd != null, Report::getUpdatedAt, updatedEnd)
+                        .orderByDesc(Report::getUpdatedAt)
+                        .orderByDesc(Report::getId));
+    }
+
+    @Override
+    public Report createReport(ReportCreateRequest request, String operatorNo, String operatorName) {
+        ReportCreateRequest req = request == null ? new ReportCreateRequest() : request;
+        requireText(req.getCustomerId(), "客户编号");
+        requireText(req.getCustomerName(), "客户名称");
+        requireText(req.getCheckTaskNo(), "日检流水号");
+        requireText(req.getReportTitle(), "报告标题");
+        requireText(req.getReportType(), "报告类型");
+
+        // 同一日检流水号下不允许重复发起：详情页按 checkTaskNo 取「最新版本」，
+        // 多条初始记录（version 都为空）会让版本序列混乱 → 提示改用「更新报告」
+        Long exists = reportMapper.selectCount(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getCheckTaskNo, req.getCheckTaskNo().trim()));
+        if (exists != null && exists > 0) {
+            throw new ReportGenerateException("该日检流水号已存在报告，请改用「更新报告」生成新版本");
+        }
+
+        Report report = new Report();
+        report.setReportNo(generateReportNo());
+        report.setCustomerId(req.getCustomerId().trim());
+        report.setCustomerName(req.getCustomerName().trim());
+        report.setCheckTaskNo(req.getCheckTaskNo().trim());
+        report.setReportTitle(req.getReportTitle().trim());
+        report.setReportType(req.getReportType().trim());
+        report.setUserNo(StringUtils.hasText(operatorNo) ? operatorNo : null);
+        report.setStatus(REPORT_STATUS_WAITING);
+        // version 留空：生成完成（888）时再赋予；created_at / updated_at 交数据库默认值
+        reportMapper.insert(report);
+        log.info("发起报告：reportNo={} checkTaskNo={} 客户={} 发起人={}",
+                report.getReportNo(), report.getCheckTaskNo(), report.getCustomerName(), operatorName);
+        return report;
+    }
+
+    /**
+     * 日期下界：只给到日期（yyyy-MM-dd）时补 00:00:00。
+     *
+     * <p><b>空值返回 null（表示不加该条件）；返回 Timestamp 而不是 String 是刻意的</b> ——
+     * 见 {@link #dayTime(String, String)}。</p>
+     */
+    private static Timestamp dayStart(String day) {
+        return dayTime(day, "00:00:00");
+    }
+
+    /** 日期上界：只给到日期时补 23:59:59，保证「含当天」；空值返回 null（表示不加该条件） */
+    private static Timestamp dayEnd(String day) {
+        return dayTime(day, "23:59:59");
+    }
+
+    /**
+     * 把前端传来的日期/时间串转成 {@link Timestamp}。
+     *
+     * <p>三条约定：① 空值/空白串 → null（调用方按「不加该条件」处理）；
+     * ② 只给日期（不含冒号）时补默认时分秒，给了时分秒则原样；③ ISO 的 {@code T} 分隔符合成空格。</p>
+     *
+     * <p><b>为什么必须是 Timestamp 而不是 String</b>：本工程连 openGauss（PG 系），
+     * String 参数会被驱动按 varchar 下发，`timestamp_col &gt;= varchar` 在 PG 上不存在这个操作符，
+     * 会直接抛 SQL 异常；给 Timestamp 才会按 timestamp 类型绑定参数。</p>
+     *
+     * <p><b>为什么格式不对不抛异常</b>：这是列表检索的筛选条件。工程里没有全局异常处理器，
+     * 抛出去就是整个列表 500 打不开；格式不对时只忽略这一个条件并记 WARN，页面仍可用。</p>
+     */
+    private static Timestamp dayTime(String day, String fillTime) {
+        if (!StringUtils.hasText(day)) {
+            return null;
+        }
+        String value = day.trim().replace('T', ' ');
+        if (value.indexOf(':') < 0) {
+            value = value + " " + fillTime;
+        }
+        try {
+            return Timestamp.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            log.warn("报告列表检索：时间参数无法解析，已忽略该条件：{}", day);
+            return null;
+        }
+    }
+
+    /** 必填文本校验 */
+    private static void requireText(String value, String label) {
+        if (!StringUtils.hasText(value)) {
+            throw new ReportGenerateException(label + "不能为空");
+        }
     }
 
     @Override

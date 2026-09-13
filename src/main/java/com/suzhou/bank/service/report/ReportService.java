@@ -3,8 +3,10 @@ package com.suzhou.bank.service.report;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
+import com.suzhou.bank.service.report.model.ReportCreateRequest;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportPageQuery;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
 import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
@@ -251,13 +253,28 @@ public interface ReportService {
     void launchChainedWarningAdvice(String reportNo, Long analysisId);
 
     /**
-     * 报告记录分页查询（报告列表页用）
-     * <p>直接查 report，供列表页展示并跳转到详情。</p>
+     * 报告记录分页查询（报告列表页用，支持全部列检索）
+     * <p>直接查 report，供列表页展示并跳转到详情。检索条件见 {@link ReportPageQuery}，
+     * 条件全空即查全部；返回值带 {@code total} 供分页栏展示总条数。</p>
      *
-     * @param page       页码
-     * @param size       每页条数
-     * @param customerId 按客户编号筛选，可选
+     * @param query 检索条件 + 分页参数
      * @return 报告记录分页数据
      */
-    Page<Report> page(int page, int size, String customerId);
+    Page<Report> page(ReportPageQuery query);
+
+    /**
+     * 发起报告：手工创建一条报告记录（列表页「发起报告」）
+     *
+     * <p>只落 report 主表，状态置 {@code 111}（待开始）—— 实例数据仍由生成流程按模板加工。
+     * 服务端补全 {@code reportNo}（RPT+时间戳+随机数）、{@code userNo}（当前登录人）；
+     * {@code version} 留空，等生成完成（888）时再赋予。</p>
+     *
+     * <p>同一日检流水号下<b>不允许重复发起</b>（会让版本序列混乱），已存在时抛异常提示改用「更新报告」。</p>
+     *
+     * @param request      业务入参（客户编号 / 客户名称 / 日检流水号 / 报告标题 / 报告类型）
+     * @param operatorNo   发起人账号（写入 user_no）
+     * @param operatorName 发起人姓名（仅日志用）
+     * @return 新建的报告记录
+     */
+    Report createReport(ReportCreateRequest request, String operatorNo, String operatorName);
 }

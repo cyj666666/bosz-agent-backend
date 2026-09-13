@@ -10,8 +10,10 @@ import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockContentRequest;
+import com.suzhou.bank.service.report.model.ReportCreateRequest;
 import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
+import com.suzhou.bank.service.report.model.ReportPageQuery;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportRiskStatusRequest;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
@@ -83,19 +85,38 @@ public class ReportController {
     }
 
     /**
-     * 报告记录分页查询（报告列表页）
-     * <p>查 report，返回的 reportNo 即详情接口的入参。</p>
+     * 报告记录分页查询（报告列表页，支持全部列检索）
      *
-     * @param page       页码
-     * @param size       每页条数
-     * @param customerId 按客户编号筛选，可选
+     * <p>检索条件全部可选、全空即查全部：文本列按「包含」匹配，{@code status} 精确匹配，
+     * {@code createdBegin/End} 与 {@code updatedBegin/End} 为日期闭区间（yyyy-MM-dd，含当天）。
+     * 返回体带 {@code total}，供分页栏展示总条数。</p>
+     *
+     * @param query 检索条件 + 分页参数（页码/每页条数 + 各列条件）
      * @return 报告记录分页数据
      */
     @GetMapping("/instance/page")
-    public Result<Page<Report>> instancePage(@RequestParam(defaultValue = "1") int page,
-                                             @RequestParam(defaultValue = "10") int size,
-                                             @RequestParam(required = false) String customerId) {
-        return Result.ok(reportService.page(page, size, customerId));
+    public Result<Page<Report>> instancePage(ReportPageQuery query) {
+        return Result.ok(reportService.page(query));
+    }
+
+    /**
+     * 发起报告（列表页「发起报告」弹框）
+     *
+     * <p>只创建 report 主表记录（status=111 待开始），实例数据仍由生成流程按模板加工。
+     * {@code reportNo} 与 {@code userNo} 由服务端补全；同一日检流水号下不允许重复发起。</p>
+     *
+     * @param request {customerId, customerName, checkTaskNo, reportTitle, reportType}
+     * @return 新建的报告记录
+     */
+    @PostMapping("/instance/create")
+    public Result<Report> createReport(@RequestBody ReportCreateRequest request,
+                                       HttpServletRequest httpRequest) {
+        try {
+            return Result.ok(reportService.createReport(
+                    request, currentUsername(httpRequest), currentRealName(httpRequest)));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     /**
