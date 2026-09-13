@@ -5,6 +5,7 @@ import com.suzhou.bank.entity.Report;
 import com.suzhou.bank.entity.report.AppReportAiAnalysis;
 import com.suzhou.bank.mapper.ReportMapper;
 import com.suzhou.bank.mapper.report.AppReportAiAnalysisMapper;
+import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.model.ReportConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class ReportAiAnalysisTask {
     private final AppReportAiAnalysisMapper analysisMapper;
     private final ReportMapper reportMapper;
     private final AnalysisMaterialBuilder materialBuilder;
+    private final ReportPromptService promptService;
     private final LargeModelGatewayClient gatewayClient;
 
     /**
@@ -66,8 +68,15 @@ public class ReportAiAnalysisTask {
                     record.getCustomerName(),
                     report == null ? null : report.getReportTitle());
 
-            String systemPrompt = ReportAiAnalysisPrompt.systemPrompt();
-            String userPrompt = ReportAiAnalysisPrompt.userPrompt(material);
+            // 提示词优先取表 app_report_prompt（改完立即生效），没有则回落到代码兜底
+            ReportPromptService.ResolvedPrompt prompt =
+                    promptService.resolve(ReportConstants.PROMPT_AI_FULL_ANALYSIS);
+            if (!StringUtils.hasText(prompt.getSystemPrompt())) {
+                throw new ReportGenerateException("全文分析提示词为空：请检查 app_report_prompt 的 "
+                        + ReportConstants.PROMPT_AI_FULL_ANALYSIS + " 配置");
+            }
+            String systemPrompt = prompt.getSystemPrompt();
+            String userPrompt = promptService.renderUserPrompt(prompt, material);
             LargeModelGatewayClient.LlmResult result = gatewayClient.chat(systemPrompt, userPrompt);
 
             AppReportAiAnalysis update = new AppReportAiAnalysis();

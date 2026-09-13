@@ -80,6 +80,25 @@ public final class ReportConstants {
     /** AI全文分析状态：已完成 */
     public static final String ANALYSIS_STATUS_DONE = "DONE";
 
-    /** AI全文分析状态：失败 */
+    /** AI全文分析状态：失败（预警建议批次复用同一套三态） */
     public static final String ANALYSIS_STATUS_FAILED = "FAILED";
+
+    // ==================== 提示词编码（app_report_prompt.promptCode） ====================
+
+    /** 提示词：AI 全文分析 */
+    public static final String PROMPT_AI_FULL_ANALYSIS = "AI_FULL_ANALYSIS";
+
+    /** 提示词：AI 预警建议 */
+    public static final String PROMPT_WARNING_ADVICE = "WARNING_ADVICE";
+
+    // ==================== 预警建议等级（app_report_warning_advice.warningLevel） ====================
+
+    /** 建议预警等级：红色预警 */
+    public static final String WARNING_LEVEL_RED = "RED";
+
+    /** 建议预警等级：橙色预警 */
+    public static final String WARNING_LEVEL_ORANGE = "ORANGE";
+
+    /** 建议预警等级：黄色预警 */
+    public static final String WARNING_LEVEL_YELLOW = "YELLOW";
 }

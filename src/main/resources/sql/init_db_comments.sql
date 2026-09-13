@@ -27,6 +27,59 @@ COMMENT ON COLUMN app_report_ai_analysis.failReason IS '失败原因（超1000�
 COMMENT ON COLUMN app_report_ai_analysis.generateTime IS '分析完成时间';
 COMMENT ON COLUMN app_report_ai_analysis.inputtime IS '创建时间（默认当前时间）';
 
+-- ====== app_report_prompt (报告提示词表) ======
+COMMENT ON TABLE app_report_prompt IS '报告提示词表（按 promptCode 取用，改提示词无需改代码；查不到回落到代码兜底常量）';
+COMMENT ON COLUMN app_report_prompt.id IS '主键（自增）';
+COMMENT ON COLUMN app_report_prompt.promptCode IS '提示词编码（唯一）：AI_FULL_ANALYSIS-全文分析 / WARNING_ADVICE-预警建议';
+COMMENT ON COLUMN app_report_prompt.promptName IS '提示词名称（界面展示用）';
+COMMENT ON COLUMN app_report_prompt.sceneType IS '场景分类（AI_ANALYSIS 等，便于分组管理）';
+COMMENT ON COLUMN app_report_prompt.systemPrompt IS '系统提示词（角色、要求、输出格式）';
+COMMENT ON COLUMN app_report_prompt.userPromptTemplate IS '用户提示词模板，用 {material} 占位，调用时替换为素材';
+COMMENT ON COLUMN app_report_prompt.isEnabled IS '是否启用：Y-启用 N-停用（停用则回落到代码兜底常量）';
+COMMENT ON COLUMN app_report_prompt.remark IS '备注';
+COMMENT ON COLUMN app_report_prompt.inputtime IS '创建时间（默认当前时间）';
+COMMENT ON COLUMN app_report_prompt.updateTime IS '更新时间';
+
+-- ====== app_report_warning_advice_batch (报告预警建议批次表) ======
+COMMENT ON TABLE app_report_warning_advice_batch IS '报告预警建议批次表（一行=一次生成，承载状态/核心提示/模型信息/失败原因）';
+COMMENT ON COLUMN app_report_warning_advice_batch.id IS '主键（自增）';
+COMMENT ON COLUMN app_report_warning_advice_batch.reportNo IS '报告编号（归档维度，同一报告可保留多次）';
+COMMENT ON COLUMN app_report_warning_advice_batch.checkTaskNo IS '日检流水号（冗余，便于按流水号追溯）';
+COMMENT ON COLUMN app_report_warning_advice_batch.analysisId IS '基于哪一次全文分析生成（app_report_ai_analysis.id）';
+COMMENT ON COLUMN app_report_warning_advice_batch.customerId IS '客户编号';
+COMMENT ON COLUMN app_report_warning_advice_batch.customerName IS '客户名称';
+COMMENT ON COLUMN app_report_warning_advice_batch.status IS '生成状态：RUNNING-进行中 / DONE-已完成 / FAILED-失败';
+COMMENT ON COLUMN app_report_warning_advice_batch.coreTip IS '核心提示（模型总结，1~3句话概括最需关注的风险）';
+COMMENT ON COLUMN app_report_warning_advice_batch.promptCode IS '所用提示词编码（app_report_prompt.promptCode）';
+COMMENT ON COLUMN app_report_warning_advice_batch.lmCode IS '所用大模型配置编码（large_model_config.lm_code）';
+COMMENT ON COLUMN app_report_warning_advice_batch.modelName IS '实际调用的模型名';
+COMMENT ON COLUMN app_report_warning_advice_batch.sourceSnapshot IS '送进大模型的素材快照（便于追溯与复算）';
+COMMENT ON COLUMN app_report_warning_advice_batch.promptSnapshot IS '实际使用的提示词快照';
+COMMENT ON COLUMN app_report_warning_advice_batch.operatorNo IS '触发人账号';
+COMMENT ON COLUMN app_report_warning_advice_batch.operatorName IS '触发人姓名';
+COMMENT ON COLUMN app_report_warning_advice_batch.costMillis IS '大模型调用耗时（毫秒）';
+COMMENT ON COLUMN app_report_warning_advice_batch.failReason IS '失败原因（超1000字符截断）';
+COMMENT ON COLUMN app_report_warning_advice_batch.generateTime IS '生成完成时间';
+COMMENT ON COLUMN app_report_warning_advice_batch.inputtime IS '创建时间（默认当前时间）';
+
+-- ====== app_report_warning_advice (报告预警建议明细表) ======
+COMMENT ON TABLE app_report_warning_advice IS '报告预警建议明细表（一行=一条预警信号，逐条采纳/不采纳）';
+COMMENT ON COLUMN app_report_warning_advice.id IS '主键（自增）';
+COMMENT ON COLUMN app_report_warning_advice.batchId IS '所属批次（app_report_warning_advice_batch.id）';
+COMMENT ON COLUMN app_report_warning_advice.reportNo IS '报告编号（冗余，便于直接按报告查询）';
+COMMENT ON COLUMN app_report_warning_advice.seqNo IS '序号（模型输出顺序，已按红>橙>黄排序）';
+COMMENT ON COLUMN app_report_warning_advice.warningLevel IS '建议预警等级：RED-红色 / ORANGE-橙色 / YELLOW-黄色';
+COMMENT ON COLUMN app_report_warning_advice.signalDesc IS '预警信号描述';
+COMMENT ON COLUMN app_report_warning_advice.triggerCondition IS '触发条件/判断依据';
+COMMENT ON COLUMN app_report_warning_advice.sourceText IS '原文依据（引用原文关键句）';
+COMMENT ON COLUMN app_report_warning_advice.riskDesc IS '风险点描述（未关联到风险点时为空）';
+COMMENT ON COLUMN app_report_warning_advice.chapter IS '所在章节/段落';
+COMMENT ON COLUMN app_report_warning_advice.status IS '处理状态：PENDING-待处理 / ADOPTED-已采纳 / INVALID-无效';
+COMMENT ON COLUMN app_report_warning_advice.operatorNo IS '处理人账号';
+COMMENT ON COLUMN app_report_warning_advice.operatorName IS '处理人姓名';
+COMMENT ON COLUMN app_report_warning_advice.operateTime IS '处理时间';
+COMMENT ON COLUMN app_report_warning_advice.inputtime IS '创建时间（默认当前时间）';
+
 -- ====== app_report_risk_edit_log (报告风险要点修改记录表) ======
 COMMENT ON TABLE app_report_risk_edit_log IS '报告详情-风险要点修改记录表（归档维度：同日检流水号 + 同风险要点）';
 COMMENT ON COLUMN app_report_risk_edit_log.id IS '主键（自增）';

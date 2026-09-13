@@ -9,6 +9,8 @@ import com.suzhou.bank.entity.report.AppReportCatalog;
 import com.suzhou.bank.entity.report.AppReportContentBlock;
 import com.suzhou.bank.entity.report.AppReportContentInstance;
 import com.suzhou.bank.entity.report.AppReportRiskEditLog;
+import com.suzhou.bank.entity.report.AppReportWarningAdvice;
+import com.suzhou.bank.entity.report.AppReportWarningAdviceBatch;
 import com.suzhou.bank.mapper.ReportMapper;
 import com.suzhou.bank.mapper.report.AppReportAiAnalysisMapper;
 import com.suzhou.bank.mapper.report.AppReportAiRiskMapper;
@@ -16,9 +18,12 @@ import com.suzhou.bank.mapper.report.AppReportCatalogMapper;
 import com.suzhou.bank.mapper.report.AppReportContentBlockMapper;
 import com.suzhou.bank.mapper.report.AppReportContentInstanceMapper;
 import com.suzhou.bank.mapper.report.AppReportRiskEditLogMapper;
+import com.suzhou.bank.mapper.report.AppReportWarningAdviceBatchMapper;
+import com.suzhou.bank.mapper.report.AppReportWarningAdviceMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
 import com.suzhou.bank.service.report.ai.ReportAiAnalysisTask;
+import com.suzhou.bank.service.report.ai.ReportWarningAdviceTask;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockVO;
 import com.suzhou.bank.service.report.model.ReportCatalogNode;
@@ -27,6 +32,8 @@ import com.suzhou.bank.service.report.model.ReportGenerateResult;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportRiskItem;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
+import com.suzhou.bank.service.report.model.ReportWarningAdviceItem;
+import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
 import com.suzhou.bank.service.report.spi.ContentPayload;
 import com.suzhou.bank.service.report.spi.ReportContentProvider;
 import com.suzhou.bank.service.report.spi.ReportGenerateContext;
@@ -78,8 +85,11 @@ public class ReportServiceImpl implements ReportService {
     private final AppReportAiRiskMapper riskMapper;
     private final AppReportRiskEditLogMapper editLogMapper;
     private final AppReportAiAnalysisMapper aiAnalysisMapper;
+    private final AppReportWarningAdviceBatchMapper warningBatchMapper;
+    private final AppReportWarningAdviceMapper warningAdviceMapper;
     private final ReportContentProvider contentProvider;
     private final ReportAiAnalysisTask aiAnalysisTask;
+    private final ReportWarningAdviceTask warningAdviceTask;
 
     /**
      * 全文分析专用线程池。
@@ -683,6 +693,177 @@ public class ReportServiceImpl implements ReportService {
     public ReportAiAnalysisVO retryAiAnalysis(String reportNo, String operatorNo, String operatorName) {
         // 每次都新增一条记录、保留历史，语义与首次触发一致
         return startAiAnalysis(reportNo, operatorNo, operatorName);
+    }
+
+    // ==================== 预警建议 ====================
+
+    @Override
+    public ReportWarningAdviceVO startWarningAdvice(String reportNo, String operatorNo, String operatorName) {
+        if (!StringUtils.hasText(reportNo)) {
+            throw new ReportGenerateException("报告编号（reportNo）不能为空");
+        }
+        Report report = reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getReportNo, reportNo)
+                .last("LIMIT 1"));
+        if (report == null) {
+            throw new ReportGenerateException("未找到报告记录（reportNo=" + reportNo + "）");
+        }
+        if (!StringUtils.hasText(report.getCheckTaskNo())) {
+            throw new ReportGenerateException("该报告缺少日检流水号，无法生成预警建议");
+        }
+
+        // 依赖：提示词要求「结合 AI 全文分析结论」定级，所以必须先有一次成功的全文分析
+        AppReportAiAnalysis analysis = aiAnalysisMapper.selectOne(
+                Wrappers.<AppReportAiAnalysis>lambdaQuery()
+                        .eq(AppReportAiAnalysis::getReportNo, reportNo)
+                        .eq(AppReportAiAnalysis::getStatus, ANALYSIS_STATUS_DONE)
+                        .orderByDesc(AppReportAiAnalysis::getId)
+                        .last("LIMIT 1"));
+        if (analysis == null) {
+            throw new ReportGenerateException("请先完成「AI分析全文」再生成预警建议");
+        }
+
+        // 互斥：同一 reportNo 同时只允许一个进行中的批次（与全文分析共用同一把按 reportNo 的锁）
+        Object lock = ANALYSIS_LOCKS.computeIfAbsent(reportNo, k -> new Object());
+        AppReportWarningAdviceBatch batch;
+        synchronized (lock) {
+            Long running = warningBatchMapper.selectCount(
+                    Wrappers.<AppReportWarningAdviceBatch>lambdaQuery()
+                            .eq(AppReportWarningAdviceBatch::getReportNo, reportNo)
+                            .eq(AppReportWarningAdviceBatch::getStatus, ANALYSIS_STATUS_RUNNING));
+            if (running != null && running > 0) {
+                throw new ReportGenerateException("预警建议生成中，请稍后再试");
+            }
+            batch = new AppReportWarningAdviceBatch();
+            batch.setReportNo(reportNo);
+            batch.setCheckTaskNo(report.getCheckTaskNo());
+            batch.setAnalysisId(analysis.getId());
+            batch.setCustomerId(report.getCustomerId());
+            batch.setCustomerName(report.getCustomerName());
+            batch.setStatus(ANALYSIS_STATUS_RUNNING);
+            batch.setPromptCode(PROMPT_WARNING_ADVICE);
+            batch.setOperatorNo(StringUtils.hasText(operatorNo) ? operatorNo : null);
+            batch.setOperatorName(StringUtils.hasText(operatorName) ? operatorName : operatorNo);
+            // inputtime 交给列默认值 CURRENT_TIMESTAMP
+            warningBatchMapper.insert(batch);
+        }
+
+        final Long batchId = batch.getId();
+        log.info("提交预警建议任务：batchId={} reportNo={} analysisId={} 触发人={}",
+                batchId, reportNo, analysis.getId(), operatorName);
+        try {
+            aiAnalysisExecutor.execute(() -> warningAdviceTask.run(batchId));
+        } catch (Throwable e) {
+            // 提交失败（如池已关闭）也要把状态收干净，不能让它永远停在 RUNNING
+            log.error("预警建议任务提交失败：batchId={}", batchId, e);
+            AppReportWarningAdviceBatch update = new AppReportWarningAdviceBatch();
+            update.setId(batchId);
+            update.setStatus(ANALYSIS_STATUS_FAILED);
+            update.setFailReason("任务提交失败：" + e.getMessage());
+            update.setGenerateTime(new Date());
+            warningBatchMapper.updateById(update);
+            throw new ReportGenerateException("预警建议任务提交失败，请重试");
+        }
+        return toWarningAdviceVO(batch, new ArrayList<>());
+    }
+
+    @Override
+    public ReportWarningAdviceVO latestWarningAdvice(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
+            return null;
+        }
+        AppReportWarningAdviceBatch batch = warningBatchMapper.selectOne(
+                Wrappers.<AppReportWarningAdviceBatch>lambdaQuery()
+                        .eq(AppReportWarningAdviceBatch::getReportNo, reportNo)
+                        .orderByDesc(AppReportWarningAdviceBatch::getId)
+                        .last("LIMIT 1"));
+        if (batch == null) {
+            return null;
+        }
+        List<AppReportWarningAdvice> rows = warningAdviceMapper.selectList(
+                Wrappers.<AppReportWarningAdvice>lambdaQuery()
+                        .eq(AppReportWarningAdvice::getBatchId, batch.getId())
+                        .orderByAsc(AppReportWarningAdvice::getSeqNo)
+                        .orderByAsc(AppReportWarningAdvice::getId));
+        return toWarningAdviceVO(batch, rows);
+    }
+
+    @Override
+    public void updateWarningAdviceStatus(Long adviceId, String status,
+                                          String operatorNo, String operatorName) {
+        if (adviceId == null) {
+            throw new ReportGenerateException("预警建议ID不能为空");
+        }
+        String normalized = normalizeRiskStatus(status);
+        int updated = warningAdviceMapper.update(null,
+                Wrappers.<AppReportWarningAdvice>lambdaUpdate()
+                        .eq(AppReportWarningAdvice::getId, adviceId)
+                        .set(AppReportWarningAdvice::getStatus, normalized)
+                        .set(AppReportWarningAdvice::getOperatorNo, operatorNo)
+                        .set(AppReportWarningAdvice::getOperatorName,
+                                StringUtils.hasText(operatorName) ? operatorName : operatorNo)
+                        .set(AppReportWarningAdvice::getOperateTime, new Date()));
+        if (updated == 0) {
+            throw new ReportGenerateException("未找到对应的预警建议（id=" + adviceId + "）");
+        }
+        log.info("预警建议状态更新：id={} status={} 操作人={}", adviceId, normalized, operatorName);
+    }
+
+    /** 批次 + 明细 → VO（红橙黄条数现算，不在表里存，避免与实际明细不一致） */
+    private ReportWarningAdviceVO toWarningAdviceVO(AppReportWarningAdviceBatch batch,
+                                                    List<AppReportWarningAdvice> rows) {
+        ReportWarningAdviceVO vo = new ReportWarningAdviceVO();
+        vo.setId(batch.getId());
+        vo.setReportNo(batch.getReportNo());
+        vo.setCheckTaskNo(batch.getCheckTaskNo());
+        vo.setAnalysisId(batch.getAnalysisId());
+        vo.setStatus(batch.getStatus());
+        vo.setCoreTip(batch.getCoreTip());
+        vo.setPromptCode(batch.getPromptCode());
+        vo.setModelName(batch.getModelName());
+        vo.setOperatorNo(batch.getOperatorNo());
+        vo.setOperatorName(StringUtils.hasText(batch.getOperatorName())
+                ? batch.getOperatorName() : batch.getOperatorNo());
+        vo.setCostMillis(batch.getCostMillis());
+        vo.setFailReason(batch.getFailReason());
+        vo.setGenerateTime(batch.getGenerateTime());
+        vo.setInputtime(batch.getInputtime());
+
+        List<ReportWarningAdviceItem> items = new ArrayList<>(rows.size());
+        int red = 0;
+        int orange = 0;
+        int yellow = 0;
+        for (AppReportWarningAdvice row : rows) {
+            ReportWarningAdviceItem item = new ReportWarningAdviceItem();
+            item.setId(row.getId());
+            item.setBatchId(row.getBatchId());
+            item.setSeqNo(row.getSeqNo());
+            item.setWarningLevel(row.getWarningLevel());
+            item.setSignalDesc(row.getSignalDesc());
+            item.setTriggerCondition(row.getTriggerCondition());
+            item.setSourceText(row.getSourceText());
+            item.setRiskDesc(row.getRiskDesc());
+            item.setChapter(row.getChapter());
+            item.setStatus(row.getStatus());
+            item.setOperatorNo(row.getOperatorNo());
+            item.setOperatorName(StringUtils.hasText(row.getOperatorName())
+                    ? row.getOperatorName() : row.getOperatorNo());
+            item.setOperateTime(row.getOperateTime());
+            items.add(item);
+
+            if (WARNING_LEVEL_RED.equals(row.getWarningLevel())) {
+                red++;
+            } else if (WARNING_LEVEL_ORANGE.equals(row.getWarningLevel())) {
+                orange++;
+            } else if (WARNING_LEVEL_YELLOW.equals(row.getWarningLevel())) {
+                yellow++;
+            }
+        }
+        vo.setAdvices(items);
+        vo.setRedCount(red);
+        vo.setOrangeCount(orange);
+        vo.setYellowCount(yellow);
+        return vo;
     }
 
     /** 分析记录 → VO（不暴露素材快照与提示词快照，避免把大字段带到前端） */

@@ -7,6 +7,7 @@ import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportGenerateResult;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
+import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
 
 import java.util.List;
 
@@ -179,6 +180,43 @@ public interface ReportService {
      * @return 新建的分析记录（status=RUNNING）
      */
     ReportAiAnalysisVO retryAiAnalysis(String reportNo, String operatorNo, String operatorName);
+
+    /**
+     * 触发一次 AI 预警建议生成（前端手动触发，后台异步执行）
+     *
+     * <p>先落一条 {@code RUNNING} 批次再交给独立线程池执行，因此接口立刻返回、前端凭 status 轮询。</p>
+     *
+     * <p><b>依赖</b>：需要该报告已有一次<b>成功</b>的 AI 全文分析 —— 提示词要求「结合 AI 全文分析结论」
+     * 定级。没有成功分析时抛 {@link ReportGenerateException}。</p>
+     *
+     * <p><b>并发约束</b>：同一 reportNo 同时只允许一条 RUNNING 批次，
+     * 重复触发抛 {@link ReportGenerateException}（消息固定为「预警建议生成中，请稍后再试」）。</p>
+     *
+     * @param reportNo     报告编号
+     * @param operatorNo   触发人账号
+     * @param operatorName 触发人姓名（为空回落账号）
+     * @return 新建的批次（status=RUNNING）
+     */
+    ReportWarningAdviceVO startWarningAdvice(String reportNo, String operatorNo, String operatorName);
+
+    /**
+     * 查某份报告最新一批预警建议（含明细与红橙黄统计）
+     *
+     * @param reportNo 报告编号
+     * @return 最新批次；从未生成过返回 null
+     */
+    ReportWarningAdviceVO latestWarningAdvice(String reportNo);
+
+    /**
+     * 更新某条预警建议的处理状态（采纳 / 无效 / 恢复待处理）
+     * <p>只改处理状态与处理人、处理时间，预警信号内容本身不变。</p>
+     *
+     * @param adviceId     预警建议明细ID（app_report_warning_advice.id）
+     * @param status       目标状态：ADOPTED / INVALID / PENDING
+     * @param operatorNo   操作人账号
+     * @param operatorName 操作人姓名
+     */
+    void updateWarningAdviceStatus(Long adviceId, String status, String operatorNo, String operatorName);
 
     /**
      * 报告记录分页查询（报告列表页用）

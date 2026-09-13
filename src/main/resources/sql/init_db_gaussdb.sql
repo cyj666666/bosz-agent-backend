@@ -255,3 +255,67 @@ CREATE TABLE IF NOT EXISTS app_report_ai_analysis (
 CREATE INDEX idx_ai_analysis_report_no ON app_report_ai_analysis (reportNo, id);
 CREATE INDEX idx_ai_analysis_task_no ON app_report_ai_analysis (checkTaskNo, inputtime);
 CREATE INDEX idx_ai_analysis_status ON app_report_ai_analysis (status);
+
+-- 报告提示词表（按 promptCode 取用，改提示词无需改代码；查不到回落到代码兜底常量）
+-- 内容初始化见 sql/报告详情表设计/报告提示词表_初始化DML.sql
+CREATE TABLE IF NOT EXISTS app_report_prompt (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    promptCode VARCHAR(64) NOT NULL,
+    promptName VARCHAR(128),
+    sceneType VARCHAR(32),
+    systemPrompt TEXT,
+    userPromptTemplate TEXT,
+    isEnabled VARCHAR(2) DEFAULT 'Y' NOT NULL,
+    remark VARCHAR(512),
+    inputtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updateTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX uk_report_prompt_code ON app_report_prompt (promptCode);
+
+-- 报告预警建议批次表（一行=一次生成，承载状态/核心提示/模型信息/失败原因）
+CREATE TABLE IF NOT EXISTS app_report_warning_advice_batch (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    reportNo VARCHAR(64) NOT NULL,
+    checkTaskNo VARCHAR(64) NOT NULL,
+    analysisId BIGINT,
+    customerId VARCHAR(64),
+    customerName VARCHAR(128),
+    status VARCHAR(16) NOT NULL,
+    coreTip TEXT,
+    promptCode VARCHAR(64),
+    lmCode VARCHAR(100),
+    modelName VARCHAR(100),
+    sourceSnapshot TEXT,
+    promptSnapshot TEXT,
+    operatorNo VARCHAR(64),
+    operatorName VARCHAR(128),
+    costMillis BIGINT,
+    failReason VARCHAR(1024),
+    generateTime TIMESTAMP,
+    inputtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_wa_batch_report_no ON app_report_warning_advice_batch (reportNo, id);
+CREATE INDEX idx_wa_batch_task_no ON app_report_warning_advice_batch (checkTaskNo, inputtime);
+CREATE INDEX idx_wa_batch_status ON app_report_warning_advice_batch (status);
+
+-- 报告预警建议明细表（一行=一条预警信号，逐条采纳/不采纳）
+CREATE TABLE IF NOT EXISTS app_report_warning_advice (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    batchId BIGINT NOT NULL,
+    reportNo VARCHAR(64) NOT NULL,
+    seqNo INT,
+    warningLevel VARCHAR(16) NOT NULL,
+    signalDesc TEXT,
+    triggerCondition TEXT,
+    sourceText TEXT,
+    riskDesc TEXT,
+    chapter VARCHAR(256),
+    status VARCHAR(16) NOT NULL,
+    operatorNo VARCHAR(64),
+    operatorName VARCHAR(128),
+    operateTime TIMESTAMP,
+    inputtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_wa_batch ON app_report_warning_advice (batchId, seqNo);
+CREATE INDEX idx_wa_report_no ON app_report_warning_advice (reportNo);
+

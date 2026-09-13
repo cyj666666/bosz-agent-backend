@@ -15,6 +15,8 @@ import com.suzhou.bank.service.report.model.ReportGenerateResult;
 import com.suzhou.bank.service.report.model.ReportRiskEditLogVO;
 import com.suzhou.bank.service.report.model.ReportRiskStatusRequest;
 import com.suzhou.bank.service.report.model.ReportVersionVO;
+import com.suzhou.bank.service.report.model.ReportWarningAdviceStatusRequest;
+import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -281,6 +283,55 @@ public class ReportController {
     public Result<ReportAiAnalysisVO> aiAnalysisDetail(@PathVariable Long id) {
         try {
             return Result.ok(reportService.aiAnalysisDetail(id));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 触发一次 AI 预警建议生成（后台异步执行）
+     *
+     * <p>依赖该报告已有一次成功的全文分析；同一报告同时只允许一个进行中的批次。</p>
+     *
+     * @param body {reportNo}
+     * @return 新建批次（status=RUNNING，明细为空）
+     */
+    @PostMapping("/instance/warning-advice/generate")
+    public Result<ReportWarningAdviceVO> startWarningAdvice(@RequestBody Map<String, String> body,
+                                                           HttpServletRequest httpRequest) {
+        String reportNo = body == null ? null : body.get("reportNo");
+        try {
+            return Result.ok(reportService.startWarningAdvice(
+                    reportNo, currentUsername(httpRequest), currentRealName(httpRequest)));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 取某份报告最新一批预警建议（含明细与红橙黄统计）
+     *
+     * @param reportNo 报告编号
+     * @return 最新批次；从未生成过返回 data=null
+     */
+    @GetMapping("/instance/warning-advice")
+    public Result<ReportWarningAdviceVO> latestWarningAdvice(@RequestParam String reportNo) {
+        return Result.ok(reportService.latestWarningAdvice(reportNo));
+    }
+
+    /**
+     * 更新某条预警建议的处理状态（采纳 / 无效 / 恢复待处理）
+     *
+     * @param request {id, status}
+     */
+    @PostMapping("/instance/warning-advice/status")
+    public Result<Void> updateWarningAdviceStatus(@RequestBody ReportWarningAdviceStatusRequest request,
+                                                  HttpServletRequest httpRequest) {
+        try {
+            reportService.updateWarningAdviceStatus(
+                    request.getId(), request.getStatus(),
+                    currentUsername(httpRequest), currentRealName(httpRequest));
+            return Result.ok();
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }

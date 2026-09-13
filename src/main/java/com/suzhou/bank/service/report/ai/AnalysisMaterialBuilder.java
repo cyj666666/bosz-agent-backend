@@ -30,13 +30,16 @@ import java.util.Map;
  * <ul>
  *   <li>{@code analysisType=ANALYSIS}（分析类正文）—— <b>全量纳入</b>，是素材主体；</li>
  *   <li>{@code fillType=TITLE} —— 作为章节标题纳入，给模型上下文；</li>
- *   <li>{@code analysisType=RULE} —— <b>仅纳入 risk 状态为「已采纳」的要点</b>
- *       （无效 INVALID、待处理 PENDING 都不纳入）；</li>
+ *   <li>{@code analysisType=RULE} —— <b>纳入「待处理」与「已采纳」的要点</b>，只排除人工判定为
+ *       {@code INVALID}（无效）的。<br>
+ *       ⚠️ 2026-09-13 由「仅已采纳」放开为「待处理 + 已采纳」：全文分析要校验
+ *       <b>报告是否已回答了风险要点</b>，核对对象必须是完整清单，只给已采纳的就漏掉了待处理项。</li>
  *   <li>{@code fillType=TABLE} —— 表格块纳入（HTML 表格会被转成「单元格 + 制表符」的文本）；</li>
  *   <li>{@code fillType=SOURCE_LINK} —— 排除（块本身只是外链按钮，没有分析价值）。</li>
  * </ul>
  * <p>排序按目录树的真实层级（父级 sortNo 链 + 本级 sortNo），报告级内容块排在最前，
- * 让模型读到的顺序与人工阅读顺序一致。</p>
+ * 让模型读到的顺序与人工阅读顺序一致。正文之后另附【风险要点清单】小节，
+ * 给模型一份显式的核对对象。</p>
  *
  * @author cyj666666
  * @since 1.3.0
@@ -127,11 +130,15 @@ public class AnalysisMaterialBuilder {
 
         sb.append("\n【报告正文摘取】\n");
 
+        // 风险要点清单：正文里逐块输出之外，末尾再给一份显式清单，
+        // 供模型按条核对「报告是否已回答」（提示词要求它只列缺项，没有清单就无从判断）
+        List<String> riskChecklist = new ArrayList<>();
+
         List<AppReportContentInstance> head = new ArrayList<>(reportLevel);
         head.sort(Comparator.comparing(AppReportContentInstance::getSortNo,
                 Comparator.nullsLast(Comparator.naturalOrder())));
         for (AppReportContentInstance ins : head) {
-            appendBlock(sb, ins, riskStatusOfBlock, "报告头");
+            appendBlock(sb, ins, riskStatusOfBlock, "报告头", riskChecklist);
         }
 
         for (String catalogCode : orderedCodes) {
@@ -143,14 +150,34 @@ public class AnalysisMaterialBuilder {
             blocks.sort(Comparator.comparing(AppReportContentInstance::getSortNo,
                     Comparator.nullsLast(Comparator.naturalOrder())));
             for (AppReportContentInstance ins : blocks) {
-                appendBlock(sb, ins, riskStatusOfBlock, catalogName);
+                appendBlock(sb, ins, riskStatusOfBlock, catalogName, riskChecklist);
             }
+        }
+
+        appendRiskChecklist(sb, riskChecklist);
+    }
+
+    /**
+     * 风险要点清单小结
+     * <p>提示词要求模型核对「报告是否回答了风险要点」，因此末尾给一份按顺序编号的清单，
+     * 让它有明确的核对对象；清单为空时不输出该节。</p>
+     */
+    private void appendRiskChecklist(StringBuilder sb, List<String> riskChecklist) {
+        if (riskChecklist.isEmpty()) {
+            return;
+        }
+        sb.append("\n【风险要点清单】\n");
+        sb.append("（以下为本次需要核对其是否已被报告回答的风险要点，共 ")
+                .append(riskChecklist.size()).append(" 条）\n");
+        for (int i = 0; i < riskChecklist.size(); i++) {
+            sb.append(i + 1).append(". ").append(riskChecklist.get(i)).append('\n');
         }
     }
 
     /** 单个内容块的摘取规则 */
     private void appendBlock(StringBuilder sb, AppReportContentInstance ins,
-                            Map<String, String> riskStatusOfBlock, String catalogName) {
+                            Map<String, String> riskStatusOfBlock, String catalogName,
+                            List<String> riskChecklist) {
         String fillType = ins.getFillType();
         String analysisType = ins.getAnalysisType();
         String content = ins.getContent();
@@ -161,10 +188,12 @@ public class AnalysisMaterialBuilder {
         if (ReportConstants.FILL_SOURCE_LINK.equals(fillType)) {
             return;
         }
-        // 风险要点：只纳入「已采纳」，无效/待处理都不进素材
+        String riskStatus = null;
+        // 风险要点：**待处理 + 已采纳都纳入**（要校验"报告是否已回答风险要点"），
+        // 只排除人工判定为无效的；同时收集进末尾的核对清单。
         if (ReportConstants.ANALYSIS_RULE.equals(analysisType)) {
-            String status = riskStatusOfBlock.get(ins.getBlockCode());
-            if (!ReportConstants.RISK_ADOPTED.equals(status)) {
+            riskStatus = riskStatusOfBlock.get(ins.getBlockCode());
+            if (ReportConstants.RISK_INVALID.equals(riskStatus)) {
                 return;
             }
         }
@@ -177,10 +206,21 @@ public class AnalysisMaterialBuilder {
             return;
         }
         String name = StringUtils.hasText(ins.getBlockName()) ? ins.getBlockName() : ins.getBlockCode();
-        String tag = ReportConstants.ANALYSIS_RULE.equals(analysisType) ? "风险要点（已采纳）"
+        if (ReportConstants.ANALYSIS_RULE.equals(analysisType)) {
+            riskChecklist.add(name + "（" + catalogName + "）");
+        }
+        String tag = ReportConstants.ANALYSIS_RULE.equals(analysisType) ? riskTag(riskStatus)
                 : (ReportConstants.FILL_TABLE.equals(fillType) ? "表格" : "分析内容");
         sb.append("- [").append(tag).append("] ").append(name).append("：\n")
                 .append(indent(text)).append('\n');
+    }
+
+    /** 风险要点的状态标注：让模型知道这条是"已采纳"还是"待处理" */
+    private static String riskTag(String status) {
+        if (ReportConstants.RISK_ADOPTED.equals(status)) {
+            return "风险要点（已采纳）";
+        }
+        return "风险要点（待处理）";
     }
 
     /** 外部数据：由各 {@link ReportAnalysisDataSource} 实现提供，无实现时整节省略 */
