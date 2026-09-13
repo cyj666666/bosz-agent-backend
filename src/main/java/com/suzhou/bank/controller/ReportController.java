@@ -310,6 +310,30 @@ public class ReportController {
     }
 
     /**
+     * 一键串行：全文分析 → 预警建议（前端「智能体分析」按钮的唯一入口）
+     *
+     * <p>先预插一条 {@code PENDING} 的预警建议批次（前端立刻能看到整条链在跑），
+     * 再启动全文分析；全文分析结束（成功或失败）后由监听器自动续接预警建议。</p>
+     *
+     * <p><b>链级防重</b>：该报告存在进行中的全文分析、或排队中/进行中的预警建议批次时，
+     * 直接返回「分析进行中，请稍后再试」。</p>
+     *
+     * @param body {reportNo}
+     * @return 新建的全文分析记录（status=RUNNING）；预警建议批次已排队
+     */
+    @PostMapping("/instance/ai-chain/generate")
+    public Result<ReportAiAnalysisVO> startAiChain(@RequestBody Map<String, String> body,
+                                                   HttpServletRequest httpRequest) {
+        String reportNo = body == null ? null : body.get("reportNo");
+        try {
+            return Result.ok(reportService.startAiChain(
+                    reportNo, currentUsername(httpRequest), currentRealName(httpRequest)));
+        } catch (ReportGenerateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
      * 取某份报告最新一批预警建议（含明细与红橙黄统计）
      *
      * @param reportNo 报告编号

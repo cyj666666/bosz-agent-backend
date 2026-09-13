@@ -727,11 +727,13 @@ public class ReportServiceImpl implements ReportService {
         Object lock = ANALYSIS_LOCKS.computeIfAbsent(reportNo, k -> new Object());
         AppReportWarningAdviceBatch batch;
         synchronized (lock) {
-            Long running = warningBatchMapper.selectCount(
+            // 排队中（PENDING，链式预插）与进行中都要算「已有批次在跑」
+            Long active = warningBatchMapper.selectCount(
                     Wrappers.<AppReportWarningAdviceBatch>lambdaQuery()
                             .eq(AppReportWarningAdviceBatch::getReportNo, reportNo)
-                            .eq(AppReportWarningAdviceBatch::getStatus, ANALYSIS_STATUS_RUNNING));
-            if (running != null && running > 0) {
+                            .in(AppReportWarningAdviceBatch::getStatus,
+                                    ANALYSIS_STATUS_PENDING, ANALYSIS_STATUS_RUNNING));
+            if (active != null && active > 0) {
                 throw new ReportGenerateException("预警建议生成中，请稍后再试");
             }
             batch = new AppReportWarningAdviceBatch();
@@ -751,7 +753,7 @@ public class ReportServiceImpl implements ReportService {
 
         final Long batchId = batch.getId();
         log.info("提交预警建议任务：batchId={} reportNo={} analysisId={} 触发人={}",
-                batchId, reportNo, analysis.getId(), operatorName);
+                batchId, reportNo, batch.getAnalysisId(), operatorName);
         try {
             aiAnalysisExecutor.execute(() -> warningAdviceTask.run(batchId));
         } catch (Throwable e) {
@@ -766,6 +768,121 @@ public class ReportServiceImpl implements ReportService {
             throw new ReportGenerateException("预警建议任务提交失败，请重试");
         }
         return toWarningAdviceVO(batch, new ArrayList<>());
+    }
+
+    // ==================== 一键串行：全文分析 → 预警建议 ====================
+
+    @Override
+    public ReportAiAnalysisVO startAiChain(String reportNo, String operatorNo, String operatorName) {
+        if (!StringUtils.hasText(reportNo)) {
+            throw new ReportGenerateException("报告编号（reportNo）不能为空");
+        }
+        Report report = reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getReportNo, reportNo)
+                .last("LIMIT 1"));
+        if (report == null) {
+            throw new ReportGenerateException("未找到报告记录（reportNo=" + reportNo + "）");
+        }
+        if (!StringUtils.hasText(report.getCheckTaskNo())) {
+            throw new ReportGenerateException("该报告缺少日检流水号，无法进行分析");
+        }
+
+        // 链级防重：全文分析或预警建议任一在跑，就不允许再起一条链。
+        // 只靠各任务自己的互斥不够 —— 全文分析 DONE 后、预警建议还在 RUNNING 时，
+        // 全文分析那把锁已经放开，再点一次会白跑一次全文分析，所以在这里统一挡掉。
+        Object lock = ANALYSIS_LOCKS.computeIfAbsent(reportNo, k -> new Object());
+        AppReportWarningAdviceBatch pending;
+        synchronized (lock) {
+            Long runningAnalysis = aiAnalysisMapper.selectCount(
+                    Wrappers.<AppReportAiAnalysis>lambdaQuery()
+                            .eq(AppReportAiAnalysis::getReportNo, reportNo)
+                            .eq(AppReportAiAnalysis::getStatus, ANALYSIS_STATUS_RUNNING));
+            if (runningAnalysis != null && runningAnalysis > 0) {
+                throw new ReportGenerateException("分析进行中，请稍后再试");
+            }
+            Long activeAdvice = warningBatchMapper.selectCount(
+                    Wrappers.<AppReportWarningAdviceBatch>lambdaQuery()
+                            .eq(AppReportWarningAdviceBatch::getReportNo, reportNo)
+                            .in(AppReportWarningAdviceBatch::getStatus,
+                                    ANALYSIS_STATUS_PENDING, ANALYSIS_STATUS_RUNNING));
+            if (activeAdvice != null && activeAdvice > 0) {
+                throw new ReportGenerateException("分析进行中，请稍后再试");
+            }
+
+            // 预插「排队中」批次。这条记录一物两用：
+            // ① 前端立刻能看到整条链在跑，不用等全文分析完成才知道；
+            // ② 它的存在就是「本次全文分析属于链式触发」的标记，续接器据此决定是否接着跑预警建议。
+            pending = new AppReportWarningAdviceBatch();
+            pending.setReportNo(reportNo);
+            pending.setCheckTaskNo(report.getCheckTaskNo());
+            pending.setCustomerId(report.getCustomerId());
+            pending.setCustomerName(report.getCustomerName());
+            pending.setStatus(ANALYSIS_STATUS_PENDING);
+            pending.setPromptCode(PROMPT_WARNING_ADVICE);
+            pending.setOperatorNo(StringUtils.hasText(operatorNo) ? operatorNo : null);
+            pending.setOperatorName(StringUtils.hasText(operatorName) ? operatorName : operatorNo);
+            // inputtime 交给列默认值 CURRENT_TIMESTAMP
+            warningBatchMapper.insert(pending);
+            log.info("一键串行：已预插预警建议批次 batchId={} reportNo={}", pending.getId(), reportNo);
+        }
+
+        try {
+            // 复用单任务入口，它自带「全文分析 RUNNING 互斥」与任务提交失败的收尾
+            return startAiAnalysis(reportNo, operatorNo, operatorName);
+        } catch (Throwable e) {
+            // 全文分析没能启动 → 清掉预插批次，不留悬挂的排队记录
+            log.error("一键串行：全文分析启动失败，回滚预插批次 batchId={}", pending.getId(), e);
+            try {
+                warningBatchMapper.deleteById(pending.getId());
+            } catch (Throwable inner) {
+                log.error("一键串行：回滚预插批次也失败了 batchId={}", pending.getId(), inner);
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public void launchChainedWarningAdvice(String reportNo, Long analysisId) {
+        if (!StringUtils.hasText(reportNo)) {
+            return;
+        }
+        Object lock = ANALYSIS_LOCKS.computeIfAbsent(reportNo, k -> new Object());
+        final Long batchId;
+        synchronized (lock) {
+            AppReportWarningAdviceBatch pending = warningBatchMapper.selectOne(
+                    Wrappers.<AppReportWarningAdviceBatch>lambdaQuery()
+                            .eq(AppReportWarningAdviceBatch::getReportNo, reportNo)
+                            .eq(AppReportWarningAdviceBatch::getStatus, ANALYSIS_STATUS_PENDING)
+                            .orderByDesc(AppReportWarningAdviceBatch::getId)
+                            .last("LIMIT 1"));
+            if (pending == null) {
+                // 单独触发的全文分析没有预插批次 —— 它不属于任何链，到此为止
+                log.info("续接跳过：无排队中的预警建议批次（reportNo={}，本次为单独触发的全文分析）", reportNo);
+                return;
+            }
+            AppReportWarningAdviceBatch update = new AppReportWarningAdviceBatch();
+            update.setId(pending.getId());
+            update.setStatus(ANALYSIS_STATUS_RUNNING);
+            // 全文分析成功则为分析 id，失败时为空（软依赖，预警建议照样跑）
+            update.setAnalysisId(analysisId);
+            update.setPromptCode(PROMPT_WARNING_ADVICE);
+            warningBatchMapper.updateById(update);
+            batchId = pending.getId();
+        }
+
+        log.info("续接预警建议：batchId={} reportNo={} analysisId={}", batchId, reportNo, analysisId);
+        try {
+            aiAnalysisExecutor.execute(() -> warningAdviceTask.run(batchId));
+        } catch (Throwable e) {
+            // 提交失败也要把状态收干净，不能让它永远停在 RUNNING
+            log.error("续接预警建议任务提交失败：batchId={}", batchId, e);
+            AppReportWarningAdviceBatch update = new AppReportWarningAdviceBatch();
+            update.setId(batchId);
+            update.setStatus(ANALYSIS_STATUS_FAILED);
+            update.setFailReason("任务提交失败：" + e.getMessage());
+            update.setGenerateTime(new Date());
+            warningBatchMapper.updateById(update);
+        }
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.model.ReportConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -41,6 +42,8 @@ public class ReportAiAnalysisTask {
     private final AnalysisMaterialBuilder materialBuilder;
     private final ReportPromptService promptService;
     private final LargeModelGatewayClient gatewayClient;
+    /** 结束事件发布器：交给 ReportAiChainListener 续接预警建议（仅链式触发时才有效果） */
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 执行一次全文分析
@@ -96,6 +99,7 @@ public class ReportAiAnalysisTask {
             log.info("全文分析完成：id={} reportNo={} 总耗时={}ms 正文长度={}",
                     analysisId, record.getReportNo(), System.currentTimeMillis() - start,
                     result.getContent().length());
+            publishCompleted(record.getReportNo(), analysisId, true);
         } catch (Throwable e) {
             String reason = truncate(e.getMessage() == null ? e.toString() : e.getMessage(), FAIL_REASON_MAX);
             log.error("全文分析失败：id={} reportNo={} 原因={}", analysisId, record.getReportNo(), reason, e);
@@ -109,6 +113,17 @@ public class ReportAiAnalysisTask {
             } catch (Throwable inner) {
                 log.error("全文分析失败状态回写也失败了：id={}", analysisId, inner);
             }
+            // 失败同样续接：预警建议对全文分析是软依赖，不能被一起拖死
+            publishCompleted(record.getReportNo(), analysisId, false);
+        }
+    }
+
+    /** 发布结束事件（失败不影响全文分析已落库的最终状态） */
+    private void publishCompleted(String reportNo, Long analysisId, boolean success) {
+        try {
+            eventPublisher.publishEvent(new ReportAiAnalysisCompletedEvent(reportNo, analysisId, success));
+        } catch (Throwable e) {
+            log.error("发布全文分析结束事件失败：reportNo={} analysisId={}", reportNo, analysisId, e);
         }
     }
 

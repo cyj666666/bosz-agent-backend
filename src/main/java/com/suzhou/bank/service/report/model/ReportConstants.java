@@ -80,8 +80,17 @@ public final class ReportConstants {
     /** AI全文分析状态：已完成 */
     public static final String ANALYSIS_STATUS_DONE = "DONE";
 
-    /** AI全文分析状态：失败（预警建议批次复用同一套三态） */
+    /** AI全文分析状态：失败（预警建议批次复用同一套状态） */
     public static final String ANALYSIS_STATUS_FAILED = "FAILED";
+
+    /**
+     * 预警建议批次状态：排队中 —— 仅「一键串行」时使用
+     * <p>链式触发会预插一条 PENDING 批次，等全文分析结束再由续接器翻成 RUNNING。
+     * 这样做有两个作用：① 前端立刻能看到"整条链在跑"，不用等全文分析完成才知道；
+     * ② 它是「这次全文分析是链式触发还是单独触发」的判据 —— 单独触发不会预插批次，
+     * 因此不会误启预警建议。</p>
+     */
+    public static final String ANALYSIS_STATUS_PENDING = "PENDING";
 
     // ==================== 提示词编码（app_report_prompt.promptCode） ====================
 

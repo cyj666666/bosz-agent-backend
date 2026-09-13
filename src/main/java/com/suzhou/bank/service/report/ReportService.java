@@ -220,6 +220,37 @@ public interface ReportService {
     void updateWarningAdviceStatus(Long adviceId, String status, String operatorNo, String operatorName);
 
     /**
+     * 一键串行触发：全文分析 → 预警建议（前端「智能体分析」按钮的唯一入口）
+     *
+     * <p>做法：先在同一个锁里做<b>链级防重</b>（该 reportNo 不能有进行中的全文分析、
+     * 也不能有排队中或进行中的预警建议批次），随后预插一条 {@code PENDING} 预警建议批次，
+     * 再复用 {@link #startAiAnalysis} 启动全文分析。全文分析结束（成功或失败）后由
+     * {@link com.suzhou.bank.service.report.ai.ReportAiChainListener} 续接预警建议。</p>
+     *
+     * <p>预插批次一物两用：既让前端立刻看到整条链在跑，也是「链式触发」区别于
+     * 「单独触发全文分析」的判据（单独触发不会预插，因此不会误启预警建议）。</p>
+     *
+     * <p>全文分析启动失败时会回滚掉预插的批次，不留悬挂的 PENDING 记录。</p>
+     *
+     * @param reportNo     报告编号
+     * @param operatorNo   触发人账号
+     * @param operatorName 触发人姓名（为空回落账号）
+     * @return 新建的全文分析记录（status=RUNNING）；预警建议批次已排队（status=PENDING）
+     */
+    ReportAiAnalysisVO startAiChain(String reportNo, String operatorNo, String operatorName);
+
+    /**
+     * 续接预警建议（<b>仅由 {@link com.suzhou.bank.service.report.ai.ReportAiChainListener} 调用</b>）
+     *
+     * <p>把该报告下最新的 {@code PENDING} 批次翻成 {@code RUNNING} 并投递执行。
+     * 查不到 PENDING 批次时<b>什么也不做</b> —— 说明这次全文分析是单独触发的，不属于任何链。</p>
+     *
+     * @param reportNo   报告编号
+     * @param analysisId 本次全文分析记录 id；全文分析失败时也可能为空（软依赖，照样续接）
+     */
+    void launchChainedWarningAdvice(String reportNo, Long analysisId);
+
+    /**
      * 报告记录分页查询（报告列表页用）
      * <p>直接查 report，供列表页展示并跳转到详情。</p>
      *
