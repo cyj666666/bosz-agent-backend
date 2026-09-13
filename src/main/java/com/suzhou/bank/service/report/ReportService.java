@@ -186,8 +186,9 @@ public interface ReportService {
      *
      * <p>先落一条 {@code RUNNING} 批次再交给独立线程池执行，因此接口立刻返回、前端凭 status 轮询。</p>
      *
-     * <p><b>依赖</b>：需要该报告已有一次<b>成功</b>的 AI 全文分析 —— 提示词要求「结合 AI 全文分析结论」
-     * 定级。没有成功分析时抛 {@link ReportGenerateException}。</p>
+     * <p><b>AI 全文分析结论是可选素材、不是前置条件</b>：该报告已有成功的全文分析时，
+     * 自动把结论附进素材并记下 {@code analysisId}（供追溯本次定级参考了哪一版分析）；
+     * 没有则只用报告正文 + 风险要点清单，<b>不阻断</b>。</p>
      *
      * <p><b>并发约束</b>：同一 reportNo 同时只允许一条 RUNNING 批次，
      * 重复触发抛 {@link ReportGenerateException}（消息固定为「预警建议生成中，请稍后再试」）。</p>

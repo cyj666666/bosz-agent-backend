@@ -712,16 +712,16 @@ public class ReportServiceImpl implements ReportService {
             throw new ReportGenerateException("该报告缺少日检流水号，无法生成预警建议");
         }
 
-        // 依赖：提示词要求「结合 AI 全文分析结论」定级，所以必须先有一次成功的全文分析
+        // 「AI 全文分析结论」是可选素材，不是前置条件：有就附进素材并记下 analysisId（便于追溯
+        // 本次定级参考了哪一版分析），没有就只用报告正文 + 风险要点清单，不阻断。
+        // 预警建议的必要输入（报告正文、风险要点、预警管理办法）都不来自全文分析，
+        // 若强行前置，全文分析一旦持续失败就会把预警建议一起拖死。
         AppReportAiAnalysis analysis = aiAnalysisMapper.selectOne(
                 Wrappers.<AppReportAiAnalysis>lambdaQuery()
                         .eq(AppReportAiAnalysis::getReportNo, reportNo)
                         .eq(AppReportAiAnalysis::getStatus, ANALYSIS_STATUS_DONE)
                         .orderByDesc(AppReportAiAnalysis::getId)
                         .last("LIMIT 1"));
-        if (analysis == null) {
-            throw new ReportGenerateException("请先完成「AI分析全文」再生成预警建议");
-        }
 
         // 互斥：同一 reportNo 同时只允许一个进行中的批次（与全文分析共用同一把按 reportNo 的锁）
         Object lock = ANALYSIS_LOCKS.computeIfAbsent(reportNo, k -> new Object());
@@ -737,7 +737,8 @@ public class ReportServiceImpl implements ReportService {
             batch = new AppReportWarningAdviceBatch();
             batch.setReportNo(reportNo);
             batch.setCheckTaskNo(report.getCheckTaskNo());
-            batch.setAnalysisId(analysis.getId());
+            // 有成功的全文分析才记 analysisId；没有则为空（本批次只基于报告正文定级）
+            batch.setAnalysisId(analysis == null ? null : analysis.getId());
             batch.setCustomerId(report.getCustomerId());
             batch.setCustomerName(report.getCustomerName());
             batch.setStatus(ANALYSIS_STATUS_RUNNING);

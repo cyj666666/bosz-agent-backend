@@ -35,7 +35,7 @@ public class AppReportWarningAdviceBatch {
     @TableField("checkTaskNo")
     private String checkTaskNo;
 
-    /** 基于哪一次全文分析生成（app_report_ai_analysis.id） */
+    /** 基于哪一次全文分析生成（app_report_ai_analysis.id）；为空表示生成时该报告尚无成功的全文分析 */
     @TableField("analysisId")
     private Long analysisId;
 

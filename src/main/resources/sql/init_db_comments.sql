@@ -45,7 +45,7 @@ COMMENT ON TABLE app_report_warning_advice_batch IS '报告预警建议批次表
 COMMENT ON COLUMN app_report_warning_advice_batch.id IS '主键（自增）';
 COMMENT ON COLUMN app_report_warning_advice_batch.reportNo IS '报告编号（归档维度，同一报告可保留多次）';
 COMMENT ON COLUMN app_report_warning_advice_batch.checkTaskNo IS '日检流水号（冗余，便于按流水号追溯）';
-COMMENT ON COLUMN app_report_warning_advice_batch.analysisId IS '基于哪一次全文分析生成（app_report_ai_analysis.id）';
+COMMENT ON COLUMN app_report_warning_advice_batch.analysisId IS '基于哪一次全文分析生成（app_report_ai_analysis.id）；为空表示生成时该报告尚无成功的全文分析';
 COMMENT ON COLUMN app_report_warning_advice_batch.customerId IS '客户编号';
 COMMENT ON COLUMN app_report_warning_advice_batch.customerName IS '客户名称';
 COMMENT ON COLUMN app_report_warning_advice_batch.status IS '生成状态：RUNNING-进行中 / DONE-已完成 / FAILED-失败';
