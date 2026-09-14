@@ -46,12 +46,17 @@ public class AuthInterceptor implements HandlerInterceptor {
         // 将用户信息存入 request attribute，供后续使用
         request.setAttribute("userId", jwtUtil.getUserId(token));
         request.setAttribute("username", jwtUtil.getUsername(token));
+        // roles 一并在首次解析后放入 request：agent 模块的 ApiContext 从这里读取当前用户角色
+        // （用于记录指标的创建人/更新人、按角色过滤指标树）。
+        // 这是一处刻意的"接缝"：agent 模块不直接依赖本工程的 JwtUtil，
+        // 只依赖 request attribute 名，双方解耦。
+        List<String> roles = jwtUtil.getRoles(token);
+        request.setAttribute("roles", roles);
 
         // 系统管理接口需要管理员角色（修改自己密码的接口除外）
         String path = request.getRequestURI();
         if (!path.endsWith("/change-password")
                 && (path.startsWith("/api/user") || path.startsWith("/api/role"))) {
-            List<String> roles = jwtUtil.getRoles(token);
             if (roles == null || !roles.contains("admin")) {
                 sendError(response, 403, "无权限，仅系统管理员可操作");
                 return false;

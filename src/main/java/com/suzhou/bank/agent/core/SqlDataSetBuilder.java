@@ -1,0 +1,227 @@
+package com.suzhou.bank.agent.core;
+
+import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.serializer.SerializerFeature;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
+import com.suzhou.bank.agent.db.AgentDataSourceProvider;
+import com.suzhou.bank.agent.db.DynamicDataSourceModel;
+import com.suzhou.bank.agent.dict.AgentDictCache;
+import com.suzhou.bank.agent.dict.DictModel;
+import com.suzhou.bank.agent.enums.DriverTypeEnum;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import static com.suzhou.bank.agent.db.DynamicDBUtil.getNamedParameterJdbcTemplate;
+
+/**
+ * SQL 类型指标的取数实现（本模块最核心的取数路径）
+ *
+ * <p>来源：amar-agent-server 的 {@code org.jeecg.modules.agent.core.SqlDataSetBuilder}。</p>
+ *
+ * <p><b>取数流程</b>：</p>
+ * <ol>
+ *   <li>解析 {@code script} 得到 {@link SqlScript}（数据源 + SQL + 参数定义）；</li>
+ *   <li>按 {@code SqlLimitType} 字典限制结果集条数（默认 100），
+ *       达梦/Oracle 用 {@code rownum}，其余用 {@code limit}；</li>
+ *   <li>处理细类参数（{@code relateIndexSet}）：从 {@code extensions} 中按
+ *       {@code sourceField} 路径取值填充；</li>
+ *   <li>处理黑盒参数（{@code blackParams}）：key 形如 {@code xxx--paramName}，
+ *       在目标参数为空时兜底填充；</li>
+ *   <li>处理 {@code paramData} 的关联指标与默认值，把缺失的 {@code :name} 直接替换为默认值；</li>
+ *   <li>用命名参数模板执行查询，返回 {@code List<Map>}。</li>
+ * </ol>
+ *
+ * <p><b>与源实现的差异（均为改造点，非行为变更）</b>：</p>
+ * <ul>
+ *   <li>{@code CommonAPI} → {@link AgentDataSourceProvider}（去掉 JeecgBoot 依赖）；</li>
+ *   <li>{@code SysDictCache} → {@link AgentDictCache}；</li>
+ *   <li>{@code @AllArgsConstructor}+{@code @Autowired} 字段并存（既走构造注入又走字段注入）
+ *       简化为纯字段注入，效果等价、避免误读。</li>
+ * </ul>
+ *
+ * <p><b>注意（保留源行为）</b>：取数异常时返回 {@code null} 而不是抛异常，
+ * 由上层（指标查询）决定如何降级。这是源实现的设计，
+ * 意味着"取不到数"和"SQL 报错"在上层无法区分，排查时需看日志。</p>
+ */
+@Slf4j
+@Component(value = "Sql")
+public class SqlDataSetBuilder implements DataSetBuilder {
+
+    /** 未配置 SqlLimitType 字典时的默认结果集上限 */
+    private static final int DEFAULT_LIMIT = 100;
+
+    @Autowired
+    private AgentDataSourceProvider agentDataSourceProvider;
+
+    @Autowired
+    private AgentDictCache agentDictCache;
+
+    @Override
+    public String type() {
+        return "Sql";
+    }
+
+    @Override
+    public String label() {
+        return "SQL";
+    }
+
+    @Override
+    public List<?> build(String paramNo, String script, Map<String, Object> parameters, String relateIndexSet) {
+        try {
+            SqlScript sqlScript = JSON.parseObject(script, SqlScript.class);
+            String scriptSql = sqlScript.getSql();
+            if (StringUtils.isEmpty(sqlScript.getDataSource()) || StringUtils.isEmpty(scriptSql)) {
+                return null;
+            }
+            String dataSourceId = sqlScript.getDataSource();
+            DynamicDataSourceModel dataSourceModel = agentDataSourceProvider.getDynamicDbSourceById(dataSourceId);
+            if (Objects.isNull(dataSourceModel)) {
+                log.error("数据源信息不存在,dataSourceId:{}", dataSourceId);
+                return null;
+            }
+
+            // sql查询结果限制条数处理
+            int limit = DEFAULT_LIMIT;
+            String dbType = dataSourceModel.getDbType();
+            try {
+                List<DictModel> list = agentDictCache.get("SqlLimitType");
+                if (CollectionUtil.isNotEmpty(list)) {
+                    limit = Integer.parseInt(list.get(0).getValue());
+                }
+            } catch (Exception e) {
+                log.error("获取数据库限制条数异常！");
+            }
+
+            boolean driverFlag = DriverTypeEnum.DM.dbType.equals(dbType) || DriverTypeEnum.ORACLE.dbType.equals(dbType);
+            if (driverFlag) {
+                scriptSql = String.format("select * from (%s) where rownum <= %s", scriptSql, limit);
+            } else {
+                scriptSql = String.format("select * from (%s) rs limit %s", scriptSql, limit);
+            }
+
+            // 细类参数解析
+            if (StringUtils.isNotEmpty(relateIndexSet)) {
+                JSONArray jsonArray = JSON.parseArray(relateIndexSet);
+                if (null != jsonArray && !jsonArray.isEmpty()) {
+                    List<JSONObject> collect = jsonArray.stream()
+                            .map(json -> (JSONObject) json)
+                            .filter(json -> paramNo.equals(json.getString("paramNo")))
+                            .collect(Collectors.toList());
+                    if (CollectionUtils.isNotEmpty(collect)) {
+                        List<JSONObject> paramsList = collect.get(0).getJSONArray("params").stream()
+                                .map(json -> (JSONObject) json)
+                                .filter(json -> "1".equals(json.getString("sourceFlag")))
+                                .collect(Collectors.toList());
+                        if (CollectionUtils.isNotEmpty(paramsList)) {
+                            paramsList.forEach(params -> {
+                                String pField = params.getString("field");
+                                String pSourceField = params.getString("sourceField");
+                                if (StringUtils.isNotEmpty(pSourceField)) {
+                                    String[] split = pSourceField.split("-");
+                                    Object extensions = parameters.get("extensions");
+                                    try {
+                                        if (Objects.isNull(extensions)) {
+                                            String extensionsStr = String.valueOf(parameters.get("extensions_str"));
+                                            if (StringUtils.isNotBlank(extensionsStr)) {
+                                                extensions = JSON.parseObject(extensionsStr);
+                                            }
+                                        }
+                                    } catch (Exception e) {
+                                        log.error("extensions_str取值异常！");
+                                    }
+                                    if (Objects.nonNull(extensions)) {
+                                        JSONObject jsonObject = (JSONObject) extensions;
+                                        int index = split.length == 3 ? 2 : (split.length == 2 ? 1 : -1);
+                                        if (index != -1 && jsonObject.containsKey(split[index])) {
+                                            parameters.put(pField, jsonObject.get(split[index]));
+                                        }
+                                        if (split.length > 3) {
+                                            int ind = pSourceField.indexOf("-", split[0].length() + 1);
+                                            String substring = pSourceField.substring(ind + 1);
+                                            if (jsonObject.containsKey(substring)) {
+                                                parameters.put(pField, jsonObject.get(substring));
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            // 黑盒配置取值
+            Object blackParams = parameters.get("blackParams");
+            if (Objects.nonNull(blackParams)) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> blackParamsMap = (Map<String, Object>) blackParams;
+                blackParamsMap.forEach((k, v) -> {
+                    String[] split = k.split("--");
+                    if (split.length > 1) {
+                        String key = split[1];
+                        Object object = parameters.get(key);
+                        if (Objects.isNull(object) || StringUtils.isEmpty(String.valueOf(object))) {
+                            parameters.put(key, v);
+                        }
+                    }
+                });
+            }
+
+            // 关联参数和默认值处理
+            if (!sqlScript.getParamData().isEmpty()) {
+                for (Object obj : sqlScript.getParamData()) {
+                    JSONObject object = (JSONObject) obj;
+                    JSONObject relateIndex = object.getJSONObject("relateIndex");
+                    String name = object.getString("name");
+                    Object defaultValue = object.get("defaultValue");
+                    Object nameValue = parameters.get(name);
+                    if (Objects.nonNull(relateIndex)) {
+                        String no = relateIndex.getString("no");
+                        if (parameters.containsKey(no) && Objects.isNull(nameValue)) {
+                            parameters.put(name, parameters.get(no));
+                        }
+                    }
+                    if (Objects.isNull(nameValue) || String.valueOf(nameValue).equals("\"\"")
+                            || String.valueOf(nameValue).equals("''") || StringUtils.isEmpty(String.valueOf(nameValue))) {
+                        if (Objects.nonNull(defaultValue) && !StringUtils.isEmpty(String.valueOf(defaultValue))) {
+                            scriptSql = scriptSql.replaceAll(":" + name, String.valueOf(defaultValue));
+                        }
+                    }
+                }
+            }
+
+            // 执行sql查询
+            NamedParameterJdbcTemplate jdbcTemplate = getNamedParameterJdbcTemplate(dataSourceModel.getCode());
+            return jdbcTemplate.queryForList(scriptSql, parameters);
+        } catch (Exception e) {
+            log.error("数据源查询数据异常，异常原因{}", ExceptionUtils.getStackTrace(e));
+            return null;
+        }
+    }
+
+    @Override
+    public List<?> formatData(List<?> data) {
+        List<JSONObject> list = new ArrayList<>(data.size());
+        data.forEach(obj -> {
+            JSONObject newJson = new JSONObject(true);
+            JSONObject json = JSON.parseObject(JSON.toJSONString(obj, SerializerFeature.WriteMapNullValue));
+            newJson.putAll(json);
+            list.add(newJson);
+        });
+        return list;
+    }
+}

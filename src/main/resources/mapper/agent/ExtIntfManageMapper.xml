@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.suzhou.bank.agent.mapper.ExtIntfManageMapper">
+
+	<select id="selectListByFilter" resultType="com.suzhou.bank.agent.entity.ExtIntfManageEntity">
+		select eim.id, eim.supplier_id,eism.supplier_name,eim.intf_no,eim.intf_name,eim.intf_request_type,eim.intf_path,eim.intf_structure,
+		eim.intf_type_name,eim.intf_request_type,eim.intf_time_out,eim.intf_status,eim.intf_desc,eim.refer_intf_no,eim.refer_intf_status,
+		eim.async_save,eim.battle_flag,eim.battle_report_content,eim.before_handler,eim.input_time,eim.input_user_name,eim.update_user_id,eim.update_user_name
+		from ext_intf_manage eim left join ext_intf_supplier_manage eism
+		on eim.supplier_id = eism.supplier_id
+		<where>
+			<if test="supplierId != null and supplierId != ''">
+				<bind name = "supplierId" value = "'%' + supplierId + '%'" />
+			  and eim.supplier_id like #{supplierId}
+			</if>
+			<if test="supplierName != null and supplierName != ''">
+				<bind name = "supplierName" value = "'%' + supplierName + '%'" />
+			  and eism.supplier_name like #{supplierName}
+			</if>
+			<if test="intfNo != null and intfNo != ''">
+				<bind name = "intfNo" value = "'%' + intfNo + '%'" />
+			  and eim.intf_no like #{intfNo}
+			</if>
+			<if test="intfName != null and intfName != ''">
+				<bind name = "intfName" value = "'%' + intfName + '%'" />
+			  and eim.intf_name like #{intfName}
+			</if>
+		</where>
+		order by eim.input_time desc
+	</select>
+
+</mapper>

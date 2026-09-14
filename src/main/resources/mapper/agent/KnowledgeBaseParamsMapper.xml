@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.suzhou.bank.agent.mapper.KnowledgeBaseParamsMapper">
+
+    <select id="getApplyPromptList" resultType="com.alibaba.fastjson.JSONObject">
+        select
+            paramname        as sceneName,
+            prompt,
+            large_model_code as largeModelCode,
+            'text' as expectFormat
+        from
+            knowledge_base_params
+        where
+            large_model_code is not null
+            and large_model_code != ''
+            and groupId in(select
+                               groupId
+                           from
+                               knowledge_base_group
+                           where
+                           groupType = 'apply_prompt')
+    </select>
+</mapper>

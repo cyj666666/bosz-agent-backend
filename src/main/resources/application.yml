@@ -21,7 +21,9 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
-      db-type: mysql
+      # 修正（2026-09-14）：原为 mysql，与实际数据源 jdbc:opengauss:// 不一致。
+      # 同类的功能性修复见 MyBatisPlusConfig（分页方言 MYSQL → POSTGRE_SQL）。
+      db-type: postgre_sql
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
@@ -52,4 +54,58 @@ report:
     pool-size: 2
     max-pool-size: 4
     queue-capacity: 50
+
+# ============================================================================
+# agent 模块（指标配置 / 知识配置管理 / 智策引擎）
+# ----------------------------------------------------------------------------
+# 来源：安硕 amar-agent-server 的三个业务模块。配置项统一收敛到 agent.* 命名空间，
+# 与宿主既有配置（report.* / know-kit.* 等）完全分开，便于整体搬迁或摘除。
+# ============================================================================
+agent:
+  # 检查项解析使用的大模型 lm_code（对应 large_model_config.lm_code）。
+  # 刻意不复用 report.ai-analysis.lm-code：两者用途不同，共用会导致调一处影响另一处。
+  # 仅 P4「智策引擎」使用，P2 指标配置不涉及。
+  lm-code: agent-rule-parse
+  # 检查项解析的提示词资源路径（classpath: 或 file: 前缀）
+  rule-parse-prompt: classpath:prompts/rule-parse-prompt.txt
+  # 指标清单粗筛上限：把全部指标塞进提示词会超 token 且稀释模型注意力，
+  # 先本地按关键词粗筛出候选短名单；设为 0 表示不粗筛、全量喂给模型。
+  indicator-catalog-limit: 200
+  # 大模型调用超时（毫秒）
+  timeout-millis: 60000
+
+  index:
+    # 是否启用「角色 → 指标」权限过滤（对应 AgentProperties#indexRoleFilterEnabled）
+    # true  = 按 sys_role_index 过滤当前用户可访问的指标/分组；
+    # false = 所有登录用户可见全部指标分组与指标（调试用，等价于关掉这套授权）。
+    role-filter-enabled: true
+    # 不受上面过滤约束的角色编码（超管放行，能看到全部指标）。
+    # 用「角色编码」而不是角色主键：编码可读、跨环境稳定；主键是各环境自增数字，写进配置会绑死环境。
+    # 注意这与 sys_role_index.role_id 存「角色主键」是两回事——前者用于绕过，后者用于授权数据关联。
+    role-filter-bypass-roles:
+      - admin
+
+  # 进程内缓存（源工程为 cache.memory.*，此处收敛到 agent 命名空间）
+  # 注意：这三个键是 @Value 直读，必须与 AgentDataCacheConfig 里的键名逐字一致
+  cache:
+    memory:
+      initial-capacity: 500
+      max-size: 1000
+      expire-time: 600
+
+  # 动态取数引擎（DynamicDBUtil）连接外部业务库时新建的 Druid 连接池参数
+  # 源工程为 spring.datasource.dynamic.*；此处改名，避免与宿主主库的 spring.datasource 混淆。
+  # 不配置则使用代码内置默认值（initial-size=5 / min-idle=10 / max-active=50 等）。
+  dynamic:
+    datasource:
+      druid:
+        initial-size: 5
+        min-idle: 10
+        max-active: 50
+        max-wait: 10000
+        # JDBC 层超时，避免外部库不可达时 TCP 连接长时间挂住线程
+        connect-timeout: 5000
+        socket-timeout: 15000
+        connection-error-retry-attempts: 1
+        time-between-connect-error-millis: 5000
 

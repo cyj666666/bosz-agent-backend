@@ -94,6 +94,105 @@
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
+
+        <!-- ==================================================================
+             agent 模块（指标配置 / 知识配置管理 / 智策引擎）桥接依赖
+             ==================================================================
+             这组依赖只服务于 com.suzhou.bank.agent 包，宿主既有代码不使用。
+             来源：安硕 amar-agent-server 的对应模块代码原样平移，为降低改造
+             风险，保留其原有的工具库选型（详见各自的说明）。
+             ================================================================== -->
+
+        <!-- 源工程使用 fastjson 1.x 的 JSONObject/JSONArray 做结构处理（非反序列化入口），
+             全模块约 90 处引用。此处沿用 1.2.83（1.x 最终版，已内置 safeMode），
+             与宿主既有的 fastjson2 包名不同、互不冲突。
+             TODO 后续统一迁移到 fastjson2，届时需逐文件核对 SerializerFeature 等差异。 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.83</version>
+        </dependency>
+
+        <!-- 源工程大量使用 hutool（BeanUtil/CollectionUtil/DateUtil/SecureUtil） -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-all</artifactId>
+            <version>5.8.25</version>
+        </dependency>
+
+        <!-- 源工程的内存缓存（MemoryCache/SysDictCache）基于 Guava LoadingCache 实现 -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>32.1.2-jre</version>
+        </dependency>
+
+        <!-- commons-lang3：StringUtils/Pair/ExceptionUtils，源工程核心工具 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+
+        <!-- 源工程同时引用了 commons-collections 3.x 与 4.x 的 CollectionUtils，两者包名不同 -->
+        <dependency>
+            <groupId>commons-collections</groupId>
+            <artifactId>commons-collections</artifactId>
+            <version>3.2.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-collections4</artifactId>
+            <version>4.4</version>
+        </dependency>
+
+        <!-- 仅用于 @Schema / @Operation / @Tag 注解（纯注解，无运行时依赖）。
+             宿主未引入 knife4j/springdoc，因此这里只引注解包，不启用文档 UI。 -->
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations</artifactId>
+            <version>2.2.25</version>
+        </dependency>
+
+        <!-- EasyExcel：P3「知识配置管理」用它读 Excel 模板（KnowledgeCacheHandler +
+             ModuleCodePromptCacheDto 的 @ExcelProperty）。宿主既有 POI 不带这套注解 API，
+             故引入。选 3.3.4 是因为它兼容 POI 5.x（宿主已是 POI 5.2.5）。 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>easyexcel</artifactId>
+            <version>3.3.4</version>
+        </dependency>
+
+        <!-- htmlcleaner：源工程的 HtmlConvertor 深度使用它的可变 DOM 树 API
+             （TagNode / BaseToken / ContentNode、makeCopy / insertChildBefore / getChildTagList / DOMUtils…），
+             共 423 行、几十处调用。曾考虑用 jsoup 替代，但两者 API 范式差异大（jsoup 偏解析查询、
+             htmlcleaner 偏可变树操作），逐行改写风险高于收益 —— 故直接引入原依赖，调用点零改写。
+             htmlcleaner 的用法是「在 Html 模板里按 data-param-no 定位占位节点并就地替换成取值」，
+             这种"就地改树"是本能力的关键，保留原库最稳。 -->
+        <dependency>
+            <groupId>net.sourceforge.htmlcleaner</groupId>
+            <artifactId>htmlcleaner</artifactId>
+            <version>2.29</version>
+        </dependency>
+
+        <!-- QLExpress：规则表达式引擎。P4「智策引擎」用它求值规则表达式，
+             P3 的 AgentPromptController 也用它做结果状态判断（QLExpressUtil.getResultAsBool）。 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>QLExpress</artifactId>
+            <version>3.3.4</version>
+        </dependency>
+
+        <!-- reactor-core：源工程 RenderBigModelApiClient 用 Flux.create 做「轮询等待外部渲染结果」，
+             并用 Disposable 在 SSE 断连时取消轮询。这是响应式流的核心用法（含轮询/取消/背压），
+             改写为普通线程的成本与出错风险都高于引一个纯函数式库。
+             版本由 spring-boot-starter-parent 管理（Boot 2.7.18 → reactor-core 3.4.29，本地已有）。
+             只引 reactor-core，不引 spring-boot-starter-webflux——后者会带入一整套响应式 Web 栈。 -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

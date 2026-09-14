@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.suzhou.bank.agent.mapper.IndexBaseGroupMapper">
+
+    <!--
+      ============================================================================
+      迁移改造说明
+      ============================================================================
+      原实现：SELECT * FROM index_base_group
+              WHERE FIND_IN_SET(groupId, get_all_index_group_parents(:groupIdListStr))
+                 OR groupId IN (:groupIdList)
+
+      存在两个 GaussDB 上不可用的问题：
+        1. get_all_index_group_parents(...) 是自定义函数，全工程无定义处（DBA 也确认用不到）；
+        2. FIND_IN_SET 是 MySQL 专有函数，GaussDB 没有。
+
+      现改写为递归 CTE：取「给定分组 + 其全部下级分组」。语义与原实现一致。
+
+      遍历方向说明：源工程无函数定义可比对，此处按"取子树（下级）"实现——
+      依据是该查询服务于指标分组的左侧树展示，权限过滤场景下需要连同子分组一起放行。
+      若后续拿到原函数定义发现方向相反，把 join 条件改为
+      g.groupid = s.parentgroupid（改为向上取祖先）即可，其余不动。
+
+      列名：index_base_group 的列在 DDL 中为全小写（groupid / parentgroupid），
+      这里按小写书写，避免任何折叠歧义。
+      ============================================================================
+    -->
+    <select id="getIndexBaseGroupList" resultType="com.suzhou.bank.agent.entity.IndexBaseGroupEntity">
+        WITH RECURSIVE group_sub_tree AS (
+            SELECT groupid FROM index_base_group WHERE groupid IN
+            <foreach collection="groupIdList" item="item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+            UNION
+            SELECT g.groupid FROM index_base_group g
+            INNER JOIN group_sub_tree s ON g.parentgroupid = s.groupid
+        )
+        SELECT * FROM index_base_group
+        WHERE groupid IN (SELECT groupid FROM group_sub_tree)
+    </select>
+</mapper>

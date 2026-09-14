@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.suzhou.bank.agent.mapper.IndexParamsMapper">
+
+    <!--
+      ============================================================================
+      迁移改造说明（安硕 amar-agent-server → bosz-agent-backend）
+      ============================================================================
+      1. resultType 包路径由 org.jeecg.modules.agent.entity.* 改为 com.suzhou.bank.agent.entity.*
+
+      2. selectAllGroupIndexList 原实现依赖两个 PostgreSQL/GaussDB 上「不存在」的对象：
+           · 自定义函数 get_all_index_parents(...)  —— 全工程无任何定义处
+           · MySQL 专有函数 FIND_IN_SET(...)        —— GaussDB 不支持
+         现改写为 WITH RECURSIVE 递归 CTE，语义等价且不再依赖任何自定义函数。
+
+      3. 列名大小写：index_params 的列在 DDL 中是【全小写】（paramno / parentparamno），
+         而 Java 实体用 @TableId("paramNo") 驼峰。GaussDB 对不加引号的标识符会折叠为小写，
+         因此能正常匹配；但若将来有人给 SQL 加双引号，会立刻失效——改这段 SQL 时务必注意。
+
+      4. 现状提示：selectAllGroupIndexList 与 IndexBaseGroupMapper.getIndexBaseGroupList
+         在当前代码中【没有任何调用点】（源工程遗留）。这里保留并改写为可执行版本，
+         而不是删除，以便后续需要"取整棵子树"时可直接使用。
+      ============================================================================
+    -->
+
+    <select id="selectRelateIndexParams" resultType="com.suzhou.bank.agent.entity.IndexParamsEntity">
+        select * from index_params where parentparamno in (
+        select parentparamno from index_params where paramno in (
+        select index_no from knowledge_relate_index where supplier_id is not null and knowledge_id in
+        <foreach collection="knowledgeIdList" item="knowledgeId" open="(" close=")" separator=",">
+            #{knowledgeId}
+        </foreach>
+        ))
+        union
+        select * from index_params where paramno in (
+        select parentparamno from index_params where parentparamno in (select parentparamno from index_params where paramno in (
+        select index_no from knowledge_relate_index where supplier_id is not null and knowledge_id in
+        <foreach collection="knowledgeIdList" item="knowledgeId" open="(" close=")" separator=",">
+            #{knowledgeId}
+        </foreach>
+        )))
+        union
+        select * from index_params where paramno in (
+        select index_no from knowledge_relate_index where supplier_id is null and knowledge_id in
+        <foreach collection="knowledgeIdList" item="knowledgeId" open="(" close=")" separator=",">
+            #{knowledgeId}
+        </foreach>
+        )
+        union
+        select * from index_params where parentparamno in (
+        select index_no from knowledge_relate_index where supplier_id is null and knowledge_id in
+        <foreach collection="knowledgeIdList" item="knowledgeId" open="(" close=")" separator=",">
+            #{knowledgeId}
+        </foreach>
+        )
+    </select>
+
+    <!--
+      取「给定指标编号集合 + 其全部下级」构成的子树，再返回子树内所有指标以及挂在这些指标下的子节点。
+
+      原实现：FIND_IN_SET(paramno, get_all_index_parents(:paramNoListStr)) or paramno in (:paramNoList)
+      改写为：递归 CTE index_sub_tree
+
+      为什么用 UNION 而不是 UNION ALL：
+      若数据中不慎出现自环或环状父子关系，UNION ALL 会无限递归把库拖死；
+      UNION 天然去重，可兜住脏数据。根节点的 parentparamno 为 NULL 时 join 不命中，递归自然终止。
+    -->
+    <select id="selectAllGroupIndexList" resultType="com.suzhou.bank.agent.entity.IndexParamsEntity">
+        WITH RECURSIVE index_sub_tree AS (
+            SELECT paramno FROM index_params WHERE paramno IN
+            <foreach collection="paramNoList" item="item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+            UNION
+            SELECT p.paramno FROM index_params p
+            INNER JOIN index_sub_tree s ON p.parentparamno = s.paramno
+        )
+        SELECT * FROM index_params
+        WHERE paramno IN (SELECT paramno FROM index_sub_tree)
+           OR parentparamno IN (SELECT paramno FROM index_sub_tree)
+    </select>
+</mapper>

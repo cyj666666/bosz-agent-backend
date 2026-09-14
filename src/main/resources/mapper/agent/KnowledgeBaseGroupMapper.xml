@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.suzhou.bank.agent.mapper.KnowledgeBaseGroupMapper">
+
+
+    <select id="getKnowledgeGroupTree"
+            resultType="com.suzhou.bank.agent.model.vo.KnowledgeInfoVO">
+        select
+        t2.groupId as labelDictCode1, t2.groupName as labelNameLevel1,  t2.groupValue as labelCodeLevel1,
+        t3.groupId as labelDictCode2, t3.groupName as labelNameLevel2,  t3.groupValue as labelCodeLevel2,
+        t4.groupId as labelDictCode3, t4.groupName as labelNameLevel3,  t4.groupValue as labelCodeLevel3,
+        t5.groupId as labelDictCode4, t5.groupName as labelNameLevel4,  t5.groupValue as labelCodeLevel4
+        FROM knowledge_base_group t1
+        LEFT JOIN knowledge_base_group t2 ON t1.groupId = t2.parentGroupId and t2.groupName != '全部'
+        LEFT JOIN knowledge_base_group t3 ON t2.groupId = t3.parentGroupId and t3.groupName != '全部'
+        LEFT JOIN knowledge_base_group t4 ON t3.groupId = t4.parentGroupId and t4.groupName != '全部'
+        LEFT JOIN knowledge_base_group t5 ON t4.groupId = t5.parentGroupId and t5.groupName != '全部'
+        where
+        t1.parentGroupId = '0' and t1.groupName != '全部'
+    </select>
+
+    <select id="getKnowledgeBaseLevelInfo" resultType="java.lang.String">
+        select concat_ws('-', kbgk6.groupValue, kbgk5.groupValue, kbgk4.groupValue, kbgk3.groupValue, kbgk2.groupValue, kbgk1.groupValue)
+        from knowledge_base_group kbgk1
+        left join knowledge_base_group kbgk2 on kbgk1.parentGroupId = kbgk2.groupId and kbgk2.parentGroupId != '0'
+        left join knowledge_base_group kbgk3 on kbgk2.parentGroupId = kbgk3.groupId and kbgk3.parentGroupId != '0'
+        left join knowledge_base_group kbgk4 on kbgk3.parentGroupId = kbgk4.groupId and kbgk4.parentGroupId != '0'
+        left join knowledge_base_group kbgk5 on kbgk4.parentGroupId = kbgk5.groupId and kbgk5.parentGroupId != '0'
+        left join knowledge_base_group kbgk6 on kbgk5.parentGroupId = kbgk6.groupId and kbgk6.parentGroupId != '0'
+        where kbgk1.parentGroupId != '0' and kbgk1.groupId = #{groupId};
+    </select>
+
+    <select id="getKnowledgeBaseNameInfo" resultType="java.lang.String">
+        select concat_ws('-', kbgk6.groupName, kbgk5.groupName, kbgk4.groupName, kbgk3.groupName, kbgk2.groupName, kbgk1.groupName)
+        from knowledge_base_group kbgk1
+        left join knowledge_base_group kbgk2 on kbgk1.parentGroupId = kbgk2.groupId and kbgk2.parentGroupId != '0'
+        left join knowledge_base_group kbgk3 on kbgk2.parentGroupId = kbgk3.groupId and kbgk3.parentGroupId != '0'
+        left join knowledge_base_group kbgk4 on kbgk3.parentGroupId = kbgk4.groupId and kbgk4.parentGroupId != '0'
+        left join knowledge_base_group kbgk5 on kbgk4.parentGroupId = kbgk5.groupId and kbgk5.parentGroupId != '0'
+        left join knowledge_base_group kbgk6 on kbgk5.parentGroupId = kbgk6.groupId and kbgk6.parentGroupId != '0'
+        where kbgk1.parentGroupId != '0' and kbgk1.groupId = #{groupId}
+    </select>
+
+    <select id="getKnowledgeBaseInfo" resultType="com.alibaba.fastjson.JSONObject">
+        select concat_ws('-', kbgk6.groupValue, kbgk5.groupValue, kbgk4.groupValue, kbgk3.groupValue, kbgk2.groupValue, kbgk1.groupValue) as knowledgeCode,
+        concat_ws('-', kbgk6.groupName, kbgk5.groupName, kbgk4.groupName, kbgk3.groupName, kbgk2.groupName, kbgk1.groupName) as knowledgeName
+        from knowledge_base_group kbgk1
+        left join knowledge_base_group kbgk2 on kbgk1.parentGroupId = kbgk2.groupId and kbgk2.parentGroupId != '0'
+        left join knowledge_base_group kbgk3 on kbgk2.parentGroupId = kbgk3.groupId and kbgk3.parentGroupId != '0'
+        left join knowledge_base_group kbgk4 on kbgk3.parentGroupId = kbgk4.groupId and kbgk4.parentGroupId != '0'
+        left join knowledge_base_group kbgk5 on kbgk4.parentGroupId = kbgk5.groupId and kbgk5.parentGroupId != '0'
+        left join knowledge_base_group kbgk6 on kbgk5.parentGroupId = kbgk6.groupId and kbgk6.parentGroupId != '0'
+        where kbgk1.parentGroupId != '0' and kbgk1.groupId = #{groupId}
+    </select>
+
+    <select id="getGroupId" resultType="java.lang.String">
+        select concat_ws('-', kbgk6.groupId, kbgk5.groupId, kbgk4.groupId, kbgk3.groupId, kbgk2.groupId, kbgk1.groupId) moduleCode
+        from knowledge_base_group kbgk1
+             left join knowledge_base_group kbgk2 on kbgk1.parentGroupId = kbgk2.groupId and kbgk2.parentGroupId != '0'
+             left join knowledge_base_group kbgk3 on kbgk2.parentGroupId = kbgk3.groupId and kbgk3.parentGroupId != '0'
+             left join knowledge_base_group kbgk4 on kbgk3.parentGroupId = kbgk4.groupId and kbgk4.parentGroupId != '0'
+             left join knowledge_base_group kbgk5 on kbgk4.parentGroupId = kbgk5.groupId and kbgk5.parentGroupId != '0'
+             left join knowledge_base_group kbgk6 on kbgk5.parentGroupId = kbgk6.groupId and kbgk6.parentGroupId != '0'
+        where kbgk1.parentGroupId != '0' and kbgk1.groupId = #{groupId};
+    </select>
+
+    <select id="getFirstKnowledgeBaseGroup" resultType="com.suzhou.bank.agent.entity.KnowledgeBaseGroupEntity">
+        select groupId,groupName,groupValue from knowledge_base_group where parentGroupId in (select groupId from knowledge_base_group where parentGroupId = 0) order by parentGroupId
+    </select>
+
+    <select id="getKnowledgeBaseGroupList" resultType="com.suzhou.bank.agent.entity.KnowledgeBaseGroupEntity">
+        SELECT * FROM knowledge_base_group
+        WHERE FIND_IN_SET(groupId, get_all_knowledge_group_parents(#{groupIdListStr})) or groupId in
+        <foreach collection="groupIdList" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+</mapper>
