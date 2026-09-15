@@ -1,5 +1,6 @@
 package com.suzhou.bank.agent.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -25,9 +26,12 @@ public class KnowledgeBaseParamsEntity extends BaseTree<KnowledgeBaseParamsEntit
     private String paramNo;
     /**
      * 知识库ID
+     *
+     * <p>主键为 VARCHAR 且由程序生成（19 位雪花号）；必须显式 ASSIGN_ID，
+     * 理由见 {@code IndexParamsEntity#paramNo}（本工程全局 id-type=auto，不生成字符串主键）。</p>
      */
     @Schema(description = "知识库ID")
-    @TableId("paramId")
+    @TableId(value = "paramId", type = IdType.ASSIGN_ID)
     private String paramId;
     /**
      * 知识库名称

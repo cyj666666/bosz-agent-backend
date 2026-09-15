@@ -2,6 +2,7 @@ package com.suzhou.bank.agent.entity;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -13,7 +14,8 @@ import com.suzhou.bank.agent.model.common.BaseTree;
 @TableName(value = "knowledge_base_group")
 public class KnowledgeBaseGroupEntity extends BaseTree<KnowledgeBaseGroupEntity> {
 
-    @TableId(value = "groupId")
+    /** 主键为 VARCHAR 且由程序生成（19 位雪花号）；必须显式 ASSIGN_ID，理由见 IndexParamsEntity#paramNo */
+    @TableId(value = "groupId", type = IdType.ASSIGN_ID)
     private String groupId;
 
     @TableField("groupName")

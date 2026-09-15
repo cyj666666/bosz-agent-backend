@@ -2,6 +2,7 @@ package com.suzhou.bank.agent.entity;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -25,8 +26,9 @@ import com.suzhou.bank.agent.model.common.BaseTree;
 @Tag(name="index_base_group对象", description = "指标分组表")
 public class IndexBaseGroupEntity extends BaseTree<IndexBaseGroupEntity> {
 
+    /** 主键为 VARCHAR 且由程序生成（19 位雪花号）；必须显式 ASSIGN_ID，理由见 IndexParamsEntity#paramNo */
     @Schema(description = "知识库分组Id")
-    @TableId(value = "groupId")
+    @TableId(value = "groupId", type = IdType.ASSIGN_ID)
     private String groupId;
 
     @Schema(description = "知识库分组名称")

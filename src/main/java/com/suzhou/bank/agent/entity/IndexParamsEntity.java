@@ -1,5 +1,6 @@
 package com.suzhou.bank.agent.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -17,8 +18,15 @@ public class IndexParamsEntity extends BaseTree<IndexParamsEntity> implements Se
 
     /**
      * 参数流水号
+     *
+     * <p><b>🔴 必须显式声明 {@code IdType.ASSIGN_ID}</b>：本工程 yml 的全局
+     * {@code mybatis-plus.global-config.db-config.id-type = auto}（宿主 bigint 自增表需要它），
+     * 而这张表的主键是 <b>VARCHAR 且由程序生成</b>（线上数据都是 19 位雪花号，如
+     * {@code 2095447359636992001}）。若沿用全局 auto，MyBatis-Plus 不会生成主键，
+     * 「新增指标」会把空串当主键插进去（第一次能插、第二次主键冲突）。
+     * 源工程在 Jeecg 环境下全局就是 ASSIGN_ID，所以源码里没写 type —— 迁移时必须补上。</p>
      */
-    @TableId("paramNo")
+    @TableId(value = "paramNo", type = IdType.ASSIGN_ID)
     private String paramNo;
 
     /**

@@ -122,10 +122,14 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
     @Override
     public ListResult<?> getAllIndexParamsList(IndexParamQueryReq reqMsg) {
         List<String> indexIdList = getIndexIdListByRoleId();
-        // 迁移改造点：源工程此处无条件拦断（拿不到角色授权就返回空）。
-        // 本工程 sys_role_index 是无数据的空表且无维护入口，无条件拦断会让页面永远空白，
-        // 故改为受 AgentProperties#indexRoleFilterEnabled 控制，默认不过滤。
-        if (agentProperties.isIndexRoleFilterEnabled() && CollectionUtils.isEmpty(indexIdList)) {
+        // getIndexIdListByRoleId() 的契约：返回「可见分组编号集合」（**非 null**）。
+        // 为空 = 一个分组都没授权 → fail-closed 返回空。
+        // ⚠️ 这里**不要**再写成 `agentProperties.isIndexRoleFilterEnabled() && CollectionUtils.isEmpty(indexIdList)`：
+        //    放行场景（超管 / 开关关闭 / 取不到角色）已在方法内部归一成"全部启用中的分组"，不再用 null 表达，
+        //    否则 `CollectionUtils.isEmpty(null) == true` 又会把"放行"误判成"无授权"，列表直接空白。
+        //    （2026-09-15 自测实测踩过：日志里只有一条 selectRoleIdsByUserId，之后没有任何 index_params 的 SQL。）
+        if (CollectionUtils.isEmpty(indexIdList)) {
+            log.info("当前角色没有任何指标分组授权，指标列表按 fail-closed 返回空");
             return new ListResult<>(0, 0);
         }
 
@@ -160,7 +164,10 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
                 records = indexParamsService.list(queryWrapper);
             }
         } else {
-            queryWrapper.in(CollectionUtils.isNotEmpty(indexIdList), IndexParamsEntity::getParentParamNo, indexIdList);
+            // 列表范围 = **挂在可见分组下的指标**（父节点是分组编号，或授权集合里混存的指标编号）。
+            // 不加这个条件会把 parentParamNo 不是分组的行（本地 950 条）也当成一级指标列出来 →
+            // 总数虚高（1091 vs 线上 136），且分页每页混入父子同行、被 buildTree 折叠后条数不足。
+            queryWrapper.in(IndexParamsEntity::getParentParamNo, indexIdList);
             queryWrapper.orderByDesc(IndexParamsEntity::getInputTime);
             Page<IndexParamsEntity> page = new Page<>(reqMsg.getPageIndex(), reqMsg.getPageSize());
             IPage<IndexParamsEntity> pageList = indexParamsService.page(page, queryWrapper);
@@ -644,9 +651,9 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
 
     @Override
     public ListResult<?> queryIndexBaseGroupTree(String groupName, String groupValue) {
-        // 权限过滤（由 agent.index.role-filter-enabled 控制，三态语义见 getIndexIdListByRoleId）
+        // 权限过滤：indexIdList = 可见分组编号集合（空 = 无授权 → fail-closed），口径详见 getIndexIdListByRoleId()
         List<String> indexIdList = getIndexIdListByRoleId();
-        if (indexIdList != null && indexIdList.isEmpty()) {
+        if (CollectionUtils.isEmpty(indexIdList)) {
             return new ListResult<>(0, 0);
         }
 
@@ -928,58 +935,78 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
     }
 
     /**
-     * 解析当前调用者可访问的「指标 / 指标分组」范围
+     * 解析当前调用者可访问的「指标分组」范围 —— 左侧分组树与右侧指标列表共用同一份口径
      *
-     * <p><b>返回值是三态语义，调用方必须区分（不要直接 isEmpty 判断）：</b></p>
+     * <p><b>返回值只有两种语义（2026-09-15 由"三态"收敛为两态）：</b></p>
      * <table border="1">
      *   <tr><th>返回值</th><th>含义</th><th>调用方应做</th></tr>
-     *   <tr><td>{@code null}</td><td><b>不做过滤</b>：过滤开关关闭 / 当前用户是超管 / 取不到角色（技术性失败）</td>
-     *       <td>正常查询，不加 in 条件</td></tr>
-     *   <tr><td>空列表</td><td><b>已启用过滤，但该角色没有任何授权</b>（fail-closed）</td>
-     *       <td>直接返回空结果（页面为空是"没配授权"，不是故障）</td></tr>
-     *   <tr><td>非空</td><td>授权范围内的指标编号 + 分组编号</td><td>加 in 条件过滤</td></tr>
+     *   <tr><td>非空</td><td><b>可见的分组编号集合</b></td>
+     *       <td>加 in 条件：树按 {@code index_base_group.groupId}，
+     *           列表按 {@code index_params.parentParamNo}
+     *           —— <b>只有挂在分组下的指标才属于列表范围</b></td></tr>
+     *   <tr><td>空列表</td><td>已启用过滤，但该角色<b>一个分组都没授权</b></td>
+     *       <td>直接返回空结果（fail-closed："没配授权"不是故障）</td></tr>
      * </table>
      *
-     * <p><b>关于 {@code sys_role_index.index_id} 存的是什么</b>：它<b>混合存两类 id</b>——
-     * 指标编号（{@code index_params.paramno}）与指标分组编号（{@code index_base_group.groupid}）。
-     * 证据是两处消费方式不同：{@code getAllIndexParamsList} 拿它去匹配
-     * {@code parentParamNo}，而 {@code queryIndexBaseGroupTree} 拿它去匹配 {@code groupId}。
-     * 两者都是 VARCHAR(32)，长度一致所以可以混存。上报/配数据时不要想当然只按其中之一理解。</p>
+     * <p><b>🔴 为什么"放行"不再返回 null（改为返回"全部启用中的分组"）</b>，三个理由：</p>
+     * <ol>
+     *   <li><b>口径</b>：超管的语义是"被授权了全部分组"（公司环境那条角色实际就是授权全部分组），
+     *       不是"完全不按分组过滤"。返回 null 会把 {@code index_params} 里 950 条
+     *       <b>父节点不是分组</b>的行也当成一级指标列出来 —— 线上是 <b>136 条</b>，本工程却显示 1091 条。</li>
+     *   <li><b>踩过的坑</b>：null 到了旧调用方，`CollectionUtils.isEmpty(null) == true` 会被误判成
+     *       "无授权" → 右侧列表直接空白（2026-09-15 自测实测）。</li>
+     *   <li><b>分页错乱</b>：不过滤时，一页 10 条里会混进"父子同页"的行，被 {@code TreeUtil.buildTree}
+     *       折叠进 children 后就不是 10 条了（实测第 2 页只剩 2 条）。</li>
+     * </ol>
      *
-     * <p><b>为什么"取不到角色"时放行而不是拦断</b>：那是配置或数据层面的技术性失败
-     * （如 Token 里没有 userId、sys_user_role 无关联记录），不是"该用户没有授权"。
-     * 若按 fail-closed 处理，会让整个指标配置页对所有人不可用且难以定位；
-     * 这里选择放行并打 WARN，把问题暴露在日志里。真正的"无授权"仍严格 fail-closed。</p>
+     * <p><b>关于 {@code sys_role_index.index_id} 存的是什么</b>：它<b>混合存两类 id</b>——
+     * 指标编号（{@code index_params.paramno}）与分组编号（{@code index_base_group.groupid}）。
+     * 列表按 {@code parentParamNo}、树按 {@code groupId} 过滤，所以指标编号那部分在树里用不上，
+     * 但**不要**过滤掉（源工程同样混存，且列表的 in 条件需要它兜住"父节点是指标"的层级）。</p>
      */
     private List<String> getIndexIdListByRoleId() {
+        // ① 开关关闭：不做角色过滤，但范围依旧是「全部分组」（不是"不过滤"）
         if (!agentProperties.isIndexRoleFilterEnabled()) {
-            return null;
+            return listAllEnabledGroupIds();
         }
         ApiContextModel apiContextModel = ApiContext.getApiContextModel();
 
-        // 超管放行：按「角色编码」判断而不是角色主键 —— 编码可读、可配置、跨环境稳定。
+        // ② 超管放行：按「角色编码」判断而不是角色主键 —— 编码可读、可配置、跨环境稳定。
         // 注意这与 sys_role_index.role_id 存主键是两回事：前者用于绕过，后者用于授权数据关联。
         List<String> bypassRoles = agentProperties.getIndexRoleFilterBypassRoles();
         List<String> roleCodes = apiContextModel.getRoleCode();
         if (CollectionUtils.isNotEmpty(bypassRoles) && CollectionUtils.isNotEmpty(roleCodes)) {
             for (String roleCode : roleCodes) {
                 if (bypassRoles.contains(roleCode)) {
-                    return null;
+                    return listAllEnabledGroupIds();
                 }
             }
         }
 
-        // sys_role_index.role_id 的口径是「角色主键」（sys_role.id），由 ApiContext 按 userId 查出。
+        // ③ sys_role_index.role_id 的口径是「角色主键」（sys_role.id），由 ApiContext 按 userId 查出。
         List<String> roleIdList = apiContextModel.getRoleIdList();
         if (CollectionUtils.isEmpty(roleIdList)) {
-            log.warn("启用角色-指标过滤但取不到当前用户的角色主键（userId={}，roleCode={}），本次不做过滤；"
+            log.warn("启用角色-指标过滤但取不到当前用户的角色主键（userId={}，roleCode={}），本次按「全部分组」放行；"
                             + "请检查 sys_user_role 是否有该用户的关联记录",
                     apiContextModel.getUserId(), roleCodes);
-            return null;
+            return listAllEnabledGroupIds();
         }
 
         List<String> indexIdList = sysRoleIndexService.getIndexIdListByRoleId(roleIdList);
-        // 源实现在查不到授权时返回 null，这里归一成空列表，以便与"不过滤(null)"区分开
+        // 源实现在查不到授权时返回 null，这里归一成空列表（= fail-closed：一个分组都没授权）
         return indexIdList == null ? Collections.<String>emptyList() : indexIdList;
+    }
+
+    /**
+     * 全部「启用中」的分组编号（{@code groupStatus = '1'}），与左侧分组树取数口径逐字一致。
+     *
+     * <p>用于「放行」场景（开关关闭 / 超管 / 取不到角色）：<b>超管不是"不过滤"，而是"被授权了全部分组"</b>。</p>
+     */
+    private List<String> listAllEnabledGroupIds() {
+        LambdaQueryWrapper<IndexBaseGroupEntity> wrapper = Wrappers.lambdaQuery();
+        wrapper.select(IndexBaseGroupEntity::getGroupId);
+        wrapper.eq(IndexBaseGroupEntity::getGroupStatus, "1");
+        List<IndexBaseGroupEntity> groupList = indexBaseGroupService.list(wrapper);
+        return groupList.stream().map(IndexBaseGroupEntity::getGroupId).collect(Collectors.toList());
     }
 }

@@ -71,8 +71,14 @@ public class AgentProperties {
     /**
      * 不受「角色 → 指标」过滤约束的角色编码（默认 <code>admin</code>）
      *
-     * <p>命中该清单的角色，{@code getIndexIdListByRoleId()} 直接返回 <b>null</b>
-     * （约定：null = 不做过滤），即能看到全部指标分组与指标。</p>
+     * <p>命中该清单的角色，{@code getIndexIdListByRoleId()} 返回
+     * <b>全部「启用中」的分组编号</b>（不是 null —— 超管的语义是"被授权了全部分组"，
+     * 而不是"完全不按分组过滤"），即能看到全部分组与全部分组下的指标。</p>
+     *
+     * <p><b>⚠️ 曾经踩过的坑（2026-09-15）</b>：放行原先用 {@code return null} 表示"不过滤"，
+     * 结果 ① 调用方 {@code CollectionUtils.isEmpty(null) == true} 把放行误判成"无授权"→ 列表空白；
+     * ② 不过滤会让 {@code parentParamNo} 不是分组的行也进列表（本地 1091 条 vs 线上 136 条），
+     * 且分页每页混入"父子同页"的行、被 buildTree 折叠后条数不足。现已统一为"全部分组"。</p>
      *
      * <p><b>为什么用角色编码而不是角色主键做放行判断</b>：放行是"代码里的运维开关"，
      * 要求可读、可配置、跨环境稳定；角色编码（<code>admin</code>）满足这三点，
