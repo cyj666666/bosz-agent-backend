@@ -23,10 +23,7 @@ import com.suzhou.bank.agent.model.req.AgentRuleSaveReq;
 import com.suzhou.bank.agent.service.IAgentRuleService;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -51,14 +48,19 @@ public class AgentRuleController {
     public AgentResult<?> queryPageList(@RequestBody @Valid AgentRuleReq req) {
         LambdaQueryWrapper<AgentRuleEntity> queryWrapper = Wrappers.lambdaQuery(AgentRuleEntity.class);
         // 通用模糊、等值条件不变
+        // 检索关键字：界面文案是「请输入规则名称/描述检索关键词」，但源实现只 LIKE 了 rule_name，
+        // 按「触发条件（rule_text）」里的内容搜不到任何结果 —— 与文案承诺不符。
+        // 2026-09-16 修复：补上 rule_text，属**有意扩面**（只会多命中，不会减少原有结果）。
         if (StringUtils.isNotBlank(req.getRuleName())) {
-            queryWrapper.like(AgentRuleEntity::getRuleName, req.getRuleName());
+            String ruleNameKw = req.getRuleName().trim();
+            queryWrapper.and(w -> w.like(AgentRuleEntity::getRuleName, ruleNameKw)
+                    .or().like(AgentRuleEntity::getRuleText, ruleNameKw));
         }
         if (StringUtils.isNotBlank(req.getRuleStatus())) {
             queryWrapper.eq(AgentRuleEntity::getRuleStatus, req.getRuleStatus());
         }
         if (StringUtils.isNotBlank(req.getRuleCode())) {
-            queryWrapper.like(AgentRuleEntity::getRuleCode, req.getRuleCode());
+            queryWrapper.like(AgentRuleEntity::getRuleCode, req.getRuleCode().trim());
         }
 
         List<AgentRuleReq.TopicPairDTO> pairList = req.getTopicPairList();
@@ -82,21 +84,21 @@ public class AgentRuleController {
             }
         }
 
-        String startDate = req.getStartTime();
-        String endDate = req.getEndTime();
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startFull = null, endFull = null;
-        if (StringUtils.isNotBlank(startDate)) {
-            startFull = LocalDateTime.parse(startDate + " 00:00:00", fmt);
-        }
-        if (StringUtils.isNotBlank(endDate)) {
-            endFull = LocalDateTime.parse(endDate + " 23:59:59", fmt);
-        }
-        if (Objects.nonNull(startFull) && Objects.nonNull(endFull)) {
+        // ── 更新日期区间（2026-09-16 修复：原先传 LocalDateTime，日期检索必然失败）──
+        // 缘由：`agent_rule.update_time` 的列类型是 **VARCHAR(30)**（见交付包 DDL / 本地库实测），
+        //   而实体字段也是 String；源实现却把 'yyyy-MM-dd' 解析成 LocalDateTime 再 between/ge/le，
+        //   JDBC 会把参数按 timestamp 发送 → PG 解析 `character varying >= timestamp without time zone`
+        //   **无此运算符**（varchar→timestamp 不是隐式转换）→ 接口直接报错，前端表现为"选完日期点查询就失败"。
+        // 修法：改为**字符串比较**。'YYYY-MM-DD HH:mm:ss' 的字典序与时间序一致，
+        //   对 varchar 列是正确比较；若将来该列改成 timestamp，字符串字面量也会被 PG 隐式转成 timestamp，
+        //   两种列类型都成立，故这是最稳的写法。
+        String startFull = dayStart(req.getStartTime());
+        String endFull = dayEnd(req.getEndTime());
+        if (startFull != null && endFull != null) {
             queryWrapper.between(AgentRuleEntity::getUpdateTime, startFull, endFull);
-        } else if (Objects.nonNull(startFull)) {
+        } else if (startFull != null) {
             queryWrapper.ge(AgentRuleEntity::getUpdateTime, startFull);
-        } else if (Objects.nonNull(endFull)) {
+        } else if (endFull != null) {
             queryWrapper.le(AgentRuleEntity::getUpdateTime, endFull);
         }
         queryWrapper.orderByDesc(AgentRuleEntity::getUpdateTime);
@@ -172,5 +174,28 @@ public class AgentRuleController {
     @PostMapping(value = "/tree")
     public AgentResult<?> getTree(@RequestParam(required = false) String keyname) {
         return agentRuleService.getRuleTreeByTopic(keyname);
+    }
+
+    /**
+     * 把前端传来的「日期」归一成可与 varchar 列比较的**字符串**下界。
+     *
+     * @param date 前端传 {@code yyyy-MM-dd}；若已带时分秒则原样使用，避免二次拼接
+     * @return {@code yyyy-MM-dd 00:00:00}；入参为空时返回 {@code null}（表示不加该条件）
+     */
+    private static String dayStart(String date) {
+        String s = StringUtils.trimToEmpty(date);
+        if (s.isEmpty()) {
+            return null;
+        }
+        return s.length() > 10 ? s : s + " 00:00:00";
+    }
+
+    /** {@link #dayStart} 的上界版本：补 23:59:59，保证「当天」的记录被包含在内。 */
+    private static String dayEnd(String date) {
+        String s = StringUtils.trimToEmpty(date);
+        if (s.isEmpty()) {
+            return null;
+        }
+        return s.length() > 10 ? s : s + " 23:59:59";
     }
 }

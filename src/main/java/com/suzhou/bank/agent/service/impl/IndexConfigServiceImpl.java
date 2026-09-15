@@ -142,6 +142,16 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
                 IndexParamsEntity::getScriptType, IndexParamsEntity::getSupplierId, IndexParamsEntity::getIntfNo);
         queryWrapper.like(StringUtils.isNotEmpty(reqMsg.getParamId()), IndexParamsEntity::getParamID, reqMsg.getParamId());
         queryWrapper.like(StringUtils.isNotEmpty(reqMsg.getParamName()), IndexParamsEntity::getParamName, reqMsg.getParamName());
+        // 数据来源（2026-09-16 新增，前端一直有这个检索框但源工程没有对应字段 → 点了没反应）：
+        // 列表「数据来源」列是 `getIndexSource(param)` 运行时拼出来的字符串，库里没有同名列，
+        // 因此对**产出它的原始列**做模糊匹配 —— script（SQL 文本 / 数据源 JSON 全在里面）、
+        // supplierId、intfNo。这样搜表名、数据源代码、接口编号都能命中，方向与列上展示的内容一致。
+        if (StringUtils.isNotEmpty(reqMsg.getIndexSource())) {
+            String indexSourceKw = reqMsg.getIndexSource().trim();
+            queryWrapper.and(w -> w.like(IndexParamsEntity::getScript, indexSourceKw)
+                    .or().like(IndexParamsEntity::getSupplierId, indexSourceKw)
+                    .or().like(IndexParamsEntity::getIntfNo, indexSourceKw));
+        }
         if (StringUtils.isNotBlank(reqMsg.getParentParamNo())) {
             List<IndexParamsEntity> indexParamsEntities = indexParamsService.selectByParentParamNo(reqMsg.getParentParamNo());
             if (CollectionUtils.isEmpty(indexParamsEntities)) {
@@ -150,10 +160,19 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             List<String> collect = indexParamsEntities.stream().map(IndexParamsEntity::getParamNo).collect(Collectors.toList());
             queryWrapper.and(qr -> qr.in(IndexParamsEntity::getParentParamNo, collect).or().eq(IndexParamsEntity::getParentParamNo, reqMsg.getParentParamNo()));
         }
+        // 「指标ID」检索（2026-09-16 修复）
+        // 源语义：`getById(paramNo)` 命中时返回「该指标 + 其同级 + 其下级」，用于"点行定位"。
+        // 🔴 原实现的问题：**未命中时没有 else 分支** —— records 保持 null，方法末尾的
+        //    `CollectionUtils.isEmpty(records)` 直接返回空列表。于是用户在「指标ID」框里输入
+        //    一个**不完整的编号**（模糊检索的用法）时，看到的是"查不到任何数据"，
+        //    实际是这条分支把查询整个吞掉了。
+        // 修法：精确未命中 → 降级为 LIKE 模糊，并继续走下面的分页查询分支。
+        boolean paramNoExactHit = false;
         if (StringUtils.isNotEmpty(reqMsg.getParamNo())) {
             // 查询父节点
-            IndexParamsEntity indexParamsEntity = indexParamsService.getById(reqMsg.getParamNo());
+            IndexParamsEntity indexParamsEntity = indexParamsService.getById(reqMsg.getParamNo().trim());
             if (indexParamsEntity != null) {
+                paramNoExactHit = true;
                 String parentParamNo = indexParamsEntity.getParentParamNo();
                 IndexParamsEntity parentEntity = indexParamsService.getById(parentParamNo);
                 if (Objects.isNull(parentEntity)) {
@@ -163,7 +182,12 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
                 }
                 records = indexParamsService.list(queryWrapper);
             }
-        } else {
+        }
+        if (!paramNoExactHit) {
+            // 模糊兜底：精确命中不到就按 LIKE 检索指标ID本身
+            if (StringUtils.isNotEmpty(reqMsg.getParamNo())) {
+                queryWrapper.like(IndexParamsEntity::getParamNo, reqMsg.getParamNo().trim());
+            }
             // 列表范围 = **挂在可见分组下的指标**（父节点是分组编号，或授权集合里混存的指标编号）。
             // 不加这个条件会把 parentParamNo 不是分组的行（本地 950 条）也当成一级指标列出来 →
             // 总数虚高（1091 vs 线上 136），且分页每页混入父子同行、被 buildTree 折叠后条数不足。

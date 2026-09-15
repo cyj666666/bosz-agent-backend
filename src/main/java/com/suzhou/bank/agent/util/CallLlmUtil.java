@@ -185,14 +185,15 @@ public class CallLlmUtil {
         // 参数校验
         if (rspBody.isEmpty()) {
             syncSaveCallLlmRecord(logSupplier.get(), requestTime, DateUtil.now(), "", "", 0, 0, 500, -1);
-            finishEmitter(emitter, finishFlag);
+            // 出错也要让前端看得见原因：只发 finished! 的话，前端只能看到"什么都没出来"
+            finishEmitterWithError(emitter, finishFlag, "参数没有数据!");
             return AgentResult.error("参数没有数据!");
         }
         // 大模型校验
         LargeModelConfigEntity largeModelConfigEntity = largeModelConfigByAccountMap.get(largeModelCode);
         if (Objects.isNull(largeModelConfigEntity)) {
             syncSaveCallLlmRecord(logSupplier.get(), requestTime, DateUtil.now(), rspBody.toString(), "", 0, 0, 500, -1);
-            finishEmitter(emitter, finishFlag);
+            finishEmitterWithError(emitter, finishFlag, "非法的大模型CODE:" + largeModelCode);
             return AgentResult.error("非法的大模型CODE:" + largeModelCode);
         }
         // 获取模型配置
@@ -411,5 +412,30 @@ public class CallLlmUtil {
             log.error("发送结束消息失败:{}", e.getMessage());
             emitter.completeWithError(e);
         }
+    }
+
+    /**
+     * 出错收尾：**先推一帧错误 JSON**，再走正常的 `finished!` 收尾。
+     *
+     * <h3>为什么需要</h3>
+     * <p>原先出错时只调 {@link #finishEmitter}，只发一条纯文本 `finished!` —— 前端拿到的是
+     * 「HTTP 200 + 没有任何内容帧 + 正常结束」，**无法区分"服务端失败了"和"结果就是空的"**。
+     * 2026-09-16 排查「智策引擎开始校验后 AI 分析整块不出现」时定位到这一点：
+     * 知识库 `IntelligentStrategyEngine` 未配置 → 没有 prompt 也没有 `large_model_code`
+     * → 这里返回 500 → 前端 onError 被静默吞掉 → 页面上什么都没有，用户以为功能没做。</p>
+     *
+     * <p>帧格式与正常帧保持一致（`code` + `message`），前端 `agentSse` 见到 `code !== 200`
+     * 即按业务错误处理（正常增量帧始终是 `code: 200`，见 {@code OpenAiChatUtil#consumeStream}）。</p>
+     */
+    public static void finishEmitterWithError(SseEmitter emitter, boolean finishFlag, String message) {
+        try {
+            JSONObject errorFrame = new JSONObject();
+            errorFrame.put("code", 500);
+            errorFrame.put("message", message);
+            emitter.send(errorFrame.toJSONString());
+        } catch (IOException e) {
+            log.error("发送错误消息失败:{}", e.getMessage());
+        }
+        finishEmitter(emitter, finishFlag);
     }
 }
