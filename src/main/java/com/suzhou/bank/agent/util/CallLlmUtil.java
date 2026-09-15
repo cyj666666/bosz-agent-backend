@@ -332,6 +332,19 @@ public class CallLlmUtil {
         return (int) sortNoCounter.getAndIncrement();
     }
 
+    /**
+     * 保存一条大模型调用记录（{@code call_llm_record}）
+     *
+     * <p><b>{@code sortNo} 直接用传入值，不走 {@link #generateSortNo}（调用方自己给序号）</b>。
+     * 本表的序号约定见 {@code OpenAiChatUtil#STREAM_RESULT_SORT_NO}：</p>
+     * <ul>
+     *   <li>{@code -1} —— init 行（{@link #syncSaveInitCallLlmRecord}），带完整 {@code request_body}；</li>
+     *   <li>{@code 0} —— 结果行（流式与非流式统一），{@code content} 存整段输出。</li>
+     * </ul>
+     * <p>⚠️ 别"顺手"把 {@code 0} 交给 {@code generateSortNo}：它判 {@code sortNo > 0 || sortNo == -1}，
+     * 而 {@code 0} 两个都不满足 → 会落到 {@code (int) sortNoCounter.getAndIncrement()}，
+     * 把毫秒级 long 强转 int 溢出成乱数。</p>
+     */
     public void saveCallLlmRecord(CallLlmRecordEntity callLlmRecordEntity, String requestTime, String responseTime,
                                   String content, String requestBody, Integer promptTokens, Integer completionTokens,
                                   Integer status, Integer sortNo) {
