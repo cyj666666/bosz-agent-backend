@@ -12,7 +12,8 @@
 --     sys_dict / sys_dict_item（agent 自带字典）、agent_config（「关联 Agent」下拉）、
 --     prompt_verify_scene_info + prompt_verify_scene_relate_prompt_info（指标配置取「大模型评估」提示词模板）
 -- 来源：agent_gauss_ddl.sql（公司提供的 179 张表自包含版）中抽取，
---       **语句原样保留、未做任何改写**（类型 / 默认值 / 注释 / 索引均为公司原口径）。
+--       **语句原样抽取**。唯一的主动改写见下面「注意」第 1 条（把 3 条事后加宽语句内联进列定义），
+--       另有 7 条表级注释是本工程补写的（均带标记行，便于与公司原文区分）。
 --
 -- 执行前置：
 --   ① schema 必须已存在（不存在先执行 CREATE SCHEMA <schema>）；
@@ -20,9 +21,15 @@
 --   ③ 脚本内**没有** IF NOT EXISTS —— 目标表已存在时会直接报表已存在，属预期行为。
 --
 -- 注意：
---   · 源脚本末尾原本有 3 条 ALTER TABLE（agent_rule ×2、index_params ×1），已**归位到各自表下方**
---     （紧随该表的 CREATE TABLE / COMMENT 之后）——这是「事后加宽字段」，**必须执行**，
---     否则 agent_rule.rule_text / parsed_expression 与 index_params.columncomment 的类型会偏小。
+--   · 🔴 源脚本末尾原本有 3 条「事后加宽」语句（agent_rule ×2、index_params ×1），
+--     写法是 **MySQL 风格的 `MODIFY COLUMN`**。本脚本**已把它们内联进各自的列定义**：
+--       agent_rule.rule_text        → TEXT
+--       agent_rule.parsed_expression→ TEXT
+--       index_params.columncomment  → VARCHAR(1000)
+--     （与公司库 `bosz_test` 的实际类型逐列核对一致；本地 `as_agent` 因用旧脚本建表仍是窄的）
+--     原 3 条语句以注释形式保留在原位，便于追溯。
+--     ⚠️ 为什么要内联：`MODIFY COLUMN` 属于 MySQL 兼容语法，**纯 PG 模式的库上可能不被支持**；
+--        内联后脚本自洽，两种模式都能一次跑通，也不会出现"建表成功但字段没加宽"的静默偏差。
 --   · 宿主自建 RBAC（sys_user / sys_role / sys_user_role）**不在本脚本内** ——
 --     agent 模块通过 AgentRoleMapper / ApiContext **只读**这三张表（不建、不写），由宿主系统负责。
 --   · sys_fill_rule / sys_permission_data_rule 也**不在本脚本内** —— 这两个表名只在代码**注释**里出现
@@ -95,7 +102,7 @@ CREATE TABLE index_params (
     columntype             VARCHAR(100),
     columnremark           VARCHAR(100),
     columnisnull           VARCHAR(100),
-    columncomment          VARCHAR(100),
+    columncomment          VARCHAR(1000),
     columnfromtable        VARCHAR(100),
     columnfromdatasource   VARCHAR(100),
     otherconfig            VARCHAR(1000),
@@ -187,7 +194,9 @@ COMMENT ON COLUMN index_params.data_example IS '数据样例';
 COMMENT ON COLUMN index_params.data_type IS '数据类型';
 COMMENT ON COLUMN index_params.data_content_parse IS '数据内容解析结果';
 COMMENT ON COLUMN index_params.paramkey IS '指标唯一标志';
-ALTER TABLE index_params MODIFY COLUMN columncomment VARCHAR(1000);
+-- ↑ 原公司脚本在此处有一条「事后加宽」语句：ALTER TABLE index_params MODIFY COLUMN columncomment VARCHAR(1000);
+--   本脚本已把它**内联进上面的列定义**（columncomment = VARCHAR(1000)，与公司库实际类型一致），故此处不再需要该语句。
+--   原因：原写法是 MySQL 风格 `MODIFY COLUMN`，在纯 PG 模式的库上可能不被支持；内联后两种模式都能跑。
 
 -- ---------------------------------------------------------------
 -- [3/44] index_params_version —— 指标参数版本信息表
@@ -393,6 +402,8 @@ CREATE TABLE sys_data_source (
     sys_org_code           VARCHAR(64),
     PRIMARY KEY (id)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE sys_data_source IS '数据源配置表';
 COMMENT ON COLUMN sys_data_source.code IS '数据源编码';
 COMMENT ON COLUMN sys_data_source.name IS '数据源名称';
 COMMENT ON COLUMN sys_data_source.remark IS '备注';
@@ -612,6 +623,8 @@ CREATE TABLE sys_category (
     sample_question        VARCHAR(1000),
     PRIMARY KEY (id)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE sys_category IS '分类字典表';
 COMMENT ON COLUMN sys_category.pid IS '父级节点';
 COMMENT ON COLUMN sys_category.name IS '类型名称';
 COMMENT ON COLUMN sys_category.code IS '类型编码';
@@ -1111,8 +1124,8 @@ COMMENT ON COLUMN sys_role_knowledge_output.operate_ip IS '操作ip';
 CREATE TABLE agent_rule (
     id                       BIGINT NOT NULL AUTO_INCREMENT,
     rule_name                VARCHAR(255),
-    rule_text                VARCHAR(1000),
-    parsed_expression        VARCHAR(1000),
+    rule_text                TEXT,
+    parsed_expression        TEXT,
     rule_status              CHAR(1),
     input_time               VARCHAR(30),
     input_user               VARCHAR(100),
@@ -1155,8 +1168,12 @@ COMMENT ON COLUMN agent_rule.rule_struct IS '规则结果结构';
 COMMENT ON COLUMN agent_rule.fact_analysis IS '事实分析';
 COMMENT ON COLUMN agent_rule.request_params IS '请求参数';
 CREATE UNIQUE INDEX uk_agent_rule_rule_code ON agent_rule (rule_code);
-ALTER TABLE agent_rule MODIFY COLUMN rule_text TEXT;
-ALTER TABLE agent_rule MODIFY COLUMN parsed_expression TEXT;
+-- ↑ 原公司脚本在此处有一条「事后加宽」语句：ALTER TABLE agent_rule MODIFY COLUMN rule_text TEXT;
+--   本脚本已把它**内联进上面的列定义**（rule_text = TEXT，与公司库实际类型一致），故此处不再需要该语句。
+--   原因：原写法是 MySQL 风格 `MODIFY COLUMN`，在纯 PG 模式的库上可能不被支持；内联后两种模式都能跑。
+-- ↑ 原公司脚本在此处有一条「事后加宽」语句：ALTER TABLE agent_rule MODIFY COLUMN parsed_expression TEXT;
+--   本脚本已把它**内联进上面的列定义**（parsed_expression = TEXT，与公司库实际类型一致），故此处不再需要该语句。
+--   原因：原写法是 MySQL 风格 `MODIFY COLUMN`，在纯 PG 模式的库上可能不被支持；内联后两种模式都能跑。
 
 -- ---------------------------------------------------------------
 -- [26/44] agent_rule_prompt —— Agent 大模型提示词配置表
@@ -1194,6 +1211,8 @@ CREATE TABLE large_model_config (
     model_config           TEXT,
     PRIMARY KEY (id)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE large_model_config IS '大模型配置表';
 COMMENT ON COLUMN large_model_config.id IS '大模型唯一ID';
 COMMENT ON COLUMN large_model_config.lm_code IS '大模型唯一CODE';
 COMMENT ON COLUMN large_model_config.model IS '模型';
@@ -1466,6 +1485,8 @@ CREATE TABLE call_llm_record (
     session_msg_no         VARCHAR(64),
     PRIMARY KEY (trace_id, sort_no)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE call_llm_record IS '大模型调用记录表';
 
 -- ---------------------------------------------------------------
 -- [38/44] open_api_conf —— openapi 定义
@@ -1575,6 +1596,8 @@ CREATE TABLE sys_dict (
     type                   INT DEFAULT 0,
     PRIMARY KEY (id)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE sys_dict IS '数据字典表';
 COMMENT ON COLUMN sys_dict.dict_name IS '字典名称';
 COMMENT ON COLUMN sys_dict.dict_code IS '字典编码';
 COMMENT ON COLUMN sys_dict.description IS '描述';
@@ -1608,6 +1631,8 @@ CREATE TABLE sys_dict_item (
     remark                 VARCHAR(100),
     PRIMARY KEY (id)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE sys_dict_item IS '数据字典项表';
 COMMENT ON COLUMN sys_dict_item.dict_id IS '字典id';
 COMMENT ON COLUMN sys_dict_item.item_text IS '字典项文本';
 COMMENT ON COLUMN sys_dict_item.item_value IS '字典项值';
@@ -1640,6 +1665,8 @@ CREATE TABLE agent_config (
     large_model_code       VARCHAR(100),
     PRIMARY KEY (id)
 );
+-- ↑ 下面这条表级注释为【本工程补写】（源 DDL 未提供），措辞按该表列注释口径归纳
+COMMENT ON TABLE agent_config IS '智能体配置表';
 COMMENT ON COLUMN agent_config.agent_name IS '智能体名称';
 COMMENT ON COLUMN agent_config.agent_code IS '智能体编码';
 COMMENT ON COLUMN agent_config.entity_type IS '主体类型';
