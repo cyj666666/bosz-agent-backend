@@ -17,12 +17,19 @@ UNION ALL SELECT 'sys_dict',                  count(*), 88   FROM sys_dict
 UNION ALL SELECT 'sys_dict_item',             count(*), 24   FROM sys_dict_item
 ORDER BY 1;
 
--- 【二】映射改写是否生效（①②③ 三个"残留"都必须是 0）
+-- 【二】映射改写是否生效（①②③④ 四个"残留"都必须是 0）
 SELECT '① 旧数据源id残留(期望0)'      AS 检查项, count(*) AS 实际值 FROM index_params            WHERE script LIKE '%2095447359636992001%'
 UNION ALL SELECT '② 旧模型code残留(期望0)',   count(*) FROM knowledge_base_params  WHERE large_model_code IS NOT NULL AND large_model_code <> (SELECT lm_code FROM large_model_config WHERE use_flag='Y' ORDER BY id LIMIT 1)
 UNION ALL SELECT '③ 旧JSON-key残留(期望0)',   count(*) FROM knowledge_base_params  WHERE large_model_content LIKE '%"Qwen3-32B":%' OR large_model_content LIKE '%"qwen3":%'
+-- ④ 「模型信息」里**嵌套的** largeModelCode 残留（漏改会让详情页显示旧模型名）
+UNION ALL SELECT '④ 嵌套largeModelCode残留(期望0)', count(*)
+  FROM knowledge_base_params
+ WHERE contentdesc     LIKE '%Qwen3-32B%' OR contentdesc     LIKE '%qwen3%'
+    OR input_condition LIKE '%Qwen3-32B%' OR input_condition LIKE '%qwen3%'
+    OR large_model_content LIKE '%Qwen3-32B%' OR large_model_content LIKE '%qwen3%'
 UNION ALL SELECT '   新数据源id命中(期望134)', count(*) FROM index_params           WHERE script LIKE '%' || (SELECT id FROM sys_data_source ORDER BY id LIMIT 1) || '%'
 UNION ALL SELECT '   新JSON-key命中(期望86)',  count(*) FROM knowledge_base_params  WHERE large_model_content LIKE '%"' || (SELECT lm_code FROM large_model_config WHERE use_flag='Y' ORDER BY id LIMIT 1) || '":%'
+UNION ALL SELECT '   新模型code命中(期望86)',  count(*) FROM knowledge_base_params  WHERE large_model_code = (SELECT lm_code FROM large_model_config WHERE use_flag='Y' ORDER BY id LIMIT 1)
 ORDER BY 1;
 
 -- 【三】授权是否生成（🔴 这两条决定知识库页是否有内容）

@@ -52,4 +52,57 @@ UPDATE knowledge_base_version
                                      '"' || (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1) || '":')
  WHERE large_model_content LIKE '%"Qwen3-32B":%';
 
+-- ④ 「模型信息」里**嵌套的** largeModelCode 也要换
+--    ⚠️ ③ 只换了 JSON 的 **key**（`"Qwen3-32B":`），**漏了嵌套 value** ——
+--       条件组里还有一处 `"modelInfo":{"largeModelCode":"Qwen3-32B"}`。
+--       漏改的后果：知识库「配置 → 详情页」右栏「输出要求 → 模型信息」显示的是**公司库的旧模型名**，
+--       而目标库的模型下拉里根本没有这个 code → 用户看到"模型信息不是我的库里的模型"。
+--    三列都可能有，且形态不同：
+--       contentdesc        （当前模型的输出要求片段，形态 `"largeModelCode":"Qwen3-32B"`）
+--       input_condition    （输入条件，同样是 `"largeModelCode":"Qwen3-32B"`）
+--       large_model_content（整张 map，内部引号是**转义**过的 `\"largeModelCode\":\"Qwen3-32B\"`）
+--    → 所以这里**直接对整个文本做裸串替换**，两种形态一次覆盖（同一模型换 code，语义无损）。
+UPDATE knowledge_base_params
+   SET contentdesc = replace(contentdesc, 'Qwen3-32B',
+                             (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1))
+ WHERE contentdesc LIKE '%Qwen3-32B%';
+
+UPDATE knowledge_base_params
+   SET input_condition = replace(input_condition, 'Qwen3-32B',
+                             (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1))
+ WHERE input_condition LIKE '%Qwen3-32B%';
+
+UPDATE knowledge_base_params
+   SET large_model_content = replace(large_model_content, 'Qwen3-32B',
+                             (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1))
+ WHERE large_model_content LIKE '%Qwen3-32B%';
+
+-- 版本表同名列（注意：版本表叫 **content_desc**，参数表叫 contentdesc，别写错）
+UPDATE knowledge_base_version
+   SET content_desc = replace(content_desc, 'Qwen3-32B',
+                             (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1))
+ WHERE content_desc LIKE '%Qwen3-32B%';
+
+UPDATE knowledge_base_version
+   SET input_condition = replace(input_condition, 'Qwen3-32B',
+                             (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1))
+ WHERE input_condition LIKE '%Qwen3-32B%';
+
+UPDATE knowledge_base_version
+   SET large_model_content = replace(large_model_content, 'Qwen3-32B',
+                             (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1))
+ WHERE large_model_content LIKE '%Qwen3-32B%';
+
+-- 历史残留小写 `qwen3`（公司库里改过模型 code，key 与嵌套 value 都留过小写形态）
+UPDATE knowledge_base_params
+   SET contentdesc = replace(replace(contentdesc, '"qwen3":', '"' || (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1) || '":'),
+                             '"largeModelCode":"qwen3"',
+                             '"largeModelCode":"' || (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1) || '"')
+ WHERE contentdesc LIKE '%qwen3%';
+
+UPDATE knowledge_base_params
+   SET input_condition = replace(input_condition, '"largeModelCode":"qwen3"',
+                             '"largeModelCode":"' || (SELECT lm_code FROM large_model_config WHERE use_flag = 'Y' ORDER BY id LIMIT 1) || '"')
+ WHERE input_condition LIKE '%qwen3%';
+
 -- 说明：历史记录表 call_llm_record.large_model_code **保留原值**（它记录当时真实调用的模型），不改。
