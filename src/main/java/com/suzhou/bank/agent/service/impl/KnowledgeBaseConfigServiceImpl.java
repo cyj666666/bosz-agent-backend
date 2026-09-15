@@ -2862,24 +2862,24 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
                 if (!req.isStream()) {
                     return AgentResult.OK(dividedPromptResult);
                 }
-        // 迁移改造点：源实现用 reactor 的 Flux.range(...).map(...).subscribe(...) 做「分块 + 逐块推 SSE」。
-        // 本工程不引入 reactor，改为等价的同步 for 循环：按 chunkSize 切片逐块发送，
-        // 单块发送失败时记日志并结束 emitter（与原实现的块级 catch 行为一致），全部完成后 finishEmitter。
-        int chunkCount = (dividedPromptResult.length() + chunkSize - 1) / chunkSize;
-        for (int i = 0; i < chunkCount; i++) {
-            String charStr = dividedPromptResult.substring(i * chunkSize, Math.min((i + 1) * chunkSize, dividedPromptResult.length()));
-            try {
-                JSONObject result = new JSONObject();
-                result.put("code", 200);
-                result.put("content", charStr);
-                SseEmitter.SseEventBuilder event = SseEmitter.event().name("message").data(result.toJSONString());
-                emitter.send(event);
-            } catch (IOException e) {
-                log.error("发送失败:{}", ExceptionUtils.getStackTrace(e));
+                // 迁移改造点：源实现用 reactor 的 Flux.range(...).map(...).subscribe(...) 做「分块 + 逐块推 SSE」。
+                // 本工程不引入 reactor，改为等价的同步 for 循环：按 chunkSize 切片逐块发送，
+                // 单块发送失败时记日志并结束 emitter（与原实现的块级 catch 行为一致），全部完成后 finishEmitter。
+                int chunkCount = (dividedPromptResult.length() + chunkSize - 1) / chunkSize;
+                for (int i = 0; i < chunkCount; i++) {
+                    String charStr = dividedPromptResult.substring(i * chunkSize, Math.min((i + 1) * chunkSize, dividedPromptResult.length()));
+                    try {
+                        JSONObject result = new JSONObject();
+                        result.put("code", 200);
+                        result.put("content", charStr);
+                        SseEmitter.SseEventBuilder event = SseEmitter.event().name("message").data(result.toJSONString());
+                        emitter.send(event);
+                    } catch (IOException e) {
+                        log.error("发送失败:{}", ExceptionUtils.getStackTrace(e));
+                        finishEmitter(emitter);
+                    }
+                }
                 finishEmitter(emitter);
-            }
-        }
-        finishEmitter(emitter);
             }
             return emitter;
         } catch (Exception e) {
@@ -5697,7 +5697,11 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         Page<KnowledgeBaseParamsEntity> page = new Page<>(reqMsg.getPageIndex(), reqMsg.getPageSize());
         IPage<KnowledgeBaseParamsEntity> pageList = knowledgeBaseParamsService.page(page, queryWrapper);
         if (CollectionUtils.isEmpty(pageList.getRecords())) {
-            return Collections.emptyMap();
+            // 迁移修正点：源实现此处 `return Collections.emptyMap();`，导致本方法【空结果返回 {}、
+            // 有结果返回 []】两种形态（Object 返回类型掩盖了它）。而调用方（源工程 RuleFormModal.vue:561）
+            // 直接 `res.result.find(...)`，即【假定永远是数组】——空结果时会抛 find is not a function。
+            // 这里改为返回空 List，与方法结尾的返回类型保持一致；对外契约因此收敛为「永远是数组」。
+            return new ArrayList<>();
         }
         List<JSONObject> paramNoList = new ArrayList<>();
         pageList.getRecords().forEach(entity -> {

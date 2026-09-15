@@ -206,12 +206,12 @@ public class CallLlmUtil {
             url = modelConfig.getString("url");
             encryptApiKey = modelConfig.getString("apiKey");
             if (StringUtils.isNotEmpty(encryptApiKey)) {
-                apiKey = AesUtil.decrypt(encryptApiKey.split(",")[0]);
+                apiKey = resolveApiKey(encryptApiKey);
             }
         } else {
             model = largeModelConfigEntity.getModel();
             encryptApiKey = largeModelConfigEntity.getApiKey();
-            apiKey = AesUtil.decrypt(encryptApiKey.split(",")[0]);
+            apiKey = resolveApiKey(encryptApiKey);
             url = largeModelConfigEntity.getUrl();
         }
 
@@ -352,6 +352,42 @@ public class CallLlmUtil {
         }
     }
 
+    /**
+     * 解析大模型 api_key：兼容「明文」与「AES 密文」两种存法。
+     *
+     * <h3>为什么需要这个方法</h3>
+     * <p>源工程把 api_key 以 AES 密文入库，{@code CallLlmUtil} 拿到值后<b>无条件解密</b>。
+     * 但本工程 {@code large_model_config.lm_desc} 明确约定「api_key 明文、url 为完整地址」
+     * ——按该约定配置明文后，{@code AesUtil.decrypt} 会对 {@code sk-xxx} 做 base64 解码，
+     * 直接抛 {@code IllegalArgumentException: Illegal base64 character 2d}（'-' 不是 base64 字符），
+     * <b>整条大模型链路 500</b>（2026-09-15 实测踩到）。</p>
+     *
+     * <h3>判定顺序</h3>
+     * <ol>
+     *   <li>以 {@code {GCM}} 开头 → 新版 AES/GCM 密文，调 {@link AesUtil#decrypt}；</li>
+     *   <li>以 {@code sk-} 开头 → 明文（OpenAI 系 API Key 的固定前缀），直接用；</li>
+     *   <li>其余 → 先尝试 ECB 解密（兼容源工程存量密文），<b>解不开则按明文使用</b>。</li>
+     * </ol>
+     * <p>第 3 条的"解不开就当明文"是刻意的：api_key 配错的正确暴露位置是调用大模型时的
+     * 401/鉴权错误（信息明确），而不是在这里抛一个"解密失败"（难以定位）。
+     * 源工程的 {@code apiKey.split(",")[0]} 也保留——它用于一行配置多个 key 轮询的场景。</p>
+     */
+    private static String resolveApiKey(String rawApiKey) {
+        if (StringUtils.isBlank(rawApiKey)) {
+            return "";
+        }
+        String value = rawApiKey.split(",")[0].trim();
+        if (value.startsWith("{GCM}") || value.startsWith("sk-")) {
+            // {GCM} 必须真解密（密文），sk- 必然已是明文
+            return value.startsWith("{GCM}") ? AesUtil.decrypt(value) : value;
+        }
+        try {
+            return AesUtil.decrypt(value);
+        } catch (Exception e) {
+            log.debug("api_key 非密文，按明文使用（本工程允许明文配置）");
+            return value;
+        }
+    }
     public static void finishEmitter(SseEmitter emitter, boolean finishFlag) {
         try {
             if (finishFlag) {

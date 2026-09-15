@@ -42,7 +42,7 @@ public class CustomToolCallExecutor implements ToolCallExecutor {
         try {
             HttpRequest request = HttpUtil.createPost(serviceUrl)
                     .header("Content-Type", "application/json")
-                    .body(requestBody.toJSONString(), "UTF-8");
+                    .body(requestBody.toJSONString(), "application/json;charset=utf-8");
             cn.hutool.http.HttpResponse response = request.execute();
             if (response.getStatus() == 200) {
                 JSONObject resultJson = JSON.parseObject(response.body());

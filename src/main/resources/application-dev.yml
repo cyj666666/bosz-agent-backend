@@ -18,3 +18,18 @@ spring:
 logging:
   level:
     com.suzhou.bank: DEBUG
+
+# ══════════════════════════════════════════════════════════════════════════
+# 检查项解析（P4）：解析结果的来源模型
+#
+# parse-model-code 对应 large_model_config.lm_code（CallLlmUtil 按该字段索引配置）。
+# 本库 large_model_config 当前只有一条 'bosz-report-ai'（model=deepseek-flash，
+# url=https://api.deepseek.com/chat/completions），故解析复用同一模型；
+# 若公司后续提供专用的「审查规则解析」模型，只改这一行即可，无需改代码。
+#
+# 说明：默认值（代码里的 @Value 兜底）是 h20-DeepSeek-V32，那是源工程的厂商模型编码，
+# 本库并不存在——所以这里必须显式覆盖，否则运行时会报「未找到大模型配置」。
+# ══════════════════════════════════════════════════════════════════════════
+agent:
+  rule:
+    parse-model-code: bosz-report-ai

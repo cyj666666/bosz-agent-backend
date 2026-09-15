@@ -356,7 +356,7 @@ public class OpenAiChatUtil {
         HttpRequest request = HttpUtil.createPost(url)
                 .header("Content-Type", "application/json;charset=utf-8")
                 .header("Accept", "application/json")
-                .body(body.toJSONString(), "UTF-8")
+                .body(body.toJSONString(), "application/json;charset=utf-8")
                 .timeout(READ_TIMEOUT_MILLIS);
         if (StringUtils.isNotBlank(apiKey)) {
             request.header("Authorization", apiKey.startsWith("Bearer ") ? apiKey : ("Bearer " + apiKey));
@@ -382,12 +382,25 @@ public class OpenAiChatUtil {
     }
 
     private static void finishEmitter(SseEmitter emitter, boolean finishFlag) {
-        if (finishFlag && Objects.nonNull(emitter)) {
-            try {
-                emitter.complete();
-            } catch (Exception e) {
-                log.warn("关闭 SSE 发射器失败（通常是对端已断开）:{}", e.getMessage());
-            }
+        if (!finishFlag || Objects.isNull(emitter)) {
+            return;
+        }
+        try {
+            // 迁移修正点：补发「结束帧」。源实现为
+            //     if (finishFlag) { emitter.send("finished!"); }
+            //     emitter.complete();
+            // 本工程重写本类时漏掉了 send 那一句，只保留 complete。
+            // 影响：前端（源工程 admin 与本次重写的 React 前端）都以 `data:finished!`
+            // 作为「流正常收尾」的判定依据，缺帧时只能退化为「靠连接关闭兜底」——
+            // 功能仍可用，但拿不到明确结束信号，且与 CallLlmUtil.finishEmitter 的行为不一致
+            // （那个方法一直是带 finished! 的）。此处按源实现恢复该帧。
+            emitter.send("finished!");
+            emitter.complete();
+        } catch (Exception e) {
+            // 注：源实现此处调用 completeWithError，本工程改为仅告警——
+            // 走到 catch 基本意味着对端已断开，再 completeWithError 只会在已关闭的
+            // emitter 上二次抛错，属于噪音而非有效信号。
+            log.warn("发送 SSE 结束帧/关闭发射器失败（通常是对端已断开）:{}", e.getMessage());
         }
     }
 }

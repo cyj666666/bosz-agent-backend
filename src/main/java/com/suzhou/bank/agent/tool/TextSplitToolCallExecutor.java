@@ -44,7 +44,7 @@ public class TextSplitToolCallExecutor implements ToolCallExecutor {
         try {
             HttpRequest request = HttpUtil.createPost(url)
                     .header("Content-Type", "application/json")
-                    .body(JSON.toJSONString(requestBodyJson), "UTF-8")
+                    .body(JSON.toJSONString(requestBodyJson), "application/json;charset=utf-8")
                     .timeout(READ_TIMEOUT_MILLIS);
             cn.hutool.http.HttpResponse response = request.execute();
             if (response.getStatus() == 200) {

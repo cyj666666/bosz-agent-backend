@@ -108,7 +108,7 @@ public class HubApiClient {
             cn.hutool.http.HttpResponse response = cn.hutool.http.HttpUtil.createPost(serviceUrl)
                     .header("Content-Type", "application/json;charset=utf-8")
                     .header("Accept", "application/json")
-                    .body(requestParams, "UTF-8")
+                    .body(requestParams, "application/json;charset=utf-8")
                     .execute();
             String result = response.body();
             if (response.getStatus() != 200) {

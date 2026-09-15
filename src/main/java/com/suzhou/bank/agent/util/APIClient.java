@@ -99,7 +99,7 @@ public class APIClient {
             request.header("server_code", serverCode);
             request.header("signature", generateSignature(serverCode, secret, mapToString(encryptMaps), timestamp));
             request.header("timestamp", String.valueOf(timestamp));
-            request.body(body, "UTF-8");
+            request.body(body, "application/json;charset=utf-8");
 
             cn.hutool.http.HttpResponse response = request.execute();
             int status = response.getStatus();

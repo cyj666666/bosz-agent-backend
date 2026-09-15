@@ -52,6 +52,16 @@ public class AgentSearchApiClient {
     private String token;
 
     /**
+     * 是否已配置外部智能体
+     *
+     * <p>供 {@code AgentRuleServiceImpl#parseRule} 决定走哪条解析路径：
+     * 配了就走厂商智能体，没配就走本工程自有大模型（P4 的默认路线）。</p>
+     */
+    public boolean isConfigured() {
+        return StringUtils.isNotBlank(agentSearchUrl);
+    }
+
+    /**
      * 提交解析请求
      *
      * @param params 报文（含 {@code input} 自然语言规则文本、{@code agent_id} 等）
@@ -72,7 +82,7 @@ public class AgentSearchApiClient {
             if (StringUtils.isNotBlank(token)) {
                 request.header("Authorization", token.startsWith("Bearer ") ? token : ("Bearer " + token));
             }
-            request.body(params.toJSONString(), "UTF-8");
+            request.body(params.toJSONString(), "application/json;charset=utf-8");
             cn.hutool.http.HttpResponse response = request.execute();
             String body = response.body();
             if (response.getStatus() != 200) {
