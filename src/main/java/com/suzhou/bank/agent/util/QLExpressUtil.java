@@ -101,9 +101,68 @@ public class QLExpressUtil {
     }
 
     /**
+     * 表达式执行失败（**严格版**用它替代"返回 null"）
+     *
+     * <p>为什么需要这个类型：{@link #execute} 在任何异常时都 `return null`，
+     * 调用方拿到 null **无法区分**「表达式算出来是假」和「表达式根本没算成」——
+     * 界面上前者显示"未命中"、后者被吞掉后也显示"未命中"，等于把"数据没取到/表达式有错"掩盖成业务结论。
+     *
+     * <p>实测案例（2026-09-16）：企业名填不存在的值 → 指标全部取不到 → 表达式被替换成
+     * `(''>''-'')`（字符串做减法）→ QLBizException → 返回 null → 界面显示"未命中"，
+     * 但真实情况是**这次校验根本没成立**。
+     */
+    public static class ExprExecuteException extends RuntimeException {
+
+        /** 占位符替换**之后**的表达式（排查时最有用的一条信息） */
+        private final String renderedExpression;
+
+        public ExprExecuteException(String renderedExpression, Throwable cause) {
+            super(cause == null ? "表达式执行失败" : String.valueOf(cause.getMessage()), cause);
+            this.renderedExpression = renderedExpression;
+        }
+
+        public String getRenderedExpression() {
+            return renderedExpression;
+        }
+
+        /** 是否属于"表达式语法就编译不过"（与运行期异常分开，日志分级不同） */
+        public boolean isCompileError() {
+            return getCause() instanceof QLCompileException;
+        }
+    }
+
+    /**
      * 业务入口：占位替换后直接执行字面量表达式，不再传入上下文数据
+     *
+     * <p>⚠️ **异常一律吞掉并返回 null**（沿用源工程行为，`buildCalculationProcess` 依赖它）。
+     * 需要区分"算成 false"和"没算成"的调用方，请改用 {@link #executeStrict}。
      */
     public static Object execute(String expression, Map<String, Object> contextMap) {
+        try {
+            return executeStrict(expression, contextMap);
+        } catch (ExprExecuteException e) {
+            if (e.isCompileError()) {
+                // 单独分类：表达式语法错误
+                log.error("QL表达式语法编译失败，原始表达式：\n{}", expression);
+                log.error("转换后表达式：{}", e.getRenderedExpression());
+                log.error("编译异常堆栈", e.getCause());
+            } else {
+                // 占位替换、反射、运行空指针等
+                log.error("QL表达式转换/执行未知异常，原始表达式：\n{}", expression);
+                log.error("转换后表达式：{}", e.getRenderedExpression());
+                log.error("异常堆栈", e.getCause());
+            }
+            return null;
+        }
+    }
+
+    /**
+     * 严格执行：**不吞异常**，失败时抛 {@link ExprExecuteException}（异常里带替换后的表达式）。
+     *
+     * <p>给「规则校验」这类需要把失败**明确告诉用户**的场景用：失败 ≠ 未命中。
+     */
+    public static Object executeStrict(String expression, Map<String, Object> contextMap) {
+        // 与 execute 保持同样的顺序：替换失败时 renderedExpression 仍为原表达式（原先 mapTemp 初值是 ""）
         String mapTemp = "";
         try {
             // 1、将所有{id|备注}占位替换为合法QL字面量（null/数字/'字符串'）
@@ -111,18 +170,8 @@ public class QLExpressUtil {
             // 2、替换完成后表达式已全是字面量，不需要传入上下文数据，传空即可
             IExpressContext<String, Object> context = new DefaultContext<>();
             return execute(mapTemp, context);
-        } catch (QLCompileException e) {
-            // 单独捕获：表达式语法错误（当前你遇到的编译报错）
-            log.error("QL表达式语法编译失败，原始表达式：\n{}", expression);
-            log.error("转换后表达式：{}", mapTemp);
-            log.error("编译异常堆栈", e);
-            return null;
         } catch (Exception e) {
-            // 捕获占位替换、反射、运行空指针等Java层异常
-            log.error("QL表达式转换/执行未知异常，原始表达式：\n{}", expression);
-            log.error("转换后表达式：{}", mapTemp);
-            log.error("异常堆栈", e);
-            return null;
+            throw new ExprExecuteException(mapTemp, e);
         }
     }
 

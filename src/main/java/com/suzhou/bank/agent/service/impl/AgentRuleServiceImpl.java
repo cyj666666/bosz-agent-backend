@@ -468,6 +468,22 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
 
         Map<String, Object> rawDataSnapshot = new HashMap<>(indexValueMap);
 
+        /*
+         * 🔴 「未取到值」的指标数必须在**默认值兜底之前**统计（2026-09-16 新增）。
+         *
+         * 为什么重要：企业名（entName）只是一个普通入参，后端**不校验企业是否存在**。
+         * 填一个不存在的企业名 → SQL 照常执行但返回 0 行 → 这些指标全部没有值。
+         * 而下面的默认值兜底会把空值换成 default_value，表达式于是在这些"假数据"上算出
+         * 命中/未命中，前端还会照常触发 AI 分析 —— 现象就是"随便输个 aaaaa 也能命中"。
+         * 统计真实缺失数并回给前端，让这件事**可见**。
+         */
+        int missingValueCount = 0;
+        for (IndexParamsEntity entity : paramsList) {
+            if (isValueEmpty(rawDataSnapshot.get(entity.getParamNo()))) {
+                missingValueCount++;
+            }
+        }
+
         List<AgentRuleMetricVO> matchedMetrics = paramsList.stream()
                 .map(param -> {
                     AgentRuleMetricVO vo = new AgentRuleMetricVO();
@@ -487,19 +503,7 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
                 if (StringUtils.isBlank(defaultValue)) {
                     continue;
                 }
-                Object val = indexValueMap.get(paramNo);
-                boolean valueIsEmpty = false;
-                if (val == null) {
-                    valueIsEmpty = true;
-                } else if (val instanceof String) {
-                    valueIsEmpty = StringUtils.isBlank((String) val);
-                } else if (val instanceof JSONArray) {
-                    valueIsEmpty = ((JSONArray) val).isEmpty();
-                } else {
-                    String strVal = String.valueOf(val);
-                    valueIsEmpty = StringUtils.isBlank(strVal);
-                }
-                if (valueIsEmpty) {
+                if (isValueEmpty(indexValueMap.get(paramNo))) {
                     indexValueMap.put(paramNo, defaultValue);
                 }
                 log.info("处理后指标编号为:{} " + paramNo + "=====:" + indexValueMap.get(paramNo));
@@ -510,14 +514,54 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
         if (StringUtils.isNotBlank(req.getFactAnalysis())) {
             factExpression = QLExpressUtil.buildCalculationProcess(req.getFactAnalysis(), indexValueMap);
         }
-        Object result = QLExpressUtil.execute(parsedExpression, indexValueMap);
+        /*
+         * 🔴 用严格版执行（2026-09-16 改）：`QLExpressUtil.execute` 会把任何异常吞掉并 return null，
+         * 于是"表达式根本没算成"和"算出来是 false"在返回体里长得一模一样 ——
+         * 前端只能显示"未命中"，把一个**执行失败**伪装成业务结论。
+         *
+         * 实测：企业名不存在 → 指标值全是空串 → 表达式被替换成 `(''>''-'')`（字符串做减法）
+         * → QLBizException → 被吞成 null → 界面显示"未命中"。这不科学，所以显式区分。
+         */
+        Object result;
+        boolean executeFailed = false;
+        try {
+            result = QLExpressUtil.executeStrict(parsedExpression, indexValueMap);
+        } catch (QLExpressUtil.ExprExecuteException e) {
+            executeFailed = true;
+            result = null;
+            // 日志带上完整上下文：规则、指标覆盖率、替换后的表达式、原始堆栈
+            log.error("规则[{}]表达式执行失败（涉及指标 {} 个，其中 {} 个未取到值），转换后表达式：{}",
+                    req.getRuleCode(), paramsList.size(), missingValueCount, e.getRenderedExpression(), e);
+        }
         long end3 = System.currentTimeMillis();
         log.info("执行表达式，规则名称为:{} 计算QL表达式耗时{}", req.getName(), end3 - end1);
         AgentRuleExecuteVO vo = new AgentRuleExecuteVO();
         vo.setResultStatus(result);
         vo.setMatchedMetrics(matchedMetrics);
         vo.setFactExpression(factExpression);
+        vo.setExecuteFailed(executeFailed);
+        vo.setMissingValueCount(missingValueCount);
+        vo.setTotalMetricCount(paramsList.size());
         return vo;
+    }
+
+    /**
+     * 判断取数结果是否"为空"（null / 空白字符串 / 空数组）
+     *
+     * <p>与 `executeRule` 里默认值兜底原本用的判断完全一致，抽出来是为了**同一口径**：
+     * 统计"未取到值"和"要不要用默认值顶上"必须用同一个判空规则，否则两边数字对不上。
+     */
+    private boolean isValueEmpty(Object val) {
+        if (val == null) {
+            return true;
+        }
+        if (val instanceof String) {
+            return StringUtils.isBlank((String) val);
+        }
+        if (val instanceof JSONArray) {
+            return ((JSONArray) val).isEmpty();
+        }
+        return StringUtils.isBlank(String.valueOf(val));
     }
 
     @Override

@@ -84,8 +84,16 @@ public class KnowledgeRelateIndexServiceImpl extends ServiceImpl<KnowledgeRelate
         LambdaQueryWrapper<KnowledgeRelateIndexEntity> queryWrapper = Wrappers.lambdaQuery();
         queryWrapper.like(StringUtils.isNotEmpty(knowledgeRelateIndexReq.getIndexNo()), KnowledgeRelateIndexEntity::getIndexNo, knowledgeRelateIndexReq.getIndexNo());
         queryWrapper.like(StringUtils.isNotEmpty(knowledgeRelateIndexReq.getIndexName()), KnowledgeRelateIndexEntity::getIndexName, knowledgeRelateIndexReq.getIndexName());
-        queryWrapper.eq(StringUtils.isNotEmpty(knowledgeRelateIndexReq.getTraceStatus()), KnowledgeRelateIndexEntity::getTraceStatus, knowledgeRelateIndexReq.getTraceStatus());
-        queryWrapper.eq(StringUtils.isNotEmpty(knowledgeRelateIndexReq.getTraceCardStatus()), KnowledgeRelateIndexEntity::getTraceCardStatus, knowledgeRelateIndexReq.getTraceCardStatus());
+        // 是否溯源 / 是否溯源卡片：库里历史数据存的是 **'N '（带尾空格）**（交付 DML 实测 493 行全是 'N '），
+        // 直接用 eq 只在 MySQL 兼容模式（比较忽略尾空格）下能命中，
+        // 换到非 B 兼容的 PG/openGauss 会**全部筛不出结果**。这里两侧都 trim。
+        // ⚠️ 用 apply + `{0}` 占位符（MP 会参数化成 ?），不要自己拼字符串。
+        if (StringUtils.isNotEmpty(knowledgeRelateIndexReq.getTraceStatus())) {
+            queryWrapper.apply("trim(trace_status) = trim({0})", knowledgeRelateIndexReq.getTraceStatus());
+        }
+        if (StringUtils.isNotEmpty(knowledgeRelateIndexReq.getTraceCardStatus())) {
+            queryWrapper.apply("trim(trace_card_status) = trim({0})", knowledgeRelateIndexReq.getTraceCardStatus());
+        }
         queryWrapper.eq(StringUtils.isNotEmpty(knowledgeRelateIndexReq.getIndexType()), KnowledgeRelateIndexEntity::getIndexType, knowledgeRelateIndexReq.getIndexType());
         queryWrapper.eq(KnowledgeRelateIndexEntity::getKnowledgeId, knowledgeRelateIndexReq.getKnowledgeId());
         queryWrapper.orderByDesc(KnowledgeRelateIndexEntity::getInputTime);
