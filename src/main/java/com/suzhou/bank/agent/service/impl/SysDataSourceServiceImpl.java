@@ -589,18 +589,24 @@ public class SysDataSourceServiceImpl extends ServiceImpl<SysDataSourceMapper, S
         queryParams.add(schema);
 
         // 添加表名过滤条件
+        // ⚠️ 必须**大小写不敏感**（2026-09-16 修复）：
+        //   本方法在返回前把表名 `toUpperCase` 了（见下方 setTableName，与 MySQL 分支/源工程保持一致），
+        //   而 PG/openGauss 的 `pg_class.relname` 存的是**小写**，`LIKE` 又是**大小写敏感**的 →
+        //   用户照着界面上显示的大写表名去搜，永远 0 命中（看起来就像"模糊检索坏了"）。
+        //   源工程是 MySQL：MySQL 的 `like` 受排序规则约束、默认**不区分大小写**，所以源工程没暴露这个问题。
+        //   → 两边都 LOWER() 后再比，等价于把 MySQL 的默认行为搬过来。
         if (!StringUtils.isEmpty(tableSyncListQueryReq.getTableName())) {
-            querySql.append(" AND c.relname LIKE ?");
-            countSql.append(" AND c.relname LIKE ?");
+            querySql.append(" AND LOWER(c.relname) LIKE LOWER(?)");
+            countSql.append(" AND LOWER(c.relname) LIKE LOWER(?)");
             String likePattern = "%" + tableSyncListQueryReq.getTableName() + "%";
             queryParams.add(likePattern);
             countParams.add(likePattern);
         }
 
-        // 添加表注释过滤条件
+        // 添加表注释过滤条件（同上，统一走 LOWER 比对；中文注释下 LOWER 为空操作，只为保持一致）
         if (!StringUtils.isEmpty(tableSyncListQueryReq.getTableNote())) {
-            querySql.append(" AND d.description LIKE ?");
-            countSql.append(" AND d.description LIKE ?");
+            querySql.append(" AND LOWER(d.description) LIKE LOWER(?)");
+            countSql.append(" AND LOWER(d.description) LIKE LOWER(?)");
             String likePattern = "%" + tableSyncListQueryReq.getTableNote() + "%";
             queryParams.add(likePattern);
             countParams.add(likePattern);
