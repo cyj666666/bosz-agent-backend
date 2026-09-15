@@ -215,12 +215,15 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
         List<IndexParamsEntity> indexParamsEntityList = TreeUtil.buildTree(records, IndexParamsEntity::getParamNo, IndexParamsEntity::getParentParamNo);
         List<IndexParamsDTO> indexParamsDTOList = new ArrayList<>();
         if (CollectionUtils.isNotEmpty(indexParamsEntityList)) {
+            // 🚀 先按「本页出现过的数据源 id」一次批量取回，避免逐行 getById（原 N+1：10 条/页 = 10 次
+            //    selectById(100 条/页 = 100 次)。见 prefetchDataSources 的说明）
+            Map<String, SysDataSource> dataSourceMap = prefetchDataSources(indexParamsEntityList);
             indexParamsEntityList.forEach(param -> {
                 IndexParamsDTO indexParamsDTO = new IndexParamsDTO();
                 BeanUtil.copyProperties(param, indexParamsDTO, true);
                 indexParamsDTO.setScriptType(param.getScriptType());
                 indexParamsDTO.setScriptTypeDesc(getScriptTypeDesc(param.getScriptType()));
-                indexParamsDTO.setIndexSource(getIndexSource(param));
+                indexParamsDTO.setIndexSource(getIndexSource(param, dataSourceMap));
                 indexParamsDTOList.add(indexParamsDTO);
             });
         }
@@ -235,7 +238,66 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
         return Objects.isNull(scriptTypeEnum) ? "" : scriptTypeEnum.name;
     }
 
-    private String getIndexSource(IndexParamsEntity param) {
+    /**
+     * 批量预取本页涉及的数据源（修 N+1）
+     *
+     * <p>背景：列表「数据来源」列由 {@link #getIndexSource} 运行时拼出，其中要拿
+     * `script.dataSource` 去换数据源的 code/name。原先**每行一次** `sysDataSourceService.getById(...)`
+     * → 10 条/页 = 10 次 selectById，100 条/页 = 100 次（实测 01:07:24 一个请求内连打 10 次，
+     * 约 15ms/次）。而 `sys_data_source` 全表通常只有几条，整表拉下来都比逐行取便宜。</p>
+     *
+     * <p>做法：先扫一遍本页的 `script` 取出出现过的数据源 id，一次 `listByIds` 取回建成 Map，
+     * 供 {@link #buildSqlIndexSource} 查。**只覆盖 SQL 类型**（Api/KnowledgeCode 不查数据源）。</p>
+     *
+     * @return 数据源 id → 实体；本页没有 SQL 类型或都没配数据源时返回空 Map（调用方按"取不到"处理）
+     */
+    private Map<String, SysDataSource> prefetchDataSources(List<IndexParamsEntity> rows) {
+        if (CollectionUtils.isEmpty(rows)) {
+            return Collections.emptyMap();
+        }
+        Set<String> dataSourceIds = new HashSet<>();
+        for (IndexParamsEntity row : rows) {
+            if (!ScriptTypeEnum.SQL.id.equals(row.getScriptType())) {
+                continue;
+            }
+            String id = parseDataSourceId(row.getScript());
+            if (StringUtils.isNotEmpty(id)) {
+                dataSourceIds.add(id);
+            }
+        }
+        if (dataSourceIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            List<SysDataSource> dataSourceList = sysDataSourceService.listByIds(dataSourceIds);
+            if (CollectionUtils.isEmpty(dataSourceList)) {
+                return Collections.emptyMap();
+            }
+            Map<String, SysDataSource> map = new HashMap<>(dataSourceList.size());
+            for (SysDataSource dataSource : dataSourceList) {
+                map.put(dataSource.getId(), dataSource);
+            }
+            return map;
+        } catch (Exception e) {
+            // 批量取失败不能影响列表渲染：降级为"数据来源取不到"，与单条取不到时的表现一致
+            log.error("批量预取数据源失败，dataSourceIds：{}，异常：{}", dataSourceIds, e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    /** 从 `script` JSON 里取 `dataSource`（数据源主键）；解析不了返回空串 */
+    private String parseDataSourceId(String script) {
+        if (StringUtils.isEmpty(script)) {
+            return "";
+        }
+        try {
+            return StringUtils.defaultString(JSONObject.parseObject(script).getString("dataSource"));
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String getIndexSource(IndexParamsEntity param, Map<String, SysDataSource> dataSourceMap) {
         String scriptType = param.getScriptType();
         if (StringUtils.isEmpty(scriptType)) {
             return "";
@@ -250,12 +312,12 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             if (StringUtils.isEmpty(script)) {
                 return "";
             }
-            return buildSqlIndexSource(script);
+            return buildSqlIndexSource(script, dataSourceMap);
         }
         return "";
     }
 
-    private String buildSqlIndexSource(String script) {
+    private String buildSqlIndexSource(String script, Map<String, SysDataSource> dataSourceMap) {
         try {
             JSONObject scriptJson = JSONObject.parseObject(script);
             String dataSource = scriptJson.getString("dataSource");
@@ -263,8 +325,8 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             if (StringUtils.isEmpty(dataSource) || StringUtils.isEmpty(sql)) {
                 return "";
             }
-            // 查询数据源的code和name
-            SysDataSource sysDataSource = sysDataSourceService.getById(dataSource);
+            // 数据源的code和name：从本页预取好的 Map 里拿（不再逐行查库）
+            SysDataSource sysDataSource = dataSourceMap == null ? null : dataSourceMap.get(dataSource);
             String code = Objects.isNull(sysDataSource) ? "" : StringUtils.defaultString(sysDataSource.getCode());
             String name = Objects.isNull(sysDataSource) ? "" : StringUtils.defaultString(sysDataSource.getName());
 
