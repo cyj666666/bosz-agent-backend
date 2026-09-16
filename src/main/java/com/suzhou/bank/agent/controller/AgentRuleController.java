@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import com.suzhou.bank.agent.common.ListResult;
 import com.suzhou.bank.agent.common.AgentResult;
+import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.AgentRuleEntity;
 import com.suzhou.bank.agent.model.req.AgentRuleExecuteReq;
 import com.suzhou.bank.agent.model.req.AgentRuleParseReq;
@@ -130,6 +131,19 @@ public class AgentRuleController {
     @Operation(summary = "规则管理-模拟执行规则", description = "模拟执行规则，当前先返回空执行结果")
     @PostMapping(value = "/execute")
     public AgentResult<?> executeRule(@RequestBody @Valid AgentRuleExecuteReq req) {
+        // 【真实业务执行】打上严格取数标记（2026-09-16 新增）
+        // 规则页的"执行"结果会被采纳，属于正式执行，必须"填什么就是什么"：
+        // 参数没传全时，宁可这次取不到数，也绝不能让取数层拿配置里预置的样例值
+        // （如 '苏州XX精密机械制造有限公司' / '科大讯飞股份有限公司'）兜底顶上。
+        // 与 AgentPromptController#getRule（规则判定 + 智策引擎补充分析）保持同一口径。
+        // 该标记随 requestParams 透传：handleParam 会把 params 所有键拷进 paramData，最终在
+        // SqlDataSetBuilder#build 读到它。
+        JSONObject requestParams = req.getRequestParams();
+        if (requestParams == null) {
+            requestParams = new JSONObject();
+            req.setRequestParams(requestParams);
+        }
+        requestParams.put(SqlDataSetBuilder.STRICT_FETCH_KEY, true);
         return AgentResult.OK(agentRuleService.executeRule(req));
     }
 

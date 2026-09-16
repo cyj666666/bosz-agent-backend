@@ -17,6 +17,11 @@
 --   7) 2026-09-16 结构变更（同事反馈）：`app_reputation_event_info` 新增两列
 --      `eventtypecode`（舆情类型编码）/ `eventtypeorder`（舆情事件排序）——见 [35/45]。
 --      变更来自开发侧脚本，导出库（公司库）当时**尚未**加这两列，故本文件比公司库多 2 列。
+--   8) 2026-09-16 结构变更（同事反馈）：`app_collateral_info` 新增四列
+--      `dyqdj`（是否存在地役权登记）/ `yydj`（是否存在异议登记）/
+--      `cfdj`（是否存在查封登记）/ `ygdj`（是否存在预告登记）——见 [6/45]。
+--      变更来自开发侧脚本（对应 DML 脚本 `20260819/app层/押品表20260916_新增字段.sql`），
+--      导出库（公司库）当时**尚未**加这四列。至此本文件比公司库导出时共多 6 列（第 7 条 2 列 + 本条 4 列）。
 -- =====================================================================
 
 -- ---------------------------------------------------------------
@@ -205,6 +210,11 @@ CREATE TABLE app_collateral_info (
     confirmdate                         VARCHAR(32),
     inputtime                           TIMESTAMP DEFAULT pg_systimestamp(),
     clrid                               VARCHAR(64),
+    -- ↓↓ 2026-09-16 同事反馈的表结构变更（原表无此四列，见文件头说明 8）
+    dyqdj                               VARCHAR(2),
+    yydj                                VARCHAR(2),
+    cfdj                                VARCHAR(2),
+    ygdj                                VARCHAR(2),
     PRIMARY KEY (id)
 );
 COMMENT ON TABLE app_collateral_info IS '押品主档表';
@@ -224,6 +234,10 @@ COMMENT ON COLUMN app_collateral_info.rightsum IS '权证金额（万元）';
 COMMENT ON COLUMN app_collateral_info.confirmdate IS '认定日期';
 COMMENT ON COLUMN app_collateral_info.inputtime IS '入库时间';
 COMMENT ON COLUMN app_collateral_info.clrid IS '押品编号';
+COMMENT ON COLUMN app_collateral_info.dyqdj IS '是否存在地役权登记';
+COMMENT ON COLUMN app_collateral_info.yydj IS '是否存在异议登记';
+COMMENT ON COLUMN app_collateral_info.cfdj IS '是否存在查封登记';
+COMMENT ON COLUMN app_collateral_info.ygdj IS '是否存在预告登记';
 CREATE INDEX idx_collateral_info_clrid ON app_collateral_info (clrid);
 CREATE INDEX idx_collateral_info_customerid ON app_collateral_info (customerid);
 CREATE INDEX idx_collateral_info_reportno ON app_collateral_info (reportno);
@@ -2216,5 +2230,6 @@ CREATE INDEX idx_xd_shareholder_info_reportno ON app_xd_shareholder_info (report
 --   app_top_five_updown_info.id  ->  主键ID
 --   app_xd_shareholder_info.id  ->  主键ID
 --
--- 语句统计：CREATE TABLE 45 张 / 列 842 / 索引 102 个
---   （2026-09-16 变更前为 840 列；+2 = app_reputation_event_info.eventtypecode / eventtypeorder）
+-- 语句统计：CREATE TABLE 45 张 / 列 846 / 索引 102 个
+--   （2026-09-16 两次结构变更：840 → 842 = app_reputation_event_info.eventtypecode / eventtypeorder；
+--     842 → 846 = app_collateral_info.dyqdj / yydj / cfdj / ygdj。详见文件头说明 7、8）
