@@ -12,6 +12,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.suzhou.bank.agent.common.AgentResult;
 import com.suzhou.bank.agent.common.AgentBizException;
 import com.suzhou.bank.agent.util.JSONTools;
+import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.AgentRuleEntity;
 import com.suzhou.bank.agent.model.req.AgentRuleExecuteReq;
 import com.suzhou.bank.agent.model.req.IndexInfoSearchReq;
@@ -79,6 +80,12 @@ public class AgentPromptController {
     @PostMapping(value = "/get/rule", name = "获取规则文案", produces = MediaType.APPLICATION_JSON_VALUE)
     public Object getRule(@RequestBody String paramStr) {
         JSONObject params = JSONObject.parseObject(paramStr);
+        // 【真实业务执行】打上严格取数标记（2026-09-16 新增）
+        // 本条链路是"规则判定 + 智策引擎补充分析"的正式执行路径，必须"填什么就是什么"：
+        // 参数没传全时，宁可这次取不到数，也绝不能让取数层拿配置里预置的样例值
+        // （如 '苏州XX精密机械制造有限公司' / '科大讯飞股份有限公司'）兜底顶上。
+        // 该标记随 params 一路透传：既进 executeRule 的 requestParams，也进 getPromptContent 的 getParams。
+        params.put(SqlDataSetBuilder.STRICT_FETCH_KEY, true);
         String ruleCode = JSONTools.getString(params,"ruleCode");
         AgentRuleEntity agentRuleEntity = agentRuleService.getRule(ruleCode);
         if(agentRuleEntity!=null){

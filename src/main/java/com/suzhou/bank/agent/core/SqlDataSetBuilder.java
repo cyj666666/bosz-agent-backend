@@ -63,6 +63,27 @@ public class SqlDataSetBuilder implements DataSetBuilder {
     /** 未配置 SqlLimitType 字典时的默认结果集上限 */
     private static final int DEFAULT_LIMIT = 100;
 
+    /**
+     * 严格取数标记键（2026-09-16 新增）
+     *
+     * <p>调用方把它放进请求参数（值 {@code true}），取数时就**禁止**用
+     * {@code paramData[].defaultValue}（即配置里预置的"样例值"）兜底。</p>
+     *
+     * <p><b>为什么需要</b>：默认值兜底原本是**无条件**的 —— 参数一缺，就把"样例值"
+     * （如 {@code '苏州XX精密机械制造有限公司'}、{@code '科大讯飞股份有限公司'}）直接替换进 SQL 去跑，
+     * <b>不报错、也不留痕</b>。结果就是"真实业务执行"时参数没传全，却拿样例数据算出了
+     * 一个看起来正常的结论 —— 比报错危险得多。</p>
+     *
+     * <p>所以：<b>配置态预览</b>（指标预览、知识库详情页测试集）保持宽松、继续享受兜底；
+     * <b>真实业务执行</b>（{@code /get/rule} 那条链路：规则判定 + 智策引擎补充分析）带上本标记，
+     * 参数缺失时宁可这次取不到数（返回 {@code null}，由上层按"未取到值"如实反映），
+     * 也绝不用样例值顶包。</p>
+     *
+     * <p>注意：本键随请求参数一路传到取数线程，是刻意为之 —— 取数跑在独立的
+     * {@code fetch-data-fetcher-*} 线程池里，ThreadLocal 传不过去。</p>
+     */
+    public static final String STRICT_FETCH_KEY = "__strictFetch";
+
     @Autowired
     private AgentDataSourceProvider agentDataSourceProvider;
 
@@ -182,6 +203,7 @@ public class SqlDataSetBuilder implements DataSetBuilder {
             }
 
             // 关联参数和默认值处理
+            boolean strictFetch = Boolean.TRUE.equals(parameters.get(STRICT_FETCH_KEY));
             if (!sqlScript.getParamData().isEmpty()) {
                 for (Object obj : sqlScript.getParamData()) {
                     JSONObject object = (JSONObject) obj;
@@ -197,6 +219,14 @@ public class SqlDataSetBuilder implements DataSetBuilder {
                     }
                     if (Objects.isNull(nameValue) || String.valueOf(nameValue).equals("\"\"")
                             || String.valueOf(nameValue).equals("''") || StringUtils.isEmpty(String.valueOf(nameValue))) {
+                        // 严格模式（真实业务执行）：宁可不取数，也绝不用配置里预置的样例值顶包。
+                        // 返回 null 后由上层按"未取到值"如实反映（missingValueCount / executeFailed），
+                        // 而不是拿样例数据算出一个看起来正常的结论。
+                        if (strictFetch) {
+                            log.warn("【严格取数】指标[{}] 参数[{}] 缺失，且不允许使用预置样例值兜底 —— 跳过本次取数（不执行 SQL）。"
+                                    + "若确需用样例值试跑，请走配置页预览入口。", paramNo, name);
+                            return null;
+                        }
                         if (Objects.nonNull(defaultValue) && !StringUtils.isEmpty(String.valueOf(defaultValue))) {
                             scriptSql = scriptSql.replaceAll(":" + name, String.valueOf(defaultValue));
                         }

@@ -190,6 +190,13 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
                         String indexCode = metricObj.getString("指标编号");
                         indexMap.put(metricName, indexCode);
                         paramIdList.add(indexCode);
+                    } else if (valueObj instanceof String) {
+                        // 兼容模型输出的"扁平"形态：{"指标名称": "指标编号"}
+                        // 模型偶尔不按契约包成 {"指标编号": "..."} 对象；不兼容会导致指标全部丢失、
+                        // 表达式里的 {名称} 替换不掉，最终执行失败。
+                        String indexCode = ((String) valueObj).trim();
+                        indexMap.put(metricName, indexCode);
+                        paramIdList.add(indexCode);
                     }
                 }
             }
@@ -208,6 +215,14 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
             // 于是上面会空转、表达式里留下裸编号。而下游（前端表达式展示、emptyMetricList 的 \d+ 提取）
             // 都按 {编号|名称} 这个约定格式解析，故这里把残留的裸编号补成统一格式。
             parsedExpression = normalizeMetricRefs(parsedExpression, indexMap, indexNameMap);
+            // ── 表达式归一化（2026-09-16 新增）──
+            // 表达式来自大模型输出，模型会带出各种"非标准但常见"的写法：全角标点、数学符号 ≥≤≠、
+            // 大写的 AND/OR/NOT、单个等号、行尾注释…… 任何一个都会让 executeRule 时**整个表达式编译失败**
+            // （QLCompileException）。在此处归一有两个好处：
+            //   ① 前端展示的与后续回传执行的表达式是同一份，不会"界面看着对、执行却报错"；
+            //   ② 下面的 promptKey（md5）基于归一后的表达式计算，缓存口径与实际执行一致。
+            // ⚠️ 副作用：promptKey 因此变化，旧 AI 分析缓存会失效并重新生成（旧缓存本就基于脏表达式）。
+            parsedExpression = QLExpressUtil.normalizeExpression(parsedExpression);
             vo.setParsedExpression(parsedExpression);
             JSONObject specialIndicatorResult = JSONTools.getJSONObject(finalAnswerJo, "special_indicator_result");
             if (specialIndicatorResult != null && specialIndicatorResult.size() > 0) {
@@ -690,7 +705,12 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
                 continue;
             }
             String name = indexNameMap.getOrDefault(code, "");
-            out = out.replace(code, "{" + code + "|" + name + "}");
+            // 用「非标识符字符」双向环视限定，避免编号被当成别的数字/标识符的一部分而误替换：
+            // 例如编号 123 命中 1234、编号 12 命中阈值 120。
+            // 原实现是 `out.replace(code, ...)` 无边界全局替换，会**静默改错**表达式（不报错、结果却不对）。
+            out = Pattern.compile("(?<![0-9A-Za-z_])" + Pattern.quote(code) + "(?![0-9A-Za-z_])")
+                    .matcher(out)
+                    .replaceAll(Matcher.quoteReplacement("{" + code + "|" + name + "}"));
         }
         return out;
     }
@@ -706,19 +726,43 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
     }
 
 
+    /**
+     * 从表达式里提取「涉及到的指标编号」。
+     *
+     * <p><b>为什么优先取 {@code {编号|名称}} 里的编号</b>：表达式经 {@link #parseRule} 归一后，
+     * 指标一定是 {@code {编号|名称}} 形态；而直接 {@code \d+} 全量提取会把<b>阈值与函数参数</b>
+     * 也当成编号（实测 {@code ABS(9.8000)>10} 会提出 9 / 8000 / 10）。这些查库时多数会被过滤掉，
+     * 但一旦某个数字恰好等于真实指标编号，就会<b>多取一次数</b>、并在"涉及指标"里多显示一条。</p>
+     *
+     * <p>兜底：表达式里没有任何 {@code {}} 占位符时（裸编号形态），保持原有的全量数字提取行为。</p>
+     */
     public List<String> emptyMetricList(String parsedExpression) {
         List<String> idList = new ArrayList<>();
         if (parsedExpression == null || parsedExpression.trim().isEmpty()) {
             return idList;
         }
 
-        // 匹配 纯数字（指标编号）
-        Pattern pattern = Pattern.compile("\\d+");
-        Matcher matcher = pattern.matcher(parsedExpression);
+        // 1、优先：{编号|名称} 里的编号（与前端 RuleFormModal.tsx 的插入格式一致）
+        Matcher placeholderMatcher = Pattern.compile("\\{(\\d+)(?:\\|[^}]*)?\\}").matcher(parsedExpression);
+        while (placeholderMatcher.find()) {
+            addDistinct(idList, placeholderMatcher.group(1));
+        }
+        if (!idList.isEmpty()) {
+            return idList;
+        }
 
+        // 2、兜底：裸编号形态，按纯数字提取（保留原行为）
+        Matcher matcher = Pattern.compile("\\d+").matcher(parsedExpression);
         while (matcher.find()) {
-            idList.add(matcher.group());
+            addDistinct(idList, matcher.group());
         }
         return idList;
+    }
+
+    /** 去重添加（保持出现顺序）：同一指标只需取一次数，重复会放大 SQL 开销并干扰展示 */
+    private static void addDistinct(List<String> list, String value) {
+        if (!list.contains(value)) {
+            list.add(value);
+        }
     }
 }
