@@ -50,14 +50,15 @@ SELECT 'large_model_config' AS 项, lm_code, model, use_flag FROM large_model_co
 SELECT 'sys_data_source'    AS 项, id, code, db_type FROM sys_data_source;
 SELECT 'sys_role(admin)'    AS 项, id::text, role_code FROM sys_role WHERE role_code = 'admin';
 
--- 【六】表级深度对账（期望 0 差异，可选用）
-SELECT '列名差异' AS 项, count(*) AS 实际值 FROM (
-  SELECT c.table_name, c.column_name
-    FROM information_schema.columns c
-   WHERE c.table_schema = current_schema()
-     AND c.table_name IN ('index_base_group','index_params','index_relate_knowledge_info',
-                          'knowledge_base_group','knowledge_base_params','knowledge_base_version',
-                          'knowledge_relate_index','knowledge_relate_input_param','agent_rule',
-                          'sys_dict','sys_dict_item','sys_role_knowledge','sys_role_knowledge_output')
-   GROUP BY 1,2
-) t;   -- 仅作参考；列名是否齐全以《三个菜单_表清单与核对报告.md》为准
+-- 【六】关键表的列数（结构完整性参考；行数见上面【一】）
+--   说明：早先这里写的是一段「列名差异」子查询，但它在 openGauss 驱动下会报
+--        `ERROR: 查询传回多个 ResultSet`（子查询 + 尾声注释的组合），已改为直接列出各表列数。
+SELECT '各表列数' AS 检查项, table_name, count(*) AS 列数
+  FROM information_schema.columns
+ WHERE table_schema = current_schema()
+   AND table_name IN ('index_base_group','index_params','index_relate_knowledge_info',
+                      'knowledge_base_group','knowledge_base_params','knowledge_base_version',
+                      'knowledge_relate_index','knowledge_relate_input_param','agent_rule',
+                      'sys_dict','sys_dict_item','sys_role_knowledge','sys_role_knowledge_output')
+ GROUP BY table_name
+ ORDER BY table_name;
