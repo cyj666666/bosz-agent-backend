@@ -14,6 +14,9 @@
 --   5) 时间列默认值保留来源库表达式 pg_systimestamp()（PG/openGauss 通用函数）；
 --   6) 标识符引用：混合大小写（如 "CONDITION"）与**保留字**（如 group）一律加双引号，
 --      否则裸写会被折叠/直接语法错（公司库实测两处）。
+--   7) 2026-09-16 结构变更（同事反馈）：`app_reputation_event_info` 新增两列
+--      `eventtypecode`（舆情类型编码）/ `eventtypeorder`（舆情事件排序）——见 [35/45]。
+--      变更来自开发侧脚本，导出库（公司库）当时**尚未**加这两列，故本文件比公司库多 2 列。
 -- =====================================================================
 
 -- ---------------------------------------------------------------
@@ -1555,6 +1558,9 @@ CREATE TABLE app_reputation_event_info (
     eventtype                           VARCHAR(64),
     eventdesc                           TEXT,
     inputtime                           TIMESTAMP DEFAULT pg_systimestamp(),
+    -- ↓↓ 2026-09-16 同事反馈的表结构变更（原表无此两列，见文件头说明 7）
+    eventtypecode                       VARCHAR(64),
+    eventtypeorder                      INTEGER,
     PRIMARY KEY (id)
 );
 COMMENT ON TABLE app_reputation_event_info IS '舆情事件明细表';
@@ -1568,6 +1574,8 @@ COMMENT ON COLUMN app_reputation_event_info.eventtime IS '舆情发生时间';
 COMMENT ON COLUMN app_reputation_event_info.eventtype IS '舆情类型（码值：证券市场违规/股票戴帽/退市风险/评级下调/高管无法履职/财务造假/其他，待确认）';
 COMMENT ON COLUMN app_reputation_event_info.eventdesc IS '舆情事件描述';
 COMMENT ON COLUMN app_reputation_event_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_reputation_event_info.eventtypecode IS '舆情类型编码';
+COMMENT ON COLUMN app_reputation_event_info.eventtypeorder IS '舆情事件排序';
 CREATE INDEX idx_reputation_event_info_customerid ON app_reputation_event_info (customerid);
 CREATE INDEX idx_reputation_event_info_reportno ON app_reputation_event_info (reportno);
 
@@ -2208,4 +2216,5 @@ CREATE INDEX idx_xd_shareholder_info_reportno ON app_xd_shareholder_info (report
 --   app_top_five_updown_info.id  ->  主键ID
 --   app_xd_shareholder_info.id  ->  主键ID
 --
--- 语句统计：CREATE TABLE 45 张 / 列 840 / 索引 102 个
+-- 语句统计：CREATE TABLE 45 张 / 列 842 / 索引 102 个
+--   （2026-09-16 变更前为 840 列；+2 = app_reputation_event_info.eventtypecode / eventtypeorder）

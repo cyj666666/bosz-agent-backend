@@ -1375,6 +1375,9 @@ CREATE TABLE IF NOT EXISTS app_reputation_event_info (
     eventType              VARCHAR(64),
     eventDesc              TEXT,
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- ↓↓ 2026-09-16 结构变更（同事反馈）：新增两列
+    eventTypeCode          VARCHAR(64),
+    eventTypeOrder         INTEGER,
     PRIMARY KEY (id)
 );
 
@@ -1388,6 +1391,8 @@ COMMENT ON COLUMN app_reputation_event_info.eventTime IS '舆情发生时间';
 COMMENT ON COLUMN app_reputation_event_info.eventType IS '舆情类型（码值：证券市场违规/股票戴帽/退市风险/评级下调/高管无法履职/财务造假/其他，待确认）';
 COMMENT ON COLUMN app_reputation_event_info.eventDesc IS '舆情事件描述';
 COMMENT ON COLUMN app_reputation_event_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_reputation_event_info.eventTypeCode IS '舆情类型编码';
+COMMENT ON COLUMN app_reputation_event_info.eventTypeOrder IS '舆情事件排序';
 CREATE INDEX IF NOT EXISTS idx_reputation_event_info_reportNo ON app_reputation_event_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_reputation_event_info_customerId ON app_reputation_event_info (customerId);
 

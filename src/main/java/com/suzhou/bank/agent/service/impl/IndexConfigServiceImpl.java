@@ -218,14 +218,7 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             // 🚀 先按「本页出现过的数据源 id」一次批量取回，避免逐行 getById（原 N+1：10 条/页 = 10 次
             //    selectById(100 条/页 = 100 次)。见 prefetchDataSources 的说明）
             Map<String, SysDataSource> dataSourceMap = prefetchDataSources(indexParamsEntityList);
-            indexParamsEntityList.forEach(param -> {
-                IndexParamsDTO indexParamsDTO = new IndexParamsDTO();
-                BeanUtil.copyProperties(param, indexParamsDTO, true);
-                indexParamsDTO.setScriptType(param.getScriptType());
-                indexParamsDTO.setScriptTypeDesc(getScriptTypeDesc(param.getScriptType()));
-                indexParamsDTO.setIndexSource(getIndexSource(param, dataSourceMap));
-                indexParamsDTOList.add(indexParamsDTO);
-            });
+            indexParamsEntityList.forEach(param -> indexParamsDTOList.add(toIndexParamsDTO(param, dataSourceMap)));
         }
         return new ListResult<>(totalSize, reqMsg.getPageSize(), reqMsg.getPageIndex(), indexParamsDTOList);
     }
@@ -256,15 +249,7 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             return Collections.emptyMap();
         }
         Set<String> dataSourceIds = new HashSet<>();
-        for (IndexParamsEntity row : rows) {
-            if (!ScriptTypeEnum.SQL.id.equals(row.getScriptType())) {
-                continue;
-            }
-            String id = parseDataSourceId(row.getScript());
-            if (StringUtils.isNotEmpty(id)) {
-                dataSourceIds.add(id);
-            }
-        }
+        collectDataSourceIds(rows, dataSourceIds);
         if (dataSourceIds.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -282,6 +267,56 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             // 批量取失败不能影响列表渲染：降级为"数据来源取不到"，与单条取不到时的表现一致
             log.error("批量预取数据源失败，dataSourceIds：{}，异常：{}", dataSourceIds, e.getMessage());
             return Collections.emptyMap();
+        }
+    }
+
+    /**
+     * 实体树 → DTO 树（**递归**，含全部层级的子指标）
+     *
+     * <p>为什么必须递归（2026-09-16 修）：{@code queryAllList} 返回的是**树**
+     * （{@code TreeUtil.buildTree}），前端 antd Table 按默认的 {@code childrenColumnName='children'}
+     * 把子指标渲染成**可展开的子行**。原实现只给**顶层根**做了
+     * {@code BeanUtil.copyProperties(entity, dto)}，子节点仍是 {@code IndexParamsEntity} 实体 →
+     * 子行的「数据源类型 / 数据源配置」两列**恒为空白**（{@code scriptTypeDesc} / {@code indexSource}
+     * 是 DTO 独有字段，实体上没有）。</p>
+     */
+    private IndexParamsDTO toIndexParamsDTO(IndexParamsEntity param, Map<String, SysDataSource> dataSourceMap) {
+        IndexParamsDTO dto = new IndexParamsDTO();
+        BeanUtil.copyProperties(param, dto, true);
+        // copyProperties 会把实体的 children（List<IndexParamsEntity>）按引用带过来 —— 必须清掉再填 DTO 版本，
+        // 否则子节点还是实体、字段对不上（这也是本条 bug 的成因）。
+        dto.setChildren(null);
+        dto.setScriptType(param.getScriptType());
+        dto.setScriptTypeDesc(getScriptTypeDesc(param.getScriptType()));
+        dto.setIndexSource(getIndexSource(param, dataSourceMap));
+        if (CollectionUtils.isNotEmpty(param.getChildren())) {
+            List<IndexParamsDTO> children = new ArrayList<>(param.getChildren().size());
+            for (IndexParamsEntity child : param.getChildren()) {
+                children.add(toIndexParamsDTO(child, dataSourceMap));
+            }
+            dto.setChildren(children);
+        }
+        return dto;
+    }
+
+    /**
+     * 递归收集「树里出现过」的数据源 id（**顶层 + 全部子节点**）
+     *
+     * <p>只扫顶层会漏掉子指标的数据源 → 子行的 `indexSource` 取不到 code/name（配合
+     * {@link #toIndexParamsDTO} 一起修）。</p>
+     */
+    private void collectDataSourceIds(List<IndexParamsEntity> rows, Set<String> dataSourceIds) {
+        if (CollectionUtils.isEmpty(rows)) {
+            return;
+        }
+        for (IndexParamsEntity row : rows) {
+            if (ScriptTypeEnum.SQL.id.equals(row.getScriptType())) {
+                String id = parseDataSourceId(row.getScript());
+                if (StringUtils.isNotEmpty(id)) {
+                    dataSourceIds.add(id);
+                }
+            }
+            collectDataSourceIds(row.getChildren(), dataSourceIds);
         }
     }
 
