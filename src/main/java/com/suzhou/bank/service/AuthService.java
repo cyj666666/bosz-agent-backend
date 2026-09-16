@@ -73,7 +73,7 @@ public class AuthService {
     }
 
     /** 查询用户的角色编码列表 */
-    private List<String> getUserRoleCodes(Long userId) {
+    public List<String> getUserRoleCodes(Long userId) {
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(
                 new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId));
         if (userRoles.isEmpty()) return Collections.emptyList();

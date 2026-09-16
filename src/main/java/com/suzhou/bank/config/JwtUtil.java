@@ -31,15 +31,25 @@ public class JwtUtil {
         this.expiration = expiration;
     }
 
-    /** 生成 Token */
+    /** 生成 Token（使用默认有效期） */
     public String generateToken(Long userId, String username, List<String> roles) {
+        return generateToken(userId, username, roles, this.expiration);
+    }
+
+    /**
+     * 生成 Token（指定有效期毫秒数）
+     *
+     * 信贷跳转场景需要独立有效期（credit.token-expiration，默认 4 小时），
+     * 与系统登录态有效期解耦 —— 与行内 JwtUtil 的口径保持一致。
+     */
+    public String generateToken(Long userId, String username, List<String> roles, long expirationMillis) {
         Date now = new Date();
         return Jwts.builder()
                 .setSubject(String.valueOf(userId))
                 .claim("username", username)
                 .claim("roles", roles)
                 .setIssuedAt(now)
-                .setExpiration(new Date(now.getTime() + expiration))
+                .setExpiration(new Date(now.getTime() + expirationMillis))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
