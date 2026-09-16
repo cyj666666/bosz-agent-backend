@@ -479,6 +479,11 @@ CREATE TABLE IF NOT EXISTS app_collateral_info (
     rightSum               DECIMAL(18,2),
     confirmDate            VARCHAR(32),
     inputtime              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- ↓↓ 2026-09-16 结构变更（同事反馈）：新增四列，见 00_执行说明.md「第 1 步·附」
+    dyqdj                  VARCHAR(2),
+    yydj                   VARCHAR(2),
+    cfdj                   VARCHAR(2),
+    ygdj                   VARCHAR(2),
     PRIMARY KEY (id)
 );
 
@@ -498,6 +503,10 @@ COMMENT ON COLUMN app_collateral_info.rightOrder IS '顺位';
 COMMENT ON COLUMN app_collateral_info.rightSum IS '权证金额（万元）';
 COMMENT ON COLUMN app_collateral_info.confirmDate IS '认定日期';
 COMMENT ON COLUMN app_collateral_info.inputtime IS '入库时间';
+COMMENT ON COLUMN app_collateral_info.dyqdj IS '是否存在地役权登记';
+COMMENT ON COLUMN app_collateral_info.yydj IS '是否存在异议登记';
+COMMENT ON COLUMN app_collateral_info.cfdj IS '是否存在查封登记';
+COMMENT ON COLUMN app_collateral_info.ygdj IS '是否存在预告登记';
 CREATE INDEX IF NOT EXISTS idx_collateral_info_reportNo ON app_collateral_info (reportNo);
 CREATE INDEX IF NOT EXISTS idx_collateral_info_customerId ON app_collateral_info (customerId);
 CREATE INDEX IF NOT EXISTS idx_collateral_info_clrId ON app_collateral_info (clrId);
