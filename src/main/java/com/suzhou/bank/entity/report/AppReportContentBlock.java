@@ -39,9 +39,26 @@ public class AppReportContentBlock {
     @TableField("analysisType")
     private String analysisType;
 
-    /** 智能体编码（仅 fillType=TEXT 时有值；已含经验规则编号） */
+    /** 智能体编码（仅 fillType=TEXT/TABLE 时有值；已含经验规则编号） */
     @TableField("agentCode")
     private String agentCode;
+
+    /**
+     * 调智能体时的入参清单（逗号分隔的**参数名**，仅 fillType=TEXT/TABLE 时有值）
+     * <p>2026-09-17 新增（对齐《报告详情设计》G 列「知识库/智策引擎参数」）。
+     * 取值只有三种：</p>
+     * <ul>
+     *   <li>{@code reportNo,entName} —— 只用借款人口径</li>
+     *   <li>{@code reportNo,entName,guarantorName} —— 还要按担保人口径（多担保人时轮循）</li>
+     *   <li>NULL / 空 —— 由 provider 按默认（reportNo,entName）处理</li>
+     * </ul>
+     * <p><b>为什么必须有这一列</b>：同一个 agentCode 会在不同章节复用（源表里
+     * {@code zxcxsjmsqy}/{@code zwqkmsqy} 等在「六、征信」与「十二、担保人征信」各出现一次），
+     * 前者是**借款人**口径、后者是**担保人**口径，入参不同、结果完全不同 ——
+     * 只靠 agentCode 无法区分，调度侧不能去重也不能混用。</p>
+     */
+    @TableField("agentParams")
+    private String agentParams;
 
     /** 内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值） */
     @TableField("blockName")

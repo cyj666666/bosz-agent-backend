@@ -68,6 +68,7 @@ CREATE TABLE app_report_content_block (
     fillType       VARCHAR(16) NOT NULL,
     analysisType   VARCHAR(16),
     agentCode      VARCHAR(64),
+    agentParams    VARCHAR(256),
     blockName      VARCHAR(128) NOT NULL,
     titleLevel     SMALLINT,
     emptyStrategy  VARCHAR(16) DEFAULT 'PLACEHOLDER',
@@ -84,7 +85,8 @@ COMMENT ON COLUMN app_report_content_block.blockCode IS '内容块编号（全�
 COMMENT ON COLUMN app_report_content_block.catalogCode IS '所属目录编号（关联 app_report_catalog.catalogCode；报告级内容块（如报告头）为NULL，不进目录树）';
 COMMENT ON COLUMN app_report_content_block.fillType IS '填充类型：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源链接';
 COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT 时有值，否则为NULL）';
-COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT 时有值，否则为NULL；已含经验规则编号；为与内容实例、AI 风险实例的关联键）';
+COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT/TABLE 时有值，否则为NULL；已含经验规则编号；为与内容实例、AI 风险实例的关联键）';
+COMMENT ON COLUMN app_report_content_block.agentParams IS '调智能体入参清单（逗号分隔的参数名，仅 TEXT/TABLE 有值）：reportNo,entName 或 reportNo,entName,guarantorName（后者按担保人口径、多担保人时轮循）。2026-09-17 新增：同一 agentCode 在不同章节可能是借款人/担保人两种口径，入参不同结果不同，必须有此列区分';
 COMMENT ON COLUMN app_report_content_block.blockName IS '内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值）';
 COMMENT ON COLUMN app_report_content_block.titleLevel IS '标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略（实例内容为空时生效）：PLACEHOLDER-显示暂无数据占位（默认） HIDE-整块隐藏';

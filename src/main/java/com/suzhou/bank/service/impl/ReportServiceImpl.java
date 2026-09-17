@@ -39,6 +39,7 @@ import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
 import com.suzhou.bank.service.report.spi.ContentPayload;
 import com.suzhou.bank.service.report.spi.ReportContentProvider;
 import com.suzhou.bank.service.report.spi.ReportGenerateContext;
+import com.suzhou.bank.service.report.spi.RuleHit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -50,6 +51,7 @@ import javax.annotation.Resource;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,6 +61,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -86,6 +89,18 @@ import static com.suzhou.bank.service.report.model.ReportConstants.*;
 @Service
 @RequiredArgsConstructor
 public class ReportServiceImpl implements ReportService {
+
+    /**
+     * 风险要点「总结块」的 agentCode（与 {@code AgentReportContentProvider#AGENT_RULE_SUMMARY} 同值）。
+     * <p>本类的两阶段调度用它识别「延后到阶段 2 回填」的块。</p>
+     */
+    private static final String AGENT_RULE_SUMMARY = "RULE_SUMMARY";
+
+    /**
+     * 风险要点「条目块」的 agentCode 前缀（与 {@code AgentReportContentProvider#AGENT_RULE_ENTRY_PREFIX} 同值）。
+     * <p>前缀之后存的是「它对应的那个 RULE 块的 blockCode」——条目块的内容就是复用那条规则的正文档内容。</p>
+     */
+    private static final String AGENT_RULE_ENTRY_PREFIX = "RULE_ENTRY#";
 
     private final ReportMapper reportMapper;
     private final AppReportCatalogMapper catalogMapper;
@@ -115,6 +130,14 @@ public class ReportServiceImpl implements ReportService {
      */
     @Resource(name = "reportGenerateExecutor")
     private ThreadPoolTaskExecutor reportGenerateExecutor;
+
+    /**
+     * 内容块级并发池：一份报告内多个内容块并行调智能体用。
+     * <p>与 {@code reportGenerateExecutor}（按报告维度的加工池）是两层，**不能合并** ——
+     * 详见 {@code ReportGenerateConfig#reportBlockExecutor} 的说明。</p>
+     */
+    @Resource(name = "reportBlockExecutor")
+    private ThreadPoolTaskExecutor reportBlockExecutor;
 
     /** 同一 reportNo 的触发互斥锁：避免两次点击并发通过「是否已有 RUNNING」的校验 */
     private static final ConcurrentHashMap<String, Object> ANALYSIS_LOCKS = new ConcurrentHashMap<>();
@@ -271,35 +294,90 @@ public class ReportServiceImpl implements ReportService {
             return result;
         }
 
-        // ===== 3. 逐块实例化（分块隔离：单块异常记软备注，继续下一块） =====
-        Set<String> agentCodes = new HashSet<>();
-        List<AppReportContentInstance> instances = new ArrayList<>(blocks.size());
+        // ===== 3. 逐块实例化（**并发 + 分块隔离**：单块异常记软备注，继续下一块） =====
+        //
+        // 🔴 **为什么要两阶段**：模板里「一、（一）风险要点」的总结块排在所有 RULE 块**之前**
+        //    （sortNo 20 vs 各章节 30+），而它的素材正是「本报告已生成的全部 RULE 块内容」。
+        //    一阶段按顺序加工时素材还不存在，必须等普通块跑完再回填。
+        //    · 阶段 1：普通块（TITLE / TEXT / TABLE）并发调智能体
+        //    · 阶段 2：回填 RULE_SUMMARY（总结，1 次大模型调用）与 RULE_ENTRY#（条目，复用 RULE 内容，不调模型）
+        //
+        // 🔴 **为什么必须并发**：93 个取数块 × 单次数十秒 = 串行几十分钟，业务上不可接受。
+        //    并发度由 report.agent.block-pool-size 控制（暂定 5）。
+        Set<String> seenBlockCodes = new HashSet<>();
+        List<String> failureSink = Collections.synchronizedList(new ArrayList<>());
+        int size = blocks.size();
+        AppReportContentInstance[] slots = new AppReportContentInstance[size];
+        AppReportAiRisk[] riskSlots = new AppReportAiRisk[size];
+
+        List<java.util.concurrent.Future<?>> futures = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            final int idx = i;
+            final AppReportContentBlock block = blocks.get(i);
+            // 二阶段负责的块：这里先占位（内容留空），等阶段 2 回填
+            if (isDeferredBlock(block)) {
+                continue;
+            }
+            futures.add(reportBlockExecutor.submit(() -> {
+                long blockStart = System.currentTimeMillis();
+                try {
+                    AppReportContentInstance instance = buildInstance(
+                            reportNo, customerId, customerName, reportTitle, block, catalogMap);
+                    slots[idx] = instance;
+                    if (isRuleBlock(block)) {
+                        riskSlots[idx] = buildRisk(instance, block, seenBlockCodes);
+                    }
+                } catch (Throwable e) {
+                    // 单块失败：记日志 + 软备注，继续下一块（绝不中断整份报告）
+                    log.error("内容块加工失败(跳过该块) reportNo={} blockCode={}", reportNo, block.getBlockCode(), e);
+                    String blockName = StringUtils.hasText(block.getBlockName())
+                            ? block.getBlockName() : block.getBlockCode();
+                    failureSink.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
+                } finally {
+                    log.debug("内容块加工结束 reportNo={} blockCode={} 耗时={}ms",
+                            reportNo, block.getBlockCode(), System.currentTimeMillis() - blockStart);
+                }
+            }));
+        }
+        // 等全部块跑完（任何单块失败都已在任务内消化，不会抛到这里）
+        for (java.util.concurrent.Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Throwable e) {
+                // 仅当任务被拒绝/池异常等情况才会走到；同样只记软备注
+                log.error("内容块加工任务异常 reportNo={}", reportNo, e);
+                failureSink.add("[任务提交] " + briefError(e));
+            }
+        }
+        if (!failureSink.isEmpty()) {
+            blockFailures.addAll(failureSink);
+        }
+
+        // ===== 3.5 阶段2：回填「风险要点」=====
+        //   · 总结块：把本报告已生成的**全部 RULE 块内容**当素材，1 次大模型调用出总结
+        //   · 条目块：直接复用对应 RULE 块的内容（本地截取，不再调模型）
+        fillRiskSummaryBlocks(reportNo, customerId, customerName, blocks, catalogMap,
+                slots, blockFailures);
+
+        // 按模板顺序收敛结果（跳过被跳过/失败的块）
+        List<AppReportContentInstance> instances = new ArrayList<>(size);
         List<AppReportAiRisk> risks = new ArrayList<>();
         int emptyCount = 0;
         int hiddenCount = 0;
-
-        for (AppReportContentBlock block : blocks) {
-            try {
-                AppReportContentInstance instance = buildInstance(
-                        reportNo, customerId, customerName, reportTitle, block, catalogMap);
-                instances.add(instance);
-
-                if (!StringUtils.hasText(instance.getContent())) {
-                    emptyCount++;
-                    if (EMPTY_HIDE.equalsIgnoreCase(block.getEmptyStrategy())) {
-                        hiddenCount++;
-                    }
+        for (int i = 0; i < size; i++) {
+            AppReportContentInstance instance = slots[i];
+            if (instance == null) {
+                continue;
+            }
+            instances.add(instance);
+            if (!StringUtils.hasText(instance.getContent())) {
+                emptyCount++;
+                if (EMPTY_HIDE.equalsIgnoreCase(blocks.get(i).getEmptyStrategy())) {
+                    hiddenCount++;
                 }
-                // 经验规则类内容块 → 一对一生成 AI 风险明细
-                if (isRuleBlock(block)) {
-                    risks.add(buildRisk(instance, block, agentCodes));
-                }
-            } catch (Exception e) {
-                // 单块失败：记日志 + 软备注，继续下一块（绝不中断整份报告）
-                log.error("内容块加工失败(跳过该块) reportNo={} blockCode={}", reportNo, block.getBlockCode(), e);
-                String blockName = StringUtils.hasText(block.getBlockName())
-                        ? block.getBlockName() : block.getBlockCode();
-                blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
+            }
+            if (riskSlots[i] != null) {
+                risks.add(riskSlots[i]);
             }
         }
 
@@ -333,6 +411,112 @@ public class ReportServiceImpl implements ReportService {
         result.setSuccess(true);
         result.setCostMs(System.currentTimeMillis() - start);
         return result;
+    }
+
+    /**
+     * 是否「延后到阶段 2 回填」的块
+     *
+     * <p>两类：</p>
+     * <ul>
+     *   <li>{@code agentCode = RULE_SUMMARY} —— 风险要点总结块，素材是**全部 RULE 块内容**，
+     *       而它排在这些 RULE 块之前（sortNo 20 vs 各章节 30+），阶段 1 跑它必然拿不到素材；</li>
+     *   <li>{@code agentCode 以 RULE_ENTRY# 开头} —— 风险要点条目块，内容直接复用对应 RULE 块，
+     *       同样要等阶段 1 结束。</li>
+     * </ul>
+     * <p>阶段 1 遇到这两类**不建实例**（slots 留空），由
+     * {@link #fillRiskSummaryBlocks} 统一补上。</p>
+     */
+    private boolean isDeferredBlock(AppReportContentBlock block) {
+        String agentCode = block.getAgentCode();
+        return AGENT_RULE_SUMMARY.equals(agentCode)
+                || (agentCode != null && agentCode.startsWith(AGENT_RULE_ENTRY_PREFIX));
+    }
+
+    /**
+     * 阶段 2：回填「风险要点」的两个角色块
+     *
+     * <ul>
+     *   <li><b>总结块</b>（{@code agentCode=RULE_SUMMARY}）—— 收齐阶段 1 已生成的**全部 RULE 块内容**，
+     *       回调 {@link ReportContentProvider#provideRuleSummary} 由加工方调大模型归纳成一段；</li>
+     *   <li><b>条目块</b>（{@code agentCode=RULE_ENTRY#<目标RULE块code>}）—— 直接复用对应 RULE 块的
+     *       正文内容（本地截取，**不再调模型**）；对应规则未命中（内容为空）时该块内容留空，
+     *       由模板的 {@code emptyStrategy=HIDE} 让它整块不渲染 —— 「命中的才出现」就是这么实现的。</li>
+     * </ul>
+     *
+     * <p>本方法不抛异常：任何失败只记软备注。</p>
+     *
+     * @param slots 阶段 1 的实例槽位（按模板块顺序；本方法负责把延后块的空位填上）
+     */
+    private void fillRiskSummaryBlocks(String reportNo, String customerId, String customerName,
+                                       List<AppReportContentBlock> blocks,
+                                       Map<String, AppReportCatalog> catalogMap,
+                                       AppReportContentInstance[] slots,
+                                       List<String> blockFailures) {
+        // 先按「RULE 块编号 → 实例内容」建索引，供总结素材与条目块复用
+        Map<String, AppReportContentInstance> ruleInstanceOf = new LinkedHashMap<>();
+        List<RuleHit> hits = new ArrayList<>();
+        for (int i = 0; i < blocks.size(); i++) {
+            AppReportContentBlock block = blocks.get(i);
+            AppReportContentInstance instance = slots[i];
+            if (instance == null || !isRuleBlock(block) || !StringUtils.hasText(instance.getContent())) {
+                continue;
+            }
+            ruleInstanceOf.put(block.getBlockCode(), instance);
+            AppReportCatalog catalog = StringUtils.hasText(block.getCatalogCode())
+                    ? catalogMap.get(block.getCatalogCode()) : null;
+            hits.add(new RuleHit(block.getBlockCode(), block.getBlockName(), instance.getContent(),
+                    catalog == null ? null : catalog.getCatalogName()));
+        }
+
+        boolean anyDeferred = false;
+        for (AppReportContentBlock block : blocks) {
+            if (isDeferredBlock(block)) {
+                anyDeferred = true;
+                break;
+            }
+        }
+        if (!anyDeferred) {
+            return;
+        }
+        log.info("【报告内容加工】风险要点回填开始 reportNo={} 命中规则={} 条", reportNo, hits.size());
+
+        for (int i = 0; i < blocks.size(); i++) {
+            AppReportContentBlock block = blocks.get(i);
+            if (!isDeferredBlock(block) || slots[i] != null) {
+                continue;
+            }
+            try {
+                ContentPayload payload = null;
+                String agentCode = block.getAgentCode();
+
+                if (AGENT_RULE_SUMMARY.equals(agentCode)) {
+                    // 总结块：交给加工方（智能体侧）拼素材调模型
+                    ReportGenerateContext ctx = new ReportGenerateContext();
+                    ctx.setReportNo(reportNo);
+                    ctx.setCustomerId(customerId);
+                    ctx.setCustomerName(customerName);
+                    ctx.setBlock(block);
+                    payload = contentProvider.provideRuleSummary(ctx, hits);
+                } else if (agentCode != null && agentCode.startsWith(AGENT_RULE_ENTRY_PREFIX)) {
+                    // 条目块：agentCode 里存的就是「对应 RULE 块的 blockCode」
+                    String targetBlockCode = agentCode.substring(AGENT_RULE_ENTRY_PREFIX.length());
+                    AppReportContentInstance ruleInstance = ruleInstanceOf.get(targetBlockCode);
+                    if (ruleInstance != null) {
+                        payload = new ContentPayload(ruleInstance.getContent());
+                    }
+                }
+
+                String content = payload == null ? null : payload.getContent();
+                slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
+                        content);
+            } catch (Throwable e) {
+                log.error("风险要点块加工失败(跳过该块) reportNo={} blockCode={}", reportNo, block.getBlockCode(), e);
+                String blockName = StringUtils.hasText(block.getBlockName())
+                        ? block.getBlockName() : block.getBlockCode();
+                blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
+            }
+        }
+        log.info("【报告内容加工】风险要点回填结束 reportNo={}", reportNo);
     }
 
     /** 清理某报告的内容实例与 AI 风险（重跑前调用，避免唯一键 (reportNo, blockCode) 冲突） */
@@ -1333,25 +1517,46 @@ public class ReportServiceImpl implements ReportService {
 
     /**
      * 实例化一个内容块：取加工产物 → 标题兜底 → 建锚点与跳转 → 快照模板结构性字段
+     *
+     * <p>正常路径：内容由 {@code contentProvider.provide()} 现取（阶段 1）。</p>
      */
     private AppReportContentInstance buildInstance(String reportNo, String customerId, String customerName,
                                                    String reportTitle,
                                                    AppReportContentBlock block,
                                                    Map<String, AppReportCatalog> catalogMap) {
+        return buildInstance(reportNo, customerId, customerName, reportTitle, block, catalogMap, null);
+    }
+
+    /**
+     * 实例化一个内容块（可指定已加工好的内容）
+     *
+     * <p>阶段 2（风险要点回填）走这个重载：总结/条目块的内容在调用方就已经拿到了，
+     * 不能再让 {@code contentProvider.provide()} 去取（它会返回 null，见
+     * {@code AgentReportContentProvider} 对这两类块的显式跳过）。</p>
+     *
+     * @param presetContent 非 null 时直接用它当内容，跳过 provider 取数
+     */
+    private AppReportContentInstance buildInstance(String reportNo, String customerId, String customerName,
+                                                   String reportTitle,
+                                                   AppReportContentBlock block,
+                                                   Map<String, AppReportCatalog> catalogMap,
+                                                   String presetContent) {
         AppReportCatalog catalog = StringUtils.hasText(block.getCatalogCode())
                 ? catalogMap.get(block.getCatalogCode()) : null;
         String catalogName = catalog == null ? null : catalog.getCatalogName();
 
         // ① 前置加工产物（由数据加工链路提供，本服务不取数）
-        ReportGenerateContext context = new ReportGenerateContext();
-        context.setReportNo(reportNo);
-        context.setCustomerId(customerId);
-        context.setCustomerName(customerName);
-        context.setCatalogName(catalogName);
-        context.setBlock(block);
-        ContentPayload payload = contentProvider.provide(context);
-
-        String content = payload == null ? null : payload.getContent();
+        String content = presetContent;
+        if (content == null) {
+            ReportGenerateContext context = new ReportGenerateContext();
+            context.setReportNo(reportNo);
+            context.setCustomerId(customerId);
+            context.setCustomerName(customerName);
+            context.setCatalogName(catalogName);
+            context.setBlock(block);
+            ContentPayload payload = contentProvider.provide(context);
+            content = payload == null ? null : payload.getContent();
+        }
         // ② 标题类内容块无加工产物时按模板兜底（报告头 / 章节标题）
         if (!StringUtils.hasText(content) && FILL_TITLE.equalsIgnoreCase(block.getFillType())) {
             content = fallbackTitle(block, catalogName, reportTitle, customerName);
@@ -1398,10 +1603,23 @@ public class ReportServiceImpl implements ReportService {
     /**
      * 生成 AI 风险明细（1:1）
      * <p>riskDesc 取正文内容同一份文案：正文 content 为准、列表为副本。</p>
+     *
+     * <p>⚠️ <b>不要在这里按 agentCode 判重</b>（2026-09-17 修正）：报告模板里同一个 agentCode
+     * 会在不同章节<b>合法复用</b> —— 典型是征信类规则在「六、征信情况和潜在风险」按**借款人**口径、
+     * 在「十二、（二）担保人征信信息」按**担保人**口径各出现一次，入参不同、结果不同。
+     * 风险明细的行身份是 {@code (reportNo, blockCode)}（见 {@code uk_report_ai_risk_report_block}），
+     * 而 blockCode 全局唯一，所以真正要防的是 blockCode 重复，不是 agentCode 重复。
+     * 对应地，DB 上那条 {@code uk_report_ai_risk_report_agent} 唯一索引也已移除
+     * （见 {@code sql/报告详情表设计/补丁_移除风险表agent唯一约束.sql}）。</p>
+     *
+     * @param seenBlockCodes 本报告内已生成过风险的 blockCode 集合（跨块调用累积）
      */
-    private AppReportAiRisk buildRisk(AppReportContentInstance instance, AppReportContentBlock block, Set<String> agentCodes) {
-        if (!agentCodes.add(block.getAgentCode())) {
-            throw new ReportGenerateException("智能体编码在报告内重复，要求报告内唯一：" + block.getAgentCode());
+    private AppReportAiRisk buildRisk(AppReportContentInstance instance, AppReportContentBlock block, Set<String> seenBlockCodes) {
+        if (!seenBlockCodes.add(block.getBlockCode())) {
+            // blockCode 由模板唯一键保证全局唯一，理论上到不了这里；真到了说明模板数据脏，跳过即可
+            log.warn("内容块编号在报告内重复，跳过该风险明细 reportNo={} blockCode={}",
+                    instance.getReportNo(), block.getBlockCode());
+            return null;
         }
         AppReportAiRisk risk = new AppReportAiRisk();
         risk.setReportNo(instance.getReportNo());

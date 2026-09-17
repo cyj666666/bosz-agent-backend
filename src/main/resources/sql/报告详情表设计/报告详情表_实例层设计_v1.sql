@@ -99,8 +99,14 @@ CREATE INDEX idx_report_ci_agent ON app_report_content_instance (reportNo, agent
 --        riskDesc 与内容实例 content（analysisType=RULE 场景）为同一份文案。
 --    唯一性约束：
 --        uk_report_ai_risk_report_block  (reportNo, blockCode) —— 行身份，1:1
---        uk_report_ai_risk_report_agent  (reportNo, agentCode) —— 报告内 agentCode 唯一
---        两条约束互为印证；若将来出现"一条规则命中多个内容块"，需先移除 agent 唯一约束。
+--        ⚠️ 2026-09-17 移除 uk_report_ai_risk_report_agent (reportNo, agentCode)：
+--           原注释写「若将来出现"一条规则命中多个内容块"，需先移除 agent 唯一约束」——
+--           这个场景已经到了：报告模板里**同一个 agentCode 会在不同章节合法复用**
+--           （典型：同一套征信类规则在「六、征信情况和潜在风险」按**借款人**口径、
+--            在「十二、（二）担保人征信信息」按**担保人**口径各出现一次，
+--            入参不同、结果不同，必须各生成一条风险明细）。
+--           行身份本来就是 (reportNo, blockCode)（内容块编号全局唯一），
+--           故只保留 report_block 那条唯一约束；agentCode 降为普通索引（见下方 idx）。
 --    写入纪律：正文内容支持编辑时，content 与 riskDesc 必须在同一事务内同步更新，
 --              以 content 为准本、riskDesc 为副本；编辑入口只开在正文侧，方向单向。
 --    小文本字段（原有 rawRiskDesc/aiRead/suggestion）按最新设计已移除。
@@ -138,6 +144,6 @@ COMMENT ON COLUMN app_report_ai_risk.sortNo IS '排序（风险列表内顺序�
 COMMENT ON COLUMN app_report_ai_risk.inputtime IS '入库时间';
 
 CREATE UNIQUE INDEX uk_report_ai_risk_report_block ON app_report_ai_risk (reportNo, blockCode);
-CREATE UNIQUE INDEX uk_report_ai_risk_report_agent ON app_report_ai_risk (reportNo, agentCode);
 CREATE INDEX idx_report_ai_risk_report ON app_report_ai_risk (reportNo);
+CREATE INDEX idx_report_ai_risk_agent ON app_report_ai_risk (reportNo, agentCode);
 CREATE INDEX idx_report_ai_risk_status ON app_report_ai_risk (reportNo, status);

@@ -40,7 +40,16 @@ jwt:
 #报告详情是否使用模拟数据
 report:
   mock-content:
+    # ⚠️ 置 false 才会走 AgentReportContentProvider（真实调智能体）
+    #    true（默认）= 用 classpath:report-demo/demo-content.json 的预置内容，仅演示用
     enabled: true
+  # 内容块取数（真实链路）：报告模板里每个 TEXT/TABLE 块都要调一次智能体
+  agent:
+    # 块级并发数：一份报告有近百个取数块，单块一次大模型调用（数十秒），
+    # 串行要几十分钟 → 必须并发；上界受大模型网关的并发能力约束。
+    block-pool-size: 5
+    # 块级并发池队列容量
+    block-queue-capacity: 200
   # 报告实例加工（列表页「发起报告」/ 详情页「更新报告」后异步执行）
   # 外网没有行内的「生成池轮询」：发起落 111 后直接触发加工，111 → 000 → 888/999。
   # 加工要逐块取数、后续还要调大模型，是长耗时 IO，故与 Web 请求、AI 分析线程池都隔离。
