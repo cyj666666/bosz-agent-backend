@@ -5,11 +5,12 @@ import lombok.Data;
 /**
  * 发起报告入参（列表页「发起报告」弹框）
  *
- * <p>只收用户必填的 5 个业务字段，其余由服务端补全：</p>
+ * <p>只收用户必填的 5 个业务字段 + 1 个选填的报告编号，其余由服务端补全：</p>
  * <ul>
- *   <li>{@code reportNo} —— 服务端生成（RPT + 时间戳 + 随机数）</li>
+ *   <li>{@code reportNo} —— <b>选填</b>；填了就用填的（对齐行内口径「传入则直接使用、跳过取号」），
+ *       留空则由服务端生成（RPT + 时间戳 + 随机数）</li>
  *   <li>{@code version} —— 留空，等生成完成（888）时再赋予</li>
- *   <li>{@code status} —— 固定 {@code 111}（待开始），交给上游/定时任务触发加工</li>
+ *   <li>{@code status} —— 固定 {@code 111}（待开始），落表后立即异步触发加工</li>
  *   <li>{@code userNo} —— 取当前登录账号</li>
  *   <li>{@code createdAt} / {@code updatedAt} —— 交数据库默认值</li>
  * </ul>
@@ -34,4 +35,11 @@ public class ReportCreateRequest {
 
     /** 报告类型（必填） */
     private String reportType;
+
+    /**
+     * 报告编号（<b>选填</b>）
+     * <p>对齐行内口径：<b>填了就直接用填的值</b>（trim 后落库，跳过服务端取号）；
+     * 留空才由服务端生成。前端发起弹框的「报告编号」输入框即此字段。</p>
+     */
+    private String reportNo;
 }

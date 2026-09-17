@@ -15,10 +15,13 @@ import java.util.List;
 
 /**
  * 报告服务（模板驱动的报告实例生成）
- * <p>本服务只负责"模板表 + 实例表"的逻辑，不负责报告记录的发起：
- * {@code report} 表的记录由上游预先生成（初始状态 111-待开始），
- * 定时任务轮询到 111 后调用本服务完成加工。</p>
- * <p><b>状态流转</b>：000-进行中 → 888-已完成 / 999-失败。</p>
+ *
+ * <p><b>发起口径（外网工程）</b>：行内是「发起落 111 → 生成池定时轮询捞取 → 加工」，
+ * 外网没有生成池、也不对接 SSF/ESB，因此 {@link #createReport} 落 111 后会
+ * <b>立即异步触发加工</b>（{@link #generate}），{@link #renew} 同理。</p>
+ *
+ * <p><b>状态流转</b>：111-待开始 → 000-进行中 → <b>888-已完成（唯一终态，同时写入 version）</b>。
+ * 999-失败为预留状态，正常链路不再产生（失败也走 888 + {@code fail_reason} 软备注）。</p>
  *
  * @author cyj666666
  * @since 1.0.0
@@ -26,21 +29,28 @@ import java.util.List;
 public interface ReportService {
 
     /**
-     * 生成报告实例（含状态流转，定时任务直接调用本方法）
-     * <p>流程：校验报告记录与状态 → 置 000 进行中 → 加工（{@link #process(String)}）
-     * → 置 888 已完成；加工抛异常时置 999 失败并向上抛出。</p>
+     * 生成报告实例（含状态流转；发起/更新报告后由后台线程池调用）
+     *
+     * <p>流程：校验报告记录与状态 → 置 000-进行中 → 加工（{@link #process(String)}）
+     * → 置 888-已完成并写入 version。</p>
+     *
+     * <p><b>888 是唯一终态</b>：单个内容块加工失败不中断整份报告，原因汇总进
+     * {@code fail_reason} 软备注、报告仍置 888（模板缺失/校验不通过/落库失败同理）。
+     * 本方法<b>不向外抛异常</b>，失败通过 {@code success=false + failReason} 返回。</p>
+     *
      * <p>本方法不声明事务；互斥由上游统一加分布式锁保证。</p>
      *
      * @param reportNo 报告编号（对应 report.report_no）
-     * @return 生成结果（各项统计）
+     * @return 生成结果（各项统计 + 块级失败汇总 + 版本号）
      */
     ReportGenerateResult generate(String reportNo);
 
     /**
      * 纯加工：按模板生成内容实例与 AI 风险明细（自行管理状态时调用）
      * <p>以模板表为唯一驱动：读模板目录与内容块 → 逐块落实例（结构性字段快照、位置锚点）
-     * → analysisType=RULE 的内容块一对一生成风险明细。</p>
-     * <p>不声明事务、不做重跑清理：报告编号每次唯一，重复加工由实例表唯一键拦截。</p>
+     * → analysisType=RULE 的内容块一对一生成风险明细；单块异常只跳过该块并记入软备注。</p>
+     * <p>不声明事务。<b>支持重跑</b>：落库前先清该报告的旧实例与风险，同一 reportNo 重复加工
+     * 不会撞实例表唯一键。</p>
      * <p>不抛异常：失败时记录日志并返回 success=false + failReason。</p>
      *
      * @param reportNo 报告编号
@@ -263,18 +273,27 @@ public interface ReportService {
     Page<Report> page(ReportPageQuery query);
 
     /**
-     * 发起报告：手工创建一条报告记录（列表页「发起报告」）
+     * 发起报告：手工创建一条报告记录并<b>立即异步触发加工</b>（列表页「发起报告」）
      *
-     * <p>只落 report 主表，状态置 {@code 111}（待开始）—— 实例数据仍由生成流程按模板加工。
-     * 服务端补全 {@code reportNo}（RPT+时间戳+随机数）、{@code userNo}（当前登录人）；
-     * {@code version} 留空，等生成完成（888）时再赋予。</p>
+     * <p>两步：① 落 report 主表，状态置 {@code 111}（待开始）—— {@code reportNo} <b>填了就用填的</b>
+     * （对齐行内「传入则直接使用、跳过取号」），留空则服务端生成（RPT+时间戳+随机数）；
+     * {@code userNo} 取当前登录人；{@code version} 留空，等置 888 时再按流水号取值写入。
+     * ② 提交到报告生成线程池执行 {@link #generate(String)}，状态随之流转 111 → 000 → 888。</p>
      *
-     * <p>同一日检流水号下<b>不允许重复发起</b>（会让版本序列混乱），已存在时抛异常提示改用「更新报告」。</p>
+     * <p><b>本方法立即返回</b>（不等待加工完成）：加工是逐块取数 + 调大模型的长耗时过程，
+     * 同步跑会让接口 HTTP 超时。调用方拿到的报告记录通常还是 111 或 000，
+     * 需按 {@code status} 判断，完成后才可进详情页。</p>
      *
-     * @param request      业务入参（客户编号 / 客户名称 / 日检流水号 / 报告标题 / 报告类型）
+     * <p><b>防重复</b>：同一日检流水号下<b>不允许重复发起</b>（会让版本序列混乱），
+     * 已存在时抛异常提示改用「更新报告」。</p>
+     *
+     * <p><b>失败兜底</b>：任务提交失败（如线程池已关闭）时不会留下永远 111 的记录 ——
+     * 直接置 888 并落 {@code failReason} 软备注（888 是唯一终态），返回值里的 status 也是 888。</p>
+     *
+     * @param request      业务入参（客户编号 / 客户名称 / 日检流水号 / 报告标题 / 报告类型 / 报告编号(选填)）
      * @param operatorNo   发起人账号（写入 user_no）
      * @param operatorName 发起人姓名（仅日志用）
-     * @return 新建的报告记录
+     * @return 新建的报告记录（加工异步进行，status 多为 111；提交失败时为 888 且带 failReason）
      */
     Report createReport(ReportCreateRequest request, String operatorNo, String operatorName);
 }

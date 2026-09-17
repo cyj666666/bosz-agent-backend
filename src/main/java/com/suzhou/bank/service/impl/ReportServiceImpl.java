@@ -58,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -67,8 +66,15 @@ import static com.suzhou.bank.service.report.model.ReportConstants.*;
 
 /**
  * 报告服务实现（模板驱动的报告实例生成）
- * <p>只负责"模板表 + 实例表"的逻辑，不负责报告记录的发起（{@code report}
- * 由上游预生成，初始状态 111-待开始）。</p>
+ *
+ * <p><b>本工程的发起口径（与行内不同）</b>：行内是「发起落 111 → 生成池
+ * {@code ReportGenerateJob} 定时轮询捞取 → CAS 认领 111→000 → 加工 → 888」，
+ * 外网没有生成池、也不对接 SSF/ESB，因此改为<b>列表点「发起」后异步直接触发加工</b>
+ * （{@link #createReport} 内提交到 {@code reportGenerateExecutor}），
+ * 「更新报告」（{@link #renew}）同理。报告记录仍由本服务负责落表，初始状态 111。</p>
+ *
+ * <p><b>状态流转</b>：111-待开始 → 000-进行中 → 888-已完成（同时写入 version）/ 999-失败。</p>
+ *
  * <p><b>并发与事务约定</b>：本服务<b>不声明事务</b>，也不做"重跑清理"。
  * 互斥由上游统一加分布式锁保证；每次生成的报告编号唯一，
  * 因此重复加工会被实例表的唯一键拦住，不会产生数据错乱。</p>
@@ -102,9 +108,30 @@ public class ReportServiceImpl implements ReportService {
     @Resource(name = "reportAiAnalysisExecutor")
     private ThreadPoolTaskExecutor aiAnalysisExecutor;
 
+    /**
+     * 报告实例加工专用线程池：列表点「发起」（或详情页「更新报告」）后异步触发加工用。
+     * <p>同 {@code reportAiAnalysisExecutor}，用 {@code @Resource} 按名字注入 ——
+     * Spring Boot 自带一个 {@code applicationTaskExecutor}，按类型注入会有两个候选，必须指定 bean 名。</p>
+     */
+    @Resource(name = "reportGenerateExecutor")
+    private ThreadPoolTaskExecutor reportGenerateExecutor;
+
     /** 同一 reportNo 的触发互斥锁：避免两次点击并发通过「是否已有 RUNNING」的校验 */
     private static final ConcurrentHashMap<String, Object> ANALYSIS_LOCKS = new ConcurrentHashMap<>();
 
+    /**
+     * 生成报告实例（含状态流转）。<b>888 是唯一终态</b>（对齐行内口径）。
+     *
+     * <p><b>容错约定</b>：单个内容块加工异常<b>不会中断整份报告</b>，该块落空、原因汇总进
+     * {@code fail_reason} 软备注，报告依然置 888。模板缺失/校验不通过/落库失败同理
+     * （空壳 + 软备注 + 888）。<b>正常链路不再产生 999</b> —— 999 是预留状态，
+     * 只在历史存量数据里可能见到。</p>
+     *
+     * <p><b>版本号</b>：置 888 时写入（{@link #markDone}），= 该流水号下最大版本号 + 1（首份 V1）。
+     * 只有 888 且 version 非空才被 {@code versions()} / {@code latest()} 认作有效版本。</p>
+     *
+     * <p>本方法不向外抛异常：任何异常都收敛为 {@code success=false + failReason} 的返回结果。</p>
+     */
     @Override
     public ReportGenerateResult generate(String reportNo) {
         long start = System.currentTimeMillis();
@@ -116,46 +143,67 @@ public class ReportServiceImpl implements ReportService {
             return failResult(result, start, "报告编号（reportNo）不能为空");
         }
 
+        Report reportInfo;
         try {
-            Report reportInfo = loadReportInfo(reportNo);
-            result.setCustomerId(reportInfo.getCustomerId());
-            result.setCustomerName(reportInfo.getCustomerName());
-            result.setReportTitle(reportInfo.getReportTitle());
+            reportInfo = loadReportInfo(reportNo);
+        } catch (Throwable e) {
+            // 报告记录都读不到（编号不存在 / DB 不可用）：无从置 888，只记日志
+            log.error("报告生成失败（报告记录不可读）reportNo={}", reportNo, e);
+            return failResult(result, start, buildFailReason(e));
+        }
+        result.setCustomerId(reportInfo.getCustomerId());
+        result.setCustomerName(reportInfo.getCustomerName());
+        result.setReportTitle(reportInfo.getReportTitle());
 
-            // 已完成的报告不做重复加工
-            if (REPORT_STATUS_DONE.equals(reportInfo.getStatus())) {
-                return failResult(result, start, "报告已完成（888），无需重复生成：" + reportNo);
-            }
+        // 已完成的报告不做重复加工（要重跑请走详情页「更新报告」，会新建一个版本）
+        if (REPORT_STATUS_DONE.equals(reportInfo.getStatus())) {
+            return failResult(result, start, "报告已完成（888），无需重复生成：" + reportNo);
+        }
 
+        try {
             // 置 000-进行中
             markStatus(reportNo, REPORT_STATUS_RUNNING);
             ReportGenerateResult processed = process(reportNo);
-            // 加工失败（process 已捕获异常，success=false）：置 999 + 落失败原因
             if (!processed.isSuccess()) {
-                markStatus(reportNo, REPORT_STATUS_FAILED);
-                markFailReason(reportNo, processed.getFailReason());
-                processed.setReportStatus(REPORT_STATUS_FAILED);
+                // 模板级/落库级致命错误（doProcess 已兜底不抛）：仍置 888 终态，失败原因落软备注
+                processed.setVersion(markDone(reportInfo, processed.getFailReason()));
+                processed.setReportStatus(REPORT_STATUS_DONE);
                 return processed;
             }
-            // 置 888-已完成，并清空历史失败原因
-            markStatus(reportNo, REPORT_STATUS_DONE);
-            markFailReason(reportNo, null);
+            // 置 888 + 写入版本号，块级失败汇总进 fail_reason（无失败则清空历史失败原因）
+            String softNote = buildBlockFailureNote(processed.getBlockFailures());
+            processed.setVersion(markDone(reportInfo, softNote));
             processed.setReportStatus(REPORT_STATUS_DONE);
             processed.setSuccess(true);
-            log.info("报告生成成功 reportNo={} 内容实例={} AI风险={} 耗时={}ms",
-                    reportNo, processed.getContentTotal(), processed.getRiskTotal(), processed.getCostMs());
+            log.info("报告生成完成 reportNo={} version={} 内容实例={} AI风险={} 块失败={} 软备注={} 耗时={}ms",
+                    reportNo, processed.getVersion(), processed.getContentTotal(), processed.getRiskTotal(),
+                    processed.getBlockFailures().size(), softNote == null ? "无" : softNote, processed.getCostMs());
             return processed;
         } catch (Throwable e) {
-            // 任何异常（技术类/业务类）都不向外抛：记录日志、置 999 失败、落失败原因
-            log.error("报告生成失败，已置为 999 reportNo={}", reportNo, e);
+            // 基础设施级异常（DB 不可用等）。
+            // 行内此处「不置任何状态」，交给生成池的「000 超时兜底」重置回 111 重捞；
+            // 但外网没有生成池 —— 若也放着不管，记录会永远卡在 000，所以这里就地兜底：
+            // 尽力置 888 + 软备注（888 是唯一终态）。若连这一步都失败，说明 DB 真的挂了，只能记日志。
+            log.error("报告生成异常，尝试兜底置 888 reportNo={}", reportNo, e);
             String reason = buildFailReason(e);
-            markStatus(reportNo, REPORT_STATUS_FAILED);
-            markFailReason(reportNo, reason);
-            result.setReportStatus(REPORT_STATUS_FAILED);
+            try {
+                result.setVersion(markDone(reportInfo, reason));
+                result.setReportStatus(REPORT_STATUS_DONE);
+            } catch (Throwable fatal) {
+                log.error("兜底置 888 亦失败（DB 不可用）reportNo={}", reportNo, fatal);
+            }
             return failResult(result, start, reason);
         }
     }
 
+    /**
+     * 纯加工：按模板生成内容实例与 AI 风险明细（含状态流转时调用见 {@link #generate}）。
+     *
+     * <p>不声明事务、不管理状态（调用方自行维护）。<b>支持重跑</b>：落库前先清该报告的旧实例与风险
+     * （见 {@link #clearInstances}），因此同一 reportNo 重复加工不会撞实例表唯一键。</p>
+     *
+     * <p><b>不抛异常</b>：失败时记录日志并返回 {@code success=false + failReason}。</p>
+     */
     @Override
     public ReportGenerateResult process(String reportNo) {
         long start = System.currentTimeMillis();
@@ -174,28 +222,56 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
-    /** 加工内核：模板 → 实例的落地；失败时抛异常，由 process 统一捕获 */
+    /**
+     * 加工内核：模板 → 实例的落地。<b>分块隔离</b>，单块异常不中断整份报告（对齐行内口径）。
+     *
+     * <p>本方法只在「报告记录都不存在」时才抛异常；模板缺失/校验不通过/单块加工失败/落库失败
+     * 一律收敛成 {@code success=false + failReason}（同时把原因逐条收进 {@code blockFailures}），
+     * 由 {@link #generate} 统一置 888 + 软备注 —— <b>888 是唯一终态</b>。</p>
+     */
     private ReportGenerateResult doProcess(String reportNo) {
         long start = System.currentTimeMillis();
+        ReportGenerateResult result = new ReportGenerateResult();
+        result.setReportNo(reportNo);
+        result.setSuccess(false);
+        List<String> blockFailures = result.getBlockFailures();
 
-        // ===== 1. 报告记录（上游预生成，此处只读抬头信息） =====
+        // ===== 1. 报告记录（此处只读抬头信息） =====
         Report reportInfo = loadReportInfo(reportNo);
         String customerId = reportInfo.getCustomerId();
         String customerName = StringUtils.hasText(reportInfo.getCustomerName())
                 ? reportInfo.getCustomerName() : "客户" + customerId;
         String reportTitle = StringUtils.hasText(reportInfo.getReportTitle())
                 ? reportInfo.getReportTitle() : customerName + "贷后管理定期检查报告";
+        result.setCustomerId(customerId);
+        result.setCustomerName(customerName);
+        result.setReportTitle(reportTitle);
 
         // ===== 2. 载入模板（生成依据） =====
         Map<String, AppReportCatalog> catalogMap = loadEnabledCatalogs().stream()
                 .collect(Collectors.toMap(AppReportCatalog::getCatalogCode, c -> c, (a, b) -> a, LinkedHashMap::new));
         List<AppReportContentBlock> blocks = loadEnabledBlocks();
         if (blocks.isEmpty()) {
-            throw new ReportGenerateException("报告模板未配置内容块，请先维护 app_report_content_block");
+            // 模板级致命错误：无内容块可生成 → 空壳报告 + 软备注（仍走 888 终态，不中断也不抛）
+            blockFailures.add("模板未配置内容块，请先维护 app_report_content_block");
+            result.setBlockTotal(0);
+            result.setFailReason("模板未配置内容块：app_report_content_block 无启用记录");
+            result.setCostMs(System.currentTimeMillis() - start);
+            return result;
         }
-        validateTemplate(blocks, catalogMap);
+        try {
+            validateTemplate(blocks, catalogMap);
+        } catch (ReportGenerateException e) {
+            // 模板校验不通过 → 空壳报告 + 软备注（仍走 888 终态）
+            log.error("报告模板校验不通过 reportNo={}", reportNo, e);
+            blockFailures.add("模板校验不通过：" + e.getMessage());
+            result.setBlockTotal(blocks.size());
+            result.setFailReason("模板校验不通过：" + e.getMessage());
+            result.setCostMs(System.currentTimeMillis() - start);
+            return result;
+        }
 
-        // ===== 3. 逐块实例化（模板驱动） =====
+        // ===== 3. 逐块实例化（分块隔离：单块异常记软备注，继续下一块） =====
         Set<String> agentCodes = new HashSet<>();
         List<AppReportContentInstance> instances = new ArrayList<>(blocks.size());
         List<AppReportAiRisk> risks = new ArrayList<>();
@@ -219,29 +295,36 @@ public class ReportServiceImpl implements ReportService {
                     risks.add(buildRisk(instance, block, agentCodes));
                 }
             } catch (Exception e) {
-                // 单环节异常：记录日志后转成带定位信息的业务异常，交由上层统一置失败
-                log.error("报告加工失败，内容块={} reportNo={}", block.getBlockCode(), reportNo, e);
-                throw new ReportGenerateException("内容块加工失败（" + block.getBlockCode() + "）：" + e.getMessage(), e);
+                // 单块失败：记日志 + 软备注，继续下一块（绝不中断整份报告）
+                log.error("内容块加工失败(跳过该块) reportNo={} blockCode={}", reportNo, block.getBlockCode(), e);
+                String blockName = StringUtils.hasText(block.getBlockName())
+                        ? block.getBlockName() : block.getBlockCode();
+                blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
             }
         }
 
-        // ===== 4. 落库 =====
-        for (AppReportContentInstance instance : instances) {
-            instanceMapper.insert(instance);
-        }
-        for (AppReportAiRisk risk : risks) {
-            riskMapper.insert(risk);
+        // ===== 4. 落库：先清旧实例/风险（支持重跑，防唯一键冲突），再插新 =====
+        clearInstances(reportNo);
+        try {
+            for (AppReportContentInstance instance : instances) {
+                instanceMapper.insert(instance);
+            }
+            for (AppReportAiRisk risk : risks) {
+                riskMapper.insert(risk);
+            }
+        } catch (Exception e) {
+            // 落库级致命错误（DB 异常）：记录失败原因，generate 会置 888 + 软备注
+            log.error("报告实例落库失败 reportNo={}", reportNo, e);
+            result.setBlockTotal(blocks.size());
+            result.setFailReason("报告实例落库失败：" + e.getMessage());
+            result.setCostMs(System.currentTimeMillis() - start);
+            return result;
         }
 
-        log.info("报告实例加工完成 reportNo={} 内容块={} 实例={} 空内容={} 隐藏={} AI风险={} 耗时={}ms",
+        log.info("报告实例加工完成 reportNo={} 内容块={} 实例={} 空内容={} 隐藏={} AI风险={} 块失败={} 耗时={}ms",
                 reportNo, blocks.size(), instances.size(), emptyCount, hiddenCount, risks.size(),
-                System.currentTimeMillis() - start);
+                blockFailures.size(), System.currentTimeMillis() - start);
 
-        ReportGenerateResult result = new ReportGenerateResult();
-        result.setReportNo(reportNo);
-        result.setCustomerId(customerId);
-        result.setCustomerName(customerName);
-        result.setReportTitle(reportTitle);
         result.setBlockTotal(blocks.size());
         result.setContentTotal(instances.size());
         result.setContentEmpty(emptyCount);
@@ -250,6 +333,31 @@ public class ReportServiceImpl implements ReportService {
         result.setSuccess(true);
         result.setCostMs(System.currentTimeMillis() - start);
         return result;
+    }
+
+    /** 清理某报告的内容实例与 AI 风险（重跑前调用，避免唯一键 (reportNo, blockCode) 冲突） */
+    private void clearInstances(String reportNo) {
+        instanceMapper.delete(Wrappers.<AppReportContentInstance>lambdaQuery()
+                .eq(AppReportContentInstance::getReportNo, reportNo));
+        riskMapper.delete(Wrappers.<AppReportAiRisk>lambdaQuery()
+                .eq(AppReportAiRisk::getReportNo, reportNo));
+    }
+
+    /** 块级失败汇总 → fail_reason 软备注（无失败返回 null，表示清空历史失败原因） */
+    private String buildBlockFailureNote(List<String> blockFailures) {
+        if (blockFailures == null || blockFailures.isEmpty()) {
+            return null;
+        }
+        String note = blockFailures.size() + " 个内容块生成失败：" + String.join("；", blockFailures);
+        return note.length() > 1000 ? note.substring(0, 1000) : note;
+    }
+
+    /** 截断异常信息（块级软备注用，保留可读性且不撑爆 fail_reason 列） */
+    private String briefError(Throwable e) {
+        String msg = e.getMessage() == null || e.getMessage().trim().isEmpty()
+                ? e.getClass().getSimpleName() : e.getMessage();
+        msg = msg.trim().replace('\n', ' ').replace('\r', ' ');
+        return msg.length() > 200 ? msg.substring(0, 200) : msg;
     }
 
     @Override
@@ -353,6 +461,8 @@ public class ReportServiceImpl implements ReportService {
         detail.setCheckTaskNo(reportInfo.getCheckTaskNo());
         detail.setVersion(reportInfo.getVersion());
         detail.setStatus(reportInfo.getStatus());
+        // 软备注：块级失败汇总（status 仍为 888），前端详情页顶部提示条的数据源
+        detail.setFailReason(reportInfo.getFailReason());
         detail.setUpdatedAt(reportInfo.getUpdatedAt());
         detail.setHeadBlocks(headBlocks);
         detail.setCatalogs(roots);
@@ -415,7 +525,19 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report report = new Report();
-        report.setReportNo(generateReportNo());
+        // 报告编号：填了就用填的（对齐行内「传入则直接使用、跳过取号」），留空才服务端取号
+        if (StringUtils.hasText(req.getReportNo())) {
+            String customNo = req.getReportNo().trim();
+            Long dup = reportMapper.selectCount(Wrappers.<Report>lambdaQuery()
+                    .eq(Report::getReportNo, customNo));
+            if (dup != null && dup > 0) {
+                // 行内也是直接用、撞库交给 DB 唯一键；这里提前查一次，避免用户拿到 500
+                throw new ReportGenerateException("报告编号已存在，请更换：" + customNo);
+            }
+            report.setReportNo(customNo);
+        } else {
+            report.setReportNo(generateReportNo());
+        }
         report.setCustomerId(req.getCustomerId().trim());
         report.setCustomerName(req.getCustomerName().trim());
         report.setCheckTaskNo(req.getCheckTaskNo().trim());
@@ -427,6 +549,24 @@ public class ReportServiceImpl implements ReportService {
         reportMapper.insert(report);
         log.info("发起报告：reportNo={} checkTaskNo={} 客户={} 发起人={}",
                 report.getReportNo(), report.getCheckTaskNo(), report.getCustomerName(), operatorName);
+
+        // 发起即触发加工 —— 外网工程没有行内那套「生成池轮询」（行内是落 111 后由
+        // ReportGenerateJob 定时捞取、CAS 认领 111→000），因此这里主动把链路接上，
+        // 否则报告会永远停在 111-待开始。
+        // 🔴 必须异步：加工要逐块取数、后续接入大模型后是分钟级耗时，
+        //    在 Web 请求线程里同步跑必然 HTTP 超时。
+        // 提交失败也走 888 终态（对齐行内「888 是唯一终态」）：置 888 + 软备注说明原因，
+        // 不留 111/000 脏态，用户仍能进详情、也能用「更新报告」重跑。
+        final String newReportNo = report.getReportNo();
+        try {
+            reportGenerateExecutor.execute(() -> generate(newReportNo));
+        } catch (Throwable e) {
+            log.error("报告生成任务提交失败：reportNo={}", newReportNo, e);
+            String reason = "生成任务提交失败：" + briefError(e);
+            markDone(report, reason);
+            report.setStatus(REPORT_STATUS_DONE);
+            report.setFailReason(reason);
+        }
         return report;
     }
 
@@ -486,8 +626,10 @@ public class ReportServiceImpl implements ReportService {
         if (!StringUtils.hasText(checkTaskNo)) {
             return new ArrayList<>();
         }
-        // 返回：进行中（000，"新报告生成中"）+ 已完成（888 且已赋予版本号）+ 失败（999，供前端提示生成失败）；
+        // 返回：进行中（000，"新报告生成中"）+ 已完成（888 且已赋予版本号）+ 失败（999，仅历史存量）；
         // 失败记录由前端过滤、不进入版本下拉。
+        // ⚠️ 999 分支只为兼容存量数据 —— 对齐行内口径后正常链路不再产生 999（失败也是 888 + 软备注），
+        //    保留它是为了让升级前失败的老记录仍能在版本下拉里被看到（否则会「丢版本」）。
         // version 为整数列，倒序即"版本从新到旧"（进行中的新版本号最大，自然排最前），同版本号按 id 倒序。
         List<Report> list = reportMapper.selectList(Wrappers.<Report>lambdaQuery()
                 .eq(Report::getCheckTaskNo, checkTaskNo)
@@ -555,9 +697,20 @@ public class ReportServiceImpl implements ReportService {
         log.info("更新报告：新建版本 reportNo={} version={} checkTaskNo={}",
                 report.getReportNo(), report.getVersion(), checkTaskNo);
 
-        // 4) 异步触发生成（不阻塞接口返回；生成失败由 generate 内部置 999 并落 failReason）
+        // 4) 异步触发生成（不阻塞接口返回）
+        //    走与「发起报告」同一个专用池：原先是 CompletableFuture.runAsync（ForkJoinPool.commonPool），
+        //    与 Web 请求/其它异步任务抢同一批线程，长耗时加工会拖垮无关任务。
+        //    提交失败同样走 888 终态（对齐行内「888 是唯一终态」），置 888 + 软备注，不留 000 脏态。
         final String newReportNo = report.getReportNo();
-        CompletableFuture.runAsync(() -> generate(newReportNo));
+        try {
+            reportGenerateExecutor.execute(() -> generate(newReportNo));
+        } catch (Throwable e) {
+            log.error("更新报告：生成任务提交失败 reportNo={}", newReportNo, e);
+            String reason = "生成任务提交失败：" + briefError(e);
+            markDone(report, reason);
+            report.setStatus(REPORT_STATUS_DONE);
+            report.setFailReason(reason);
+        }
 
         // 5) 返回新版本信息（前端据此提示"新报告生成中"）
         ReportVersionVO vo = new ReportVersionVO();
@@ -1322,12 +1475,38 @@ public class ReportServiceImpl implements ReportService {
                 .set(Report::getUpdatedAt, new Date()));
     }
 
-    /** 写入/清空失败原因（成功时传 null 清空历史失败原因） */
-    private void markFailReason(String reportNo, String failReason) {
+    /**
+     * 置 888-已完成并<b>写入版本号</b>，同时落/清失败备注（一次 update 落完，避免多次刷 updated_at）。
+     *
+     * <p><b>为什么 version 必须在这里写</b>：三处查询条件都是「888 <b>且 version 非空</b>」——</p>
+     * <ul>
+     *   <li>{@link #versions(String)}：详情页顶部版本下拉框</li>
+     *   <li>{@link #latestDoneReport(String)}：列表点「查看」进详情（{@link #latest(String)}）
+     *       与「更新报告」的复制模板（{@link #renew(String)}）</li>
+     * </ul>
+     * <p>发起时 version 刻意留空（落表即 111），若不在置 888 时补上，报告虽然已完成却永远
+     * 找不到"已完成版本"，点「查看」会直接报「该日检流水号下不存在已完成（含版本号）的报告」。</p>
+     *
+     * <p><b>取号口径</b>：与 {@link #renew(String)} 一致，取该流水号下最大版本号 +1（首份为 V1）。
+     * 这里不加分布式锁，沿用全服务「不声明事务、互斥交给上游」的既定口径；同流水号的并发由
+     * 「发起时 checkTaskNo 不允许重复」+「renew 时该流水号已有进行中报告则拒绝」两道前置校验挡住。</p>
+     *
+     * @param reportInfo 报告记录（用其 reportNo 定位、checkTaskNo 取号）
+     * @param failReason 失败/软备注；成功传 null 表示清空历史失败原因
+     * @return 本次写入的版本号
+     */
+    private Integer markDone(Report reportInfo, String failReason) {
+        Integer version = StringUtils.hasText(reportInfo.getCheckTaskNo())
+                ? nextVersionOf(reportInfo.getCheckTaskNo())
+                // 无流水号无法按流水号取号（也不参与版本下拉/最新版本查询），兜底给 V1
+                : 1;
         reportMapper.update(null, Wrappers.<Report>lambdaUpdate()
-                .eq(Report::getReportNo, reportNo)
+                .eq(Report::getReportNo, reportInfo.getReportNo())
+                .set(Report::getStatus, REPORT_STATUS_DONE)
+                .set(Report::getVersion, version)
                 .set(Report::getFailReason, failReason)
                 .set(Report::getUpdatedAt, new Date()));
+        return version;
     }
 
     /** 组装失败原因：技术类异常带异常类名与堆栈首因，业务类异常带业务描述 */

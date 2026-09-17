@@ -41,6 +41,16 @@ jwt:
 report:
   mock-content:
     enabled: true
+  # 报告实例加工（列表页「发起报告」/ 详情页「更新报告」后异步执行）
+  # 外网没有行内的「生成池轮询」：发起落 111 后直接触发加工，111 → 000 → 888/999。
+  # 加工要逐块取数、后续还要调大模型，是长耗时 IO，故与 Web 请求、AI 分析线程池都隔离。
+  generate:
+    # 核心线程数
+    pool-size: 2
+    # 最大线程数（队列满后才扩容）
+    max-pool-size: 4
+    # 队列容量；满了由提交线程兜底执行（CallerRuns），不丢任务
+    queue-capacity: 50
   # AI 全文分析（前端手动触发，后台独立线程池执行，前端按状态轮询）
   ai-analysis:
     # 使用 large_model_config 里哪一行配置（按 lm_code 匹配）

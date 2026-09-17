@@ -65,10 +65,20 @@ public final class ReportConstants {
     /** 报告状态：000-进行中（定时任务取到待开始记录后置入，加工期间保持） */
     public static final String REPORT_STATUS_RUNNING = "000";
 
-    /** 报告状态：888-已完成（加工正常结束） */
+    /**
+     * 报告状态：888-已完成 —— <b>唯一终态</b>
+     * <p>对齐行内口径：报告必定达 888。模板缺失/校验不通过/单个内容块加工失败/落库失败
+     * 都不再中断链路，而是空壳或跳过该块 + 原因汇总进 {@code fail_reason} 软备注。
+     * 因此「报告完成但内容不全」看 {@code fail_reason}，不看 status。</p>
+     */
     public static final String REPORT_STATUS_DONE = "888";
 
-    /** 报告状态：999-失败（加工过程抛异常） */
+    /**
+     * 报告状态：999-失败 —— <b>预留状态，正常链路不再产生</b>
+     * <p>保留用于兼容升级前的历史存量记录（{@code versions()} 的 999 分支即为它们留着，
+     * 否则老失败记录会从版本下拉里消失）。⛔ 新代码不要再置 999，失败一律走
+     * 888 + {@code fail_reason} 软备注。</p>
+     */
     public static final String REPORT_STATUS_FAILED = "999";
 
     /** 是否可用：可用 */

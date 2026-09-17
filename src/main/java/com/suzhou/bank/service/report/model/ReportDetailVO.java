@@ -30,8 +30,16 @@ public class ReportDetailVO {
     /** 报告版本号（1/2/3…，"V"前缀由前端拼接） */
     private Integer version;
 
-    /** 报告状态：111-待开始 000-进行中 888-已完成 999-失败 */
+    /** 报告状态：111-待开始 000-进行中 888-已完成（唯一终态）999-失败（预留状态，正常链路不再产生） */
     private String status;
+
+    /**
+     * 失败原因 / 软备注：部分内容块生成失败或模板/落库级错误的汇总，无失败时为空
+     * <p><b>注意 status 仍为 888</b>：本工程对齐行内口径，<b>888 是唯一终态</b>，
+     * 单个内容块失败不中断整份报告，原因汇总到这里由前端在详情页顶部显示提示条
+     * （Vue3 详情页读 {@code detail.failReason} 渲染 {@code .report-fail-note}）。</p>
+     */
+    private String failReason;
 
     /** 更新时间（生成完成/失败时刷新，即报告"生成时间"） */
     private Date updatedAt;

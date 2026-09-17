@@ -29,8 +29,13 @@ import java.util.Map;
 
 /**
  * 贷后管理报告接口（模板驱动的报告实例生成）
- * <p>生成逻辑只处理模板表 + 实例表：模板层（目录 + 内容块）→ 实例层（内容实例 + AI 风险）。
- * 报告记录（report 表）由上游预生成，本接口不负责发起报告。</p>
+ *
+ * <p>生成逻辑只处理模板表 + 实例表：模板层（目录 + 内容块）→ 实例层（内容实例 + AI 风险）。</p>
+ *
+ * <p><b>本工程的发起口径</b>：行内是「发起落 111 → 生成池定时轮询捞取 → 加工」，
+ * 外网没有生成池、也不对接 SSF/ESB，因此 {@code POST /instance/create}（列表页「发起报告」）
+ * 落表后会<b>立即异步触发加工</b>，报告状态自行流转 111 → 000 → <b>888（唯一终态）</b>，
+ * 不需要再单独调用 {@code /instance/generate}。后者保留，供联调/运维手工重跑。</p>
  *
  * @author cyj666666
  * @since 1.0.0
@@ -47,14 +52,16 @@ public class ReportController {
     private final SysUserMapper sysUserMapper;
 
     /**
-     * 生成报告实例（含状态流转，定时任务调用本接口）
-     * <p>报告记录须已存在：置 000-进行中 → 按模板加工内容实例与 AI 风险明细 → 置 888-已完成。
-     * 生成过程不会抛异常：任何技术类/业务类异常都会被捕获、记日志、置 999-失败并落 failReason，
-     * 结果通过 {@code success=false + failReason} 返回给调用方。</p>
-     * <p>本方法只是 HTTP 入口，定时任务也可直接调用 {@code ReportService.generate(reportNo)}。</p>
+     * 生成报告实例（含状态流转，手工重跑 / 运维调用本接口）
+     * <p>报告记录须已存在：置 000-进行中 → 按模板加工内容实例与 AI 风险明细 → 置 888-已完成
+     * （同时写入 version）。<b>列表页「发起报告」已自动触发本流程</b>，本接口保留给联调/运维手工重跑。</p>
+     * <p><b>888 是唯一终态</b>：生成过程不会抛异常，模板缺失/校验不通过/单块加工失败/落库失败都会被捕获，
+     * 原因汇总进 {@code failReason} 软备注，报告仍置 888（部分内容块无内容），结果以
+     * {@code success=false + failReason} 返回。</p>
+     * <p>本方法只是 HTTP 入口，后台线程池直接调用的是 {@code ReportService.generate(reportNo)}。</p>
      *
      * @param reportNo 报告编号（对应 report.report_no）
-     * @return 生成结果（success 标志 + failReason + 各项统计）
+     * @return 生成结果（success 标志 + failReason + 各项统计 + version）
      */
     @PostMapping("/instance/generate")
     public Result<ReportGenerateResult> generateInstance(@RequestParam String reportNo) {
@@ -69,8 +76,8 @@ public class ReportController {
     /**
      * 纯加工报告实例（不改状态，便于联调）
      * <p>只执行"模板表 → 实例表"的落地，报告状态由调用方自行维护。
-     * 不做重跑清理：同一 reportNo 重复加工会触发实例表唯一键冲突。
-     * 同样不抛异常：失败通过 success=false + failReason 返回。</p>
+     * <b>支持重跑</b>：落库前会先清掉该报告的旧实例与 AI 风险，同一 reportNo 重复加工不会撞唯一键。</p>
+     * <p>同样不抛异常：失败通过 success=false + failReason 返回。</p>
      *
      * @param reportNo 报告编号
      * @return 加工结果
@@ -102,11 +109,18 @@ public class ReportController {
     /**
      * 发起报告（列表页「发起报告」弹框）
      *
-     * <p>只创建 report 主表记录（status=111 待开始），实例数据仍由生成流程按模板加工。
-     * {@code reportNo} 与 {@code userNo} 由服务端补全；同一日检流水号下不允许重复发起。</p>
+     * <p>落一条 report 主表记录（status=111 待开始）后<b>立即异步触发加工</b>：
+     * 按模板层（目录 + 内容块）配置加工出内容实例与 AI 风险明细，状态流转
+     * 111 → 000 → <b>888（唯一终态，同时写入 version）</b>。内容块级失败不中断整份报告，
+     * 原因汇总进 {@code failReason} 软备注、报告仍置 888，前端在详情页/列表 tooltip 可见。</p>
      *
-     * @param request {customerId, customerName, checkTaskNo, reportTitle, reportType}
-     * @return 新建的报告记录
+     * <p><b>接口立即返回、不等待加工完成</b>（加工是长耗时过程，接大模型后为分钟级），
+     * 因此返回值里的 status 通常还是 111；前端刷新列表看状态流转结果。
+     * {@code reportNo} <b>选填</b> —— 填了就用填的，留空由服务端生成；
+     * {@code userNo} 由服务端补全；同一日检流水号下不允许重复发起。</p>
+     *
+     * @param request {customerId, customerName, checkTaskNo, reportTitle, reportType, reportNo(选填)}
+     * @return 新建的报告记录（加工异步进行）
      */
     @PostMapping("/instance/create")
     public Result<Report> createReport(@RequestBody ReportCreateRequest request,
