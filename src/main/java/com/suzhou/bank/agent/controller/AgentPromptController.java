@@ -12,6 +12,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.suzhou.bank.agent.common.AgentResult;
 import com.suzhou.bank.agent.common.AgentBizException;
 import com.suzhou.bank.agent.util.JSONTools;
+import com.suzhou.bank.agent.util.AgentParamNames;
 import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.AgentRuleEntity;
 import com.suzhou.bank.agent.model.req.AgentRuleExecuteReq;
@@ -80,6 +81,11 @@ public class AgentPromptController {
     @PostMapping(value = "/get/rule", name = "获取规则文案", produces = MediaType.APPLICATION_JSON_VALUE)
     public Object getRule(@RequestBody String paramStr) {
         JSONObject params = JSONObject.parseObject(paramStr);
+        // 【入参名归一】兼容旧写法（2026-09-17 新增）
+        // 配置侧参数名已统一成驼峰（reportNo / entName / guarantorName），调用方可能仍传
+        // reportno / guarantorname 等历史写法。这里补上规范名键（**双写**，原键保留）——
+        // 于是上游一行都不用改，新旧写法都能命中；归一动作会打 【入参归一】 日志便于观察。
+        AgentParamNames.normalizeInPlace(params);
         // 【真实业务执行】打上严格取数标记（2026-09-16 新增）
         // 本条链路是"规则判定 + 智策引擎补充分析"的正式执行路径，必须"填什么就是什么"：
         // 参数没传全时，宁可这次取不到数，也绝不能让取数层拿配置里预置的样例值

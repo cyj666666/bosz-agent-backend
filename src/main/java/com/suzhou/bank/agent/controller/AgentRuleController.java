@@ -16,6 +16,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.suzhou.bank.agent.common.ListResult;
 import com.suzhou.bank.agent.common.AgentResult;
 import com.suzhou.bank.agent.core.SqlDataSetBuilder;
+import com.suzhou.bank.agent.util.AgentParamNames;
 import com.suzhou.bank.agent.entity.AgentRuleEntity;
 import com.suzhou.bank.agent.model.req.AgentRuleExecuteReq;
 import com.suzhou.bank.agent.model.req.AgentRuleParseReq;
@@ -144,6 +145,9 @@ public class AgentRuleController {
             req.setRequestParams(requestParams);
         }
         requestParams.put(SqlDataSetBuilder.STRICT_FETCH_KEY, true);
+        // 【入参名归一】兼容旧写法（2026-09-17 新增）：补上规范名键（双写，原键保留），
+        // 使上游仍传 reportno/guarantorname 时也能命中配置里已改成驼峰的 :reportNo / :guarantorName。
+        AgentParamNames.normalizeInPlace(requestParams);
         return AgentResult.OK(agentRuleService.executeRule(req));
     }
 

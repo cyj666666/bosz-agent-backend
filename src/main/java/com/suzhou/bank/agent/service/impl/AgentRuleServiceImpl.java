@@ -35,6 +35,7 @@ import com.suzhou.bank.agent.service.IAgentRuleService;
 import com.suzhou.bank.agent.service.IIndexParamsService;
 import com.suzhou.bank.agent.service.IknowledgeBaseConfigService;
 import com.suzhou.bank.agent.util.CallLlmUtil;
+import com.suzhou.bank.agent.util.AgentParamNames;
 import com.suzhou.bank.agent.util.QLExpressUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -425,6 +426,9 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
         if (StringUtils.isBlank(parsedExpression)) {
             throw new AgentBizException("表达式原文不能为空");
         }
+        // 入参名归一（兼容旧写法）—— 规则执行的**唯一漏斗**，在这里兜一层，
+        // 任何调用方（含将来的内部调用）都不必关心上游传的是 reportno 还是 reportNo。
+        AgentParamNames.normalizeInPlace(req.getRequestParams());
         List<String> paramIdList = emptyMetricList(parsedExpression);
         List<IndexParamsEntity> paramsList = indexParamsService.getParamsList(paramIdList);
 
