@@ -48,6 +48,9 @@ public class CallLlmUtil {
     @Value("${llm.answer:暂无数据}")
     private String defaultAnswer;
 
+    /** 未显式指定、模型配置也没配时的输出上限兜底值 */
+    private static final int DEFAULT_MAX_TOKENS = 10000;
+
     @Autowired
     private ICallLlmRecordService callLlmRecordService;
 
@@ -220,7 +223,7 @@ public class CallLlmUtil {
             String systemContent = StringUtils.isEmpty(rspBody.getString("system_content")) ? "You are a helpful assistant" : rspBody.getString("system_content");
             boolean stream = ParamUtil.getBoolValue(rspBody, "stream", true);
             double temperature = StringUtils.isNotEmpty(rspBody.getString("temperature")) ? Double.parseDouble(rspBody.getString("temperature")) : 0.01;
-            int maxTokens = StringUtils.isNotEmpty(rspBody.getString("max_tokens")) ? Integer.parseInt(rspBody.getString("max_tokens")) : 10000;
+            int maxTokens = resolveMaxTokens(rspBody, largeModelConfigEntity);
             double topP = StringUtils.isNotEmpty(rspBody.getString("top_p")) ? Double.parseDouble(rspBody.getString("top_p")) : 0.7;
             String prompt = StringUtils.isEmpty(rspBody.getString("prompt")) ? null : rspBody.getString("prompt");
             boolean enableThink = ParamUtil.getBoolValue(
@@ -261,10 +264,17 @@ public class CallLlmUtil {
                 requestBody.put("ruleData", JSONTools.getValue(rspBody, "data"));
             }
             HashMap<String, Object> hashMap = Maps.newHashMap();
+            // 厂商私有参数一起发，让不同后端各取所需
             hashMap.put("enable_thinking", enableThink);
-            if (largeModelCode.toUpperCase().startsWith("DOUBAO")) {
-                hashMap.put("thinking", java.util.Collections.singletonMap("type", enableThink ? "enabled" : "disabled"));
-            }
+            // 🔴 这一个才是深寻系模型真正认的开关（OpenAI 风格的 thinking 对象）。
+            //    2026-09-18 实测（model=deepseek-flash）：只传 enable_thinking 或
+            //    chat_template_kwargs 时 reasoning 照旧（completion 181 token、其中思考 234 字），
+            //    传 thinking={"type":"disabled"} 后 reasoning=0、completion 降到 38 token。
+            //    原实现把它限定在 DOUBAO 前缀的模型上，所以本平台的模型一直关不掉思考。
+            //    关不掉思考的后果不只是慢：思考 token 与正文 token 共用 max_tokens，
+            //    额度被吃满时正文会变成空串（且不报错）。
+            hashMap.put("thinking", java.util.Collections.singletonMap(
+                    "type", enableThink ? "enabled" : "disabled"));
             HashMap<String, Object> kwargsMap = Maps.newHashMap();
             kwargsMap.put("enable_thinking", enableThink);
             kwargsMap.put("thinking", enableThink);
@@ -285,8 +295,45 @@ public class CallLlmUtil {
         }
     }
 
-    private JSONObject getRandomModel(String modelConfig) {
-        if (StringUtils.isEmpty(modelConfig)) {
+    /**
+     * 输出上限（{@code max_tokens}）三级取值
+     *
+     * <ol>
+     *   <li>调用方显式指定（{@code rspBody.max_tokens}）—— 优先级最高，
+     *       报告生成这类长文场景要能压过模型配置；</li>
+     *   <li>{@code large_model_config.max_tokens} 配了有效值（&gt;0）—— 用配置；</li>
+     *   <li>都没有 —— 兜底 {@value #DEFAULT_MAX_TOKENS}。</li>
+     * </ol>
+     *
+     * <p>🔴 <b>为什么必须可控</b>：本平台接的是 reasoning 模型（返回体里带
+     * {@code reasoning_content}），<b>思考 token 与正文 token 共用同一个 max_tokens 额度</b>。
+     * 额度不够时的表现不是报错，而是【思考把额度吃满、正文为空串】——
+     * 调用方若再把空串回退成 prompt，就会把一大段提示词写进报告正文。</p>
+     *
+     * <p>2026-09-18 实测（{@code RPT-202603-001} 的 {@code tddkjcqk} 块）：
+     * {@code prompt_tokens=10214}、{@code completion_tokens=10000}（正好顶满）、{@code answer=""}。
+     * 同一 prompt 把上限放开后正文正常产出。</p>
+     */
+    private int resolveMaxTokens(JSONObject rspBody, LargeModelConfigEntity cfg) {
+        String explicit = rspBody.getString("max_tokens");
+        if (StringUtils.isNotEmpty(explicit)) {
+            try {
+                int value = Integer.parseInt(explicit.trim());
+                if (value > 0) {
+                    return value;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("max_tokens 不是合法整数，已忽略：{}", explicit);
+            }
+        }
+        Integer fromConfig = Objects.isNull(cfg) ? null : cfg.getMaxTokens();
+        if (Objects.nonNull(fromConfig) && fromConfig > 0) {
+            return fromConfig;
+        }
+        return DEFAULT_MAX_TOKENS;
+    }
+
+    private JSONObject getRandomModel(String modelConfig) {        if (StringUtils.isEmpty(modelConfig)) {
             return null;
         }
         try {

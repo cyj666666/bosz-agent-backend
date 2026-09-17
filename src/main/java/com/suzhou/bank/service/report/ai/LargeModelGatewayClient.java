@@ -11,21 +11,36 @@ import com.suzhou.bank.service.report.config.ReportAiAnalysisProperties;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * 大模型网关客户端（OpenAI 兼容协议，非流式）
+ * 大模型网关客户端（OpenAI 兼容协议，<b>流式</b>）
+ *
+ * <h3>🔴 为什么一律走流式（2026-09-18 改）</h3>
+ * <p>本平台接的是 reasoning 模型（返回体里带 {@code reasoning_content}），
+ * <b>思考 token 与正文 token 共用同一个 {@code max_tokens} 额度</b>。非流式时若思考把额度吃满，
+ * 返回的 {@code message.content} 是空串 —— 而且 {@code code=200}、{@code usage} 正常，
+ * <b>不报错</b>，调用方只能靠"内容为空"猜出问题。</p>
+ *
+ * <p>流式则边生成边吐，<b>已产出的正文不会因总量截断而整段丢失</b>，这是"保险"的来源。
+ * 报告正文的另外两个入口（知识库块 / 智策引擎块）同样走流式 + 服务端拼接，
+ * 见 {@code CollectingSseEmitter}。</p>
  *
  * <p><b>本工程自定义 {@code large_model_config} 的字段语义</b>（不沿用其它工程的口径）。
  * 代码按 {@code report.ai-analysis.lm-code} 指定的 {@code lm_code} 取一行。与调用相关的列：</p>
@@ -58,6 +73,14 @@ public class LargeModelGatewayClient {
     /** 由代码统一装配，不允许被 model_config 覆盖 */
     private static final String[] RESERVED_KEYS = {"model", "messages", "stream"};
 
+    /**
+     * 未配置 {@code max_tokens} 时的兜底输出上限
+     *
+     * <p>取 32000 而不是 10000：本平台的模型是 reasoning 模型，
+     * 思考 token 与正文 token 共用这个额度，额度太小会出现「思考吃满 → 正文空串」。</p>
+     */
+    private static final int DEFAULT_MAX_TOKENS = 32000;
+
     /** 思考块标记：模型可能把思考过程混在正文里，需要剥掉 */
     private static final String THINK_OPEN = "<think";
 
@@ -83,25 +106,30 @@ public class LargeModelGatewayClient {
         messages.add(message("system", systemPrompt));
         messages.add(message("user", userPrompt));
         body.put("messages", messages);
-        body.put("stream", false);
-        if (config.getMaxTokens() != null && config.getMaxTokens() > 0) {
-            body.put("max_tokens", config.getMaxTokens());
-        }
+        // 🔴 一律流式：非流式在 reasoning 模型上会"思考吃满额度 → 正文空串且不报错"（见类注释）
+        body.put("stream", true);
+        body.put("max_tokens", resolveMaxTokens(config));
         applyThinkingParams(body, config);
         mergeExtraParams(body, config.getModelConfig());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON, MediaType.ALL));
+        headers.setAccept(Arrays.asList(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_JSON, MediaType.ALL));
         if (StringUtils.hasText(config.getApiKey())) {
             headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + config.getApiKey().trim());
         }
 
         long start = System.currentTimeMillis();
-        String responseText;
+        String streamed;
         try {
-            responseText = buildRestTemplate().postForObject(
-                    url, new HttpEntity<>(body.toJSONString(), headers), String.class);
+            streamed = buildRestTemplate().execute(
+                    url,
+                    HttpMethod.POST,
+                    request -> {
+                        request.getHeaders().putAll(headers);
+                        StreamUtils.copy(body.toJSONString().getBytes(StandardCharsets.UTF_8), request.getBody());
+                    },
+                    response -> readSseContent(response.getBody()));
         } catch (RestClientResponseException e) {
             throw new ReportGenerateException("大模型调用失败：HTTP " + e.getRawStatusCode()
                     + urlHint(e.getRawStatusCode()) + " " + truncate(e.getResponseBodyAsString(), 400));
@@ -110,9 +138,9 @@ public class LargeModelGatewayClient {
         }
         long cost = System.currentTimeMillis() - start;
 
-        String content = cleanContent(extractContent(responseText));
+        String content = cleanContent(streamed);
         if (!StringUtils.hasText(content)) {
-            throw new ReportGenerateException("大模型返回内容为空：" + truncate(responseText, 300));
+            throw new ReportGenerateException("大模型流式返回内容为空（lm_code=" + config.getLmCode() + "）");
         }
         log.info("大模型调用成功：lmCode={} model={} url={} 耗时={}ms 返回长度={}",
                 config.getLmCode(), config.getModel(), url, cost, content.length());
@@ -149,14 +177,28 @@ public class LargeModelGatewayClient {
     }
 
     /**
-     * 思考参数：由 {@code default_think_flag} 决定，字段放请求体顶层。
-     * <p>为什么两个字段都要传：Qwen3 这类模型靠 {@code chat_template_kwargs.enable_thinking}
-     * 控制思考开关，只传顶层 {@code enable_thinking} 在部分推理后端上不生效 ——
-     * 关不掉思考就会把思考过程混进正文（{@link #cleanContent} 是兜底，不是替代）。</p>
+     * 思考开关参数：由 {@code default_think_flag} 决定
+     *
+     * <p>三个都发，让不同后端各取所需（不认的字段会被忽略）：</p>
+     * <ul>
+     *   <li>{@code thinking: {"type": "disabled"}} —— <b>深寻系模型真正认的就是这个</b>。
+     *       2026-09-18 实测（{@code model=deepseek-flash}）：只发 {@code enable_thinking}
+     *       或 {@code chat_template_kwargs} 时思考照旧（completion 181 token、思考占 234 字），
+     *       发这个之后 reasoning 归零、completion 降到 38 token；</li>
+     *   <li>{@code enable_thinking} —— vLLM 部署的后端认这个；</li>
+     *   <li>{@code chat_template_kwargs} —— Qwen3 这类靠模板参数控制的后端认这个。</li>
+     * </ul>
+     *
+     * <p>🔴 关不掉思考的后果不只是慢：思考 token 与正文 token <b>共用 max_tokens</b>，
+     * 额度被吃满时正文会变成空串（且不报错）。{@link #cleanContent} 只是兜底，不能替代关开关。</p>
      */
     private void applyThinkingParams(JSONObject body, LargeModelConfig config) {
         boolean enableThink = "Y".equalsIgnoreCase(config.getDefaultThinkFlag());
         body.put("enable_thinking", enableThink);
+
+        JSONObject thinking = new JSONObject();
+        thinking.put("type", enableThink ? "enabled" : "disabled");
+        body.put("thinking", thinking);
 
         JSONObject kwargs = new JSONObject();
         kwargs.put("enable_thinking", enableThink);
@@ -210,31 +252,70 @@ public class LargeModelGatewayClient {
                 : "";
     }
 
-    /** 兼容 OpenAI 标准响应，取 choices[0].message.content */
-    private String extractContent(String responseText) {
-        if (!StringUtils.hasText(responseText)) {
-            return null;
+    /**
+     * 读 SSE 流并拼接正文
+     *
+     * <p>只认 {@code data:} 行、跳过 {@code [DONE]}；正文取
+     * {@code choices[0].delta.content}，部分网关在流式下仍回 {@code message.content}，两种都兼容。
+     * 非 JSON 的杂行（心跳等）直接跳过，不中断拼接。</p>
+     */
+    private String readSseContent(InputStream in) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        if (in == null) {
+            return sb.toString();
         }
-        JSONObject json;
-        try {
-            json = JSON.parseObject(responseText);
-        } catch (Exception e) {
-            throw new ReportGenerateException("大模型返回不是合法 JSON：" + truncate(responseText, 300));
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data:")) {
+                    continue;
+                }
+                String payload = line.substring("data:".length()).trim();
+                if (!StringUtils.hasText(payload) || "[DONE]".equals(payload)) {
+                    continue;
+                }
+                JSONObject chunk;
+                try {
+                    chunk = JSON.parseObject(payload);
+                } catch (Exception ignore) {
+                    continue;
+                }
+                String piece = extractDeltaContent(chunk);
+                if (StringUtils.hasText(piece)) {
+                    sb.append(piece);
+                }
+            }
         }
-        if (json == null) {
-            return null;
-        }
-        JSONArray choices = json.getJSONArray("choices");
+        return sb.toString();
+    }
+
+    /** 从单个流式分片里取文本（{@code delta.content} 优先，回落 {@code message.content}） */
+    private String extractDeltaContent(JSONObject chunk) {
+        JSONArray choices = chunk.getJSONArray("choices");
         if (choices == null || choices.isEmpty()) {
             return null;
         }
-        JSONObject message = choices.getJSONObject(0).getJSONObject("message");
-        if (message == null) {
+        JSONObject choice = choices.getJSONObject(0);
+        if (choice == null) {
             return null;
         }
-        Object content = message.get("content");
+        JSONObject delta = choice.getJSONObject("delta");
+        if (delta != null) {
+            String piece = flattenContent(delta.get("content"));
+            if (StringUtils.hasText(piece)) {
+                return piece;
+            }
+        }
+        JSONObject message = choice.getJSONObject("message");
+        return message == null ? null : flattenContent(message.get("content"));
+    }
+
+    /** content 兼容 {@code String} 与 {@code [{type,text}, ...]} 两种形态（少数网关是后者） */
+    private String flattenContent(Object content) {
+        if (content == null) {
+            return null;
+        }
         if (content instanceof JSONArray) {
-            // 少数网关把 content 返回成 [{type,text}, ...]
             StringBuilder sb = new StringBuilder();
             for (Object part : (JSONArray) content) {
                 if (part instanceof JSONObject) {
@@ -248,7 +329,19 @@ public class LargeModelGatewayClient {
             }
             return sb.toString();
         }
-        return content == null ? null : String.valueOf(content);
+        return String.valueOf(content);
+    }
+
+    /**
+     * 输出上限：{@code large_model_config.max_tokens} 填了有效值就用它，否则兜底
+     * {@value #DEFAULT_MAX_TOKENS}
+     *
+     * <p>🔴 不能不吃这个值：reasoning 模型的思考 token 与正文 token 共用该额度，
+     * 额度不够时正文会被挤成空串（不报错）。</p>
+     */
+    private int resolveMaxTokens(LargeModelConfig config) {
+        Integer fromConfig = config.getMaxTokens();
+        return (fromConfig != null && fromConfig > 0) ? fromConfig : DEFAULT_MAX_TOKENS;
     }
 
     /**

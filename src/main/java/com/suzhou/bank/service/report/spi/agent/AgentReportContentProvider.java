@@ -12,6 +12,7 @@ import com.suzhou.bank.agent.util.QLExpressUtil;
 import com.suzhou.bank.entity.report.AppGuarantorInfo;
 import com.suzhou.bank.entity.report.AppReportContentBlock;
 import com.suzhou.bank.mapper.report.AppGuarantorInfoMapper;
+import com.suzhou.bank.service.report.ai.CollectingSseEmitter;
 import com.suzhou.bank.service.report.ai.LargeModelGatewayClient;
 import com.suzhou.bank.service.report.model.ReportConstants;
 import com.suzhou.bank.service.report.spi.ContentPayload;
@@ -24,7 +25,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -102,6 +102,19 @@ public class AgentReportContentProvider implements ReportContentProvider {
      * 定义成常量而不是散落的字面量，是为了将来若要落"未命中"记录时只改一处。</p>
      */
     private static final String CHECK_RESULT_HIT = "命中";
+
+    /**
+     * 报告正文调大模型时的输出上限（{@code max_tokens}）
+     *
+     * <p>🔴 <b>必须显式给，不能吃默认值</b>：本平台接的是 reasoning 模型
+     * （返回体里带 {@code reasoning_content}），<b>思考 token 与正文 token 共用这一个额度</b>。
+     * 报告单块的输入动辄上万 token（如「特定贷款的检查情况」要把整份检查明细喂进去），
+     * 默认 10000 会被思考吃满 —— 表现不是报错，而是<b>正文为空串</b>。</p>
+     *
+     * <p>2026-09-18 实测：该块 {@code prompt_tokens=10214}、
+     * {@code completion_tokens=10000}（正好顶满）、{@code answer=""}。</p>
+     */
+    private static final int REPORT_LLM_MAX_TOKENS = 32000;
 
     private final IknowledgeBaseConfigService knowledgeBaseConfigService;
 
@@ -253,14 +266,17 @@ public class AgentReportContentProvider implements ReportContentProvider {
                                    String guarantorName, long start) {
         JSONObject params = baseParams(context, guarantorName);
         params.put("moduleCode", block.getAgentCode());
-        // 🔴 两个必传项，都是「默认值陷阱」，不传拿不到分析结果：
+        // 🔴 三个必传项，都是「默认值陷阱」，不传拿不到分析结果：
         //    withModelSummary 默认 false → 只返回渲染好的 prompt，根本不调大模型
-        //    stream           默认 true  → 走 SSE 分支，emitter 传 null 时取不到文本
+        //    stream           必须 true  → 见下方说明（流式才保险）
+        //    max_tokens       见 REPORT_LLM_MAX_TOKENS（reasoning 模型思考与正文共用额度）
         params.put("withModelSummary", true);
-        params.put("stream", false);
+        params.put("stream", true);
+        params.put("max_tokens", REPORT_LLM_MAX_TOKENS);
 
-        Object res = knowledgeBaseConfigService.getPromptContent(params.toJSONString(), sinkEmitter());
-        String text = extractAnswer(res);
+        CollectingSseEmitter emitter = new CollectingSseEmitter();
+        Object res = knowledgeBaseConfigService.getPromptContent(params.toJSONString(), emitter);
+        String text = pickLlmText(emitter, res);
         logCallDone("知识库", context, block, guarantorName, text, start);
         return text;
     }
@@ -336,31 +352,49 @@ public class AgentReportContentProvider implements ReportContentProvider {
         getParams.put("moduleCode", MODULE_STRATEGY_ENGINE);
         params.forEach(getParams::put);
         getParams.put("withModelSummary", true);
-        getParams.put("stream", false);
+        getParams.put("stream", true);
+        getParams.put("max_tokens", REPORT_LLM_MAX_TOKENS);
 
-        Object res = knowledgeBaseConfigService.getPromptContent(getParams.toJSONString(), sinkEmitter());
-        String text = extractAnswer(res);
+        CollectingSseEmitter emitter = new CollectingSseEmitter();
+        Object res = knowledgeBaseConfigService.getPromptContent(getParams.toJSONString(), emitter);
+        String text = pickLlmText(emitter, res);
         logCallDone("智策引擎", context, block, guarantorName, text, start);
         // 校验结论随内容一起回去，落 app_report_ai_risk.check_result
         return new ContentPayload(text, CHECK_RESULT_HIT);
     }
 
     /**
-     * 取数用的「空 SSE 接收器」
+     * 取模型输出：<b>流式收集结果优先</b>，兜底才回落到 {@link #extractAnswer}
      *
-     * <p>🔴 <b>必须传一个真实 SseEmitter 实例，不能传 null。</b>
-     * {@code KnowledgeBaseConfigService#getPromptContent(String, SseEmitter)} 内部在多个分支会调到
-     * {@code CallLlmUtil.finishEmitter(emitter, ...)}，而那个方法<b>没有 null 判断</b>
-     * （直接 {@code emitter.complete()}）—— 传 null 的话，只要走到出错分支就会抛 NPE，
-     * 把真正的失败原因（模型不可用 / 参数不合法等）整个吃掉，排查时只能看到一句 NPE。</p>
+     * <h3>🔴 为什么报告链路一律走「流式 + 服务端拼接」</h3>
+     * <p>本平台接的是 reasoning 模型，<b>思考 token 与正文 token 共用同一个
+     * {@code max_tokens} 额度</b>。非流式时若思考把额度吃满，返回的
+     * {@code answer} 是空串 —— 而且<b>不报错</b>：{@code code=200}、
+     * {@code completion_tokens} 顶满，调用方只能靠"正文为空"猜出问题。</p>
      *
-     * <p>传未初始化的 SseEmitter 是安全的：Spring 的实现在尚未绑定 handler 时
-     * {@code send()} 只把数据塞进 {@code earlySendAttempts}、{@code complete()} 只置完成位，都不会抛；
-     * 而且本链路 {@code stream=false} + {@code returnFlag=true}，成功路径压根不会碰它
-     * （见 {@code OpenAiChatUtil.doNonStream} 的 {@code if (!returnFlag && emitter != null)}）。</p>
+     * <p>流式的价值在于<b>边生成边吐</b>：已经产出的正文帧不会因为总量被截断而整段丢失。
+     * 这条路径与「知识配置管理 → 预览」完全一致（预览同样是
+     * {@code stream=true} + {@code returnFlag=true}，用户实测可正常出分析文案），
+     * 所以报告正文与预览不会有口径差异（{@code returnFlag=true} 时
+     * {@code consumeStream} 吐的是 {@code {code:200, answer:...}} 结构化帧）。</p>
+     *
+     * @param emitter 本次调用用的收集器，正常帧的 {@code answer}/{@code content} 会被逐帧拼进来
+     * @param res     {@code getPromptContent} 的返回值。走流式时它是 emitter 本身
+     *                （{@code shouldReturnLlmResult} 判定非 null 即返回），并无正文可取 ——
+     *                正文一律从 emitter 里拿。保留入参是为了兼容"万一走了非流式分支"的兜底。
      */
-    private static SseEmitter sinkEmitter() {
-        return new SseEmitter(0L);
+    private String pickLlmText(CollectingSseEmitter emitter, Object res) {
+        String streamed = emitter.getText();
+        if (StringUtils.hasText(streamed)) {
+            // 流式拿到的就是模型正文，不存在"误取 prompt"的可能，无需 looksLikePrompt 过滤
+            return trimToNull(streamed);
+        }
+        String notices = emitter.getNotices();
+        if (StringUtils.hasText(notices)) {
+            // 一个正文帧都没有时，把错误帧留痕 —— 否则排查时只看到"内容为空"
+            log.warn("【报告内容加工】流式未收到正文帧，非正常帧内容={}", trimToNull(notices));
+        }
+        return extractAnswer(res);
     }
 
     /* ==================== 担保人口径：多担保人轮循 ==================== */
@@ -454,10 +488,17 @@ public class AgentReportContentProvider implements ReportContentProvider {
     /** 总结用的系统提示词（可直接改这里，不必动代码结构） */
     private static final String RULE_SUMMARY_SYSTEM_PROMPT =
             "你是银行贷后检查报告的风险汇总助手。用户会给你一组已经判定命中的风险要点"
-                    + "（每条含规则名称、所在章节、风险文案）。请把它们归纳成一段简洁的中文总结："
-                    + "先一句话总体判断风险程度，再按重要程度列出 3~6 条要点，"
-                    + "每条用「规则名称：一句话结论」的形式，不要臆造材料里没有的信息。"
+                    + "（每条含规则名称、所在章节、风险文案）。请把它们**高度精炼**成一段中文总结：\n"
+                    + "① 先用 1~2 句话给出总体判断（整体风险程度、主要涉及哪几个方面、最突出的问题）；\n"
+                    + "② 再按重要程度列出**最多 5 条**要点，每条用「规则名称：一句话结论」的形式；\n"
+                    + "③ 🔴 **全文控制在 300 字以内（最多不超过 400 字）**，"
+                    + "**严禁把命中的每条规则逐条罗列** —— 必须合并同类项、只保留最关键的几条；\n"
+                    + "④ 素材里可能给出几十条，那是原始明细，你的任务是**归纳**而不是**复述**；\n"
+                    + "⑤ 不要臆造材料里没有的信息。\n"
                     + "直接输出 HTML 片段（用 <p> 和 <ol><li> 标签），不要输出 markdown 代码块。";
+
+    /** 总结素材里「每条风险文案」的截断长度（素材太长会让模型倾向忠实罗列而不是归纳） */
+    private static final int SUMMARY_MATERIAL_PER_HIT_CHARS = 120;
 
     /**
      * 风险要点总结：把本报告命中的全部 RULE 块内容交给大模型归纳成一段。
@@ -481,8 +522,11 @@ public class AgentReportContentProvider implements ReportContentProvider {
             n++;
             material.append(n).append(". 【所在章节】").append(nullToDash(hit.getCatalogName()))
                     .append(" 【规则名称】").append(nullToDash(hit.getBlockName())).append('\n')
-                    .append("   风险文案：").append(stripHtml(hit.getContent())).append('\n');
+                    .append("   风险文案：")
+                    .append(abbreviate(stripHtml(hit.getContent()), SUMMARY_MATERIAL_PER_HIT_CHARS))
+                    .append('\n');
         }
+        material.append("\n（以上为原始明细，请按要求归纳，不要逐条复述。）\n");
 
         long start = System.currentTimeMillis();
         try {
@@ -504,6 +548,14 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     private static String nullToDash(String text) {
         return StringUtils.hasText(text) ? text : "-";
+    }
+
+    /** 截断到 max 字符（超出加省略号）—— 用于压短总结素材，让模型"归纳"而不是"复述" */
+    private static String abbreviate(String text, int max) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= max ? text : text.substring(0, max) + "…";
     }
 
     /** 送进模型前去掉 HTML 标签，避免把标签本身当内容喂进去 */
@@ -570,14 +622,55 @@ public class AgentReportContentProvider implements ReportContentProvider {
             }
             String text = jo.getString("answer");
             if (!StringUtils.hasText(text)) {
-                text = jo.getString("content");
+                // 🔴 绝不回退到 content！content 在这个路径下就是 prompt 本身（见上面注释）。
+                //    2026-09-18 实测事故：知识配置 tddkjcqk（prompttype=basic、output 直接引用数据源）
+                //    返回的 answer 为空，旧代码回退取 content ⇒ 报告正文里出现
+                //    「一坨原始 JSON + 整份提示词模板」，用户看到就是"出来个什么玩意儿"。
+                String fallback = jo.getString("content");
+                log.warn("【报告内容加工】只拿到 prompt、没有模型输出（不采用 content，避免正文出现提示词）"
+                                + " content字数={}", fallback == null ? 0 : fallback.length());
+                return null;
+            }
+            if (looksLikePrompt(text)) {
+                log.warn("【报告内容加工】取到的文本含提示词特征，判为无效（不落正文）字数={}", text.length());
+                return null;
             }
             return trimToNull(text);
         }
         if (res instanceof String) {
-            return trimToNull((String) res);
+            String s = trimToNull((String) res);
+            return looksLikePrompt(s) ? null : s;
         }
         return null;
+    }
+
+    /** 提示词特征词：命中 2 个以上即认定「取到的是 prompt 而不是模型输出」 */
+    private static final String[] PROMPT_MARKERS = {
+            "你是一名", "你是银行", "你的任务", "严禁", "最终输出", "输入数据", "不得输出", "分析规则",
+    };
+
+    /**
+     * 启发式判断「这段文本是提示词，不是分析结果」
+     *
+     * <p>兜底用：正常取到 {@code answer} 时不应命中；万一某个知识配置把 prompt 拼进了 answer，
+     * 靠这个把它挡在正文之外（宁可空着，也不能让报告里出现一大段提示词）。</p>
+     * <p>用"命中 ≥2 个特征词"而不是"含 1 个"，避免正常业务文案被误伤。</p>
+     */
+    private static boolean looksLikePrompt(String text) {
+        if (!StringUtils.hasText(text)) {
+            return false;
+        }
+        if (text.contains("{{") && text.contains("}}")) {
+            // 未替换的模板占位符 —— 一定是模板/prompt，不可能是模型输出
+            return true;
+        }
+        int hits = 0;
+        for (String marker : PROMPT_MARKERS) {
+            if (text.contains(marker) && ++hits >= 2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 单次调用收尾日志（成功路径） */

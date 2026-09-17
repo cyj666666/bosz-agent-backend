@@ -42,7 +42,7 @@ report:
   mock-content:
     # ⚠️ 置 false 才会走 AgentReportContentProvider（真实调智能体）
     #    true（默认）= 用 classpath:report-demo/demo-content.json 的预置内容，仅演示用
-    enabled: true
+    enabled: false
   # 内容块取数（真实链路）：报告模板里每个 TEXT/TABLE 块都要调一次智能体
   agent:
     # 块级并发数：一份报告有近百个取数块，单块一次大模型调用（数十秒），
