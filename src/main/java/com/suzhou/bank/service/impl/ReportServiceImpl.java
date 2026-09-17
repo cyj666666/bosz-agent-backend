@@ -516,12 +516,15 @@ public class ReportServiceImpl implements ReportService {
         requireText(req.getReportTitle(), "报告标题");
         requireText(req.getReportType(), "报告类型");
 
-        // 同一日检流水号下不允许重复发起：详情页按 checkTaskNo 取「最新版本」，
-        // 多条初始记录（version 都为空）会让版本序列混乱 → 提示改用「更新报告」
-        Long exists = reportMapper.selectCount(Wrappers.<Report>lambdaQuery()
-                .eq(Report::getCheckTaskNo, req.getCheckTaskNo().trim()));
-        if (exists != null && exists > 0) {
-            throw new ReportGenerateException("该日检流水号已存在报告，请改用「更新报告」生成新版本");
+        // 同一日检流水号下不允许「在途」重复发起 —— 对齐行内口径：只挡 111-待开始 / 000-进行中。
+        // 已完成（888）的记录<b>不挡</b>：用户可以对着同一流水号再发起一次，按流水号自然堆出
+        // V1、V2…（版本号由 nextVersionOf 递增）；详情页仍按 checkTaskNo 取版本号最大的那版。
+        // 挡在途是为了避免同一流水号并发跑两份加工、版本号乱序。
+        Long inFlight = reportMapper.selectCount(Wrappers.<Report>lambdaQuery()
+                .eq(Report::getCheckTaskNo, req.getCheckTaskNo().trim())
+                .in(Report::getStatus, REPORT_STATUS_WAITING, REPORT_STATUS_RUNNING));
+        if (inFlight != null && inFlight > 0) {
+            throw new ReportGenerateException("该日检流水号有报告正在生成中，请等它完成后再发起");
         }
 
         Report report = new Report();

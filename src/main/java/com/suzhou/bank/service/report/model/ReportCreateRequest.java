@@ -27,7 +27,12 @@ public class ReportCreateRequest {
     /** 客户名称（必填） */
     private String customerName;
 
-    /** 日检流水号（必填，详情页的入口键；同一流水号下不允许重复发起） */
+    /**
+     * 日检流水号（必填，详情页的入口键）
+     * <p><b>防重复口径（对齐行内）</b>：只挡该流水号下的<b>在途</b>记录（111/000）；
+     * 已完成（888）的不挡，因此可以对着同一流水号再发起，自然堆出 V1、V2…，
+     * 详情页按 checkTaskNo 取版本号最大的那版。</p>
+     */
     private String checkTaskNo;
 
     /** 报告标题（必填） */

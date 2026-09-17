@@ -117,7 +117,8 @@ public class ReportController {
      * <p><b>接口立即返回、不等待加工完成</b>（加工是长耗时过程，接大模型后为分钟级），
      * 因此返回值里的 status 通常还是 111；前端刷新列表看状态流转结果。
      * {@code reportNo} <b>选填</b> —— 填了就用填的，留空由服务端生成；
-     * {@code userNo} 由服务端补全；同一日检流水号下不允许重复发起。</p>
+     * {@code userNo} 由服务端补全。<b>防重复</b>：同一日检流水号下只挡在途记录（111/000），
+     * 已完成（888）的不挡 —— 可对着同一流水号再发起，自然堆出 V1、V2…</p>
      *
      * @param request {customerId, customerName, checkTaskNo, reportTitle, reportType, reportNo(选填)}
      * @return 新建的报告记录（加工异步进行）
