@@ -11,3 +11,4 @@ target/
 .workbuddy
 logs/
 _tools/
+doc/

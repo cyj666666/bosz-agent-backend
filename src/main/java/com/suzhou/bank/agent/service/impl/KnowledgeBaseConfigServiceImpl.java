@@ -2410,6 +2410,9 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
             List<IndexParamsEntity> parentIndexList = new ArrayList<>();
             getParamsByParentParamNo(sqlIndexParamsList, parentIndexList);
             Map<String, Object> paramData = Maps.newHashMap();
+            // 入参名归一（兼容旧写法）：取数前兜最后一层 —— 无论上游传 reportno 还是 reportNo，
+            // 都能命中配置里已改成驼峰的 :reportNo / :entName / :guarantorName。
+            AgentParamNames.normalizeInPlace(params);
             params.keySet().forEach(key -> paramData.put(key, params.get(key)));
             // 特殊处理： sql查询的关联参数取值
             if (cascadeMap != null && !cascadeMap.isEmpty()) {
@@ -2630,6 +2633,9 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
     @Override
     public Object getPromptContent(String paramStr, SseEmitter emitter) {
         JSONObject params = JSONObject.parseObject(paramStr);
+        // 入参名归一（兼容旧写法）：reportno/guarantorname 等历史写法补上规范名键（双写，原键保留）。
+        // 挂在这里是因为：{{objectName}} 替换、ent_name 日志、以及后续取数都读这个 params。
+        AgentParamNames.normalizeInPlace(params);
         String moduleCode = params.getString("moduleCode");
         if (StringUtils.isEmpty(moduleCode)) {
             log.info("接收到获取文案接口请求，请求参数异常！参数：{}", paramStr);
@@ -2798,6 +2804,8 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         String moduleCode = knowledgeBaseParamsEntity.getParamNo();
         JSONObject params = JSONObject.parseObject(JSONObject.toJSONString(req));
         params.put("moduleCode", moduleCode);
+        // 入参名归一（兼容旧写法）：补上规范名键（双写，原键保留）
+        AgentParamNames.normalizeInPlace(params);
 
         // 处理输入参数
         List<JSONObject> inputParam = req.getInputParam();
@@ -2822,6 +2830,8 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         try {
             // 处理输入参数
             JSONObject params = req.getParams();
+            // 入参名归一（兼容旧写法）：补上规范名键（双写，原键保留）
+            AgentParamNames.normalizeInPlace(params);
             JSONArray inputParam = params.getJSONArray("inputParam");
             if (CollectionUtils.isNotEmpty(inputParam)) {
                 inputParam.forEach(obj -> {

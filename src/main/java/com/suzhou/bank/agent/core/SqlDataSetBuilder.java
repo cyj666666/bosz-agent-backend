@@ -11,6 +11,7 @@ import com.suzhou.bank.agent.db.DynamicDataSourceModel;
 import com.suzhou.bank.agent.dict.AgentDictCache;
 import com.suzhou.bank.agent.dict.DictModel;
 import com.suzhou.bank.agent.enums.DriverTypeEnum;
+import com.suzhou.bank.agent.util.AgentParamNames;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -202,6 +203,12 @@ public class SqlDataSetBuilder implements DataSetBuilder {
                 });
             }
 
+            // 入参名归一（兼容旧写法）—— 取数层的**最后兜底**。
+            // 配置里的参数名已统一成驼峰（reportNo / entName / guarantorName），
+            // 而调用方可能仍传 reportno / guarantorname 等历史写法；Java 侧 Map.get 大小写敏感，
+            // 写法对不上就取不到值。这里就地补上规范名键（双写，原键保留），调用方无需改动。
+            AgentParamNames.normalizeInPlace(parameters);
+
             // 关联参数和默认值处理
             boolean strictFetch = Boolean.TRUE.equals(parameters.get(STRICT_FETCH_KEY));
             if (!sqlScript.getParamData().isEmpty()) {
@@ -210,7 +217,12 @@ public class SqlDataSetBuilder implements DataSetBuilder {
                     JSONObject relateIndex = object.getJSONObject("relateIndex");
                     String name = object.getString("name");
                     Object defaultValue = object.get("defaultValue");
-                    Object nameValue = parameters.get(name);
+                    // 别名感知取值：规范名取不到时按等同别名的任意写法再取一次
+                    Object nameValue = AgentParamNames.get(parameters, name);
+                    if (Objects.nonNull(nameValue) && !parameters.containsKey(name)) {
+                        // 别名命中的值回填到规范名键，供后面的 NamedParameterJdbcTemplate 绑定 :name
+                        parameters.put(name, nameValue);
+                    }
                     if (Objects.nonNull(relateIndex)) {
                         String no = relateIndex.getString("no");
                         if (parameters.containsKey(no) && Objects.isNull(nameValue)) {
