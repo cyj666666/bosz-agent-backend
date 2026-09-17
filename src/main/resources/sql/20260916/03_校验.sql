@@ -59,6 +59,34 @@ SELECT 'A8 悬挂 AND 残留' AS chk, count(*) AS should_be_zero
 FROM index_params
 WHERE script ~* '(AND\s+AND)|(WHERE\s+AND)';
 
+-- A9【2026-09-17 新增】值首尾不得有多余空白
+--    教训：迁移脚本若把定界符单独放行（`= $mig$\n<值>\n$mig$`），换行会被一起写进字段值。
+--    实测影响 81(index_params.script) + 73(relate_index_set) + 23(input_param) 行。
+SELECT 'A9 script 首尾多余空白' AS chk, count(*) AS should_be_zero
+FROM index_params
+WHERE script IS NOT NULL AND length(script) > 0
+  AND (script LIKE E'\n%' OR script LIKE E'%\n' OR script LIKE ' %' OR script LIKE '% ');
+
+SELECT 'A9 relate_index_set 首尾空白' AS chk, count(*) AS should_be_zero
+FROM knowledge_base_params
+WHERE relate_index_set IS NOT NULL AND length(relate_index_set) > 0
+  AND (relate_index_set LIKE E'\n%' OR relate_index_set LIKE E'%\n');
+
+SELECT 'A9 input_param 首尾空白' AS chk, count(*) AS should_be_zero
+FROM knowledge_base_params
+WHERE input_param IS NOT NULL AND length(input_param) > 0
+  AND (input_param LIKE E'\n%' OR input_param LIKE E'%\n');
+
+SELECT 'A9 request_params 首尾空白' AS chk, count(*) AS should_be_zero
+FROM agent_rule
+WHERE request_params IS NOT NULL AND length(request_params) > 0
+  AND (request_params LIKE E'\n%' OR request_params LIKE E'%\n');
+
+SELECT 'A9 relate_input_param 首尾空白' AS chk, count(*) AS should_be_zero
+FROM knowledge_relate_input_param
+WHERE input_param IS NOT NULL AND length(input_param) > 0
+  AND (input_param LIKE E'\n%' OR input_param LIKE E'%\n');
+
 
 -- ==================== B. 目标态到位（应大于 0）====================
 
