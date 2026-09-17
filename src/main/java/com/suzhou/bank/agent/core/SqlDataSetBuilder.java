@@ -241,6 +241,13 @@ public class SqlDataSetBuilder implements DataSetBuilder {
                         }
                         if (Objects.nonNull(defaultValue) && !StringUtils.isEmpty(String.valueOf(defaultValue))) {
                             scriptSql = scriptSql.replaceAll(":" + name, String.valueOf(defaultValue));
+                            // 非严格模式（配置页预览 / 试跑）允许用配置预置样例值兜底，但必须**留痕**：
+                            // 2026-09-17 实测过一次难查的 bug —— 智策页面的"补充分析"漏传 guarantorName，
+                            // 取数层静默用样例值 '泰州公司' 顶包，导致规则判定与文案描述取到两条不同记录、
+                            // 写出自相矛盾的结论，而日志里只有 SQL 结果、看不出"这是样例值"。
+                            // 有了这条 WARN，再遇到"结果里冒出配置样例值"，一眼就能定位是哪条链路漏传了入参。
+                            log.warn("【样例值兜底】指标[{}] 参数[{}] 未取到值，已用配置预置样例值[{}]替换占位符（非严格模式）。"
+                                    + "若本次属于真实业务执行，说明调用方漏传了该参数。", paramNo, name, defaultValue);
                         }
                     }
                 }
