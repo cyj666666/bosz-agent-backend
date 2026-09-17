@@ -8,4 +8,6 @@ target/
 *.iml
 .vscode/
 .DS_Store
+.workbuddy
 logs/
+_tools/
