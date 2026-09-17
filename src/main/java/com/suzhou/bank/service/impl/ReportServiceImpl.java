@@ -390,20 +390,31 @@ public class ReportServiceImpl implements ReportService {
 
         // ===== 4. 落库：先清旧实例/风险（支持重跑，防唯一键冲突），再插新 =====
         clearInstances(reportNo);
-        try {
-            for (AppReportContentInstance instance : instances) {
+        // 🔴 **逐行隔离落库**（2026-09-17 修正）：原来整批只套一个 try-catch，
+        //    任何一行冲突都会直接跳到 catch、**丢掉其后所有行**，而报告照样置 888，
+        //    表现为「报告完成了，但风险列表莫名少了几条」，极难排查。
+        //    典型触发场景：风险表若仍残留 (reportNo, agentCode) 唯一索引，
+        //    同一规则跨章节命中（如 feiyinrz 在「六、征信」与「十二、（二）担保人征信」
+        //    各一个块）时，第二条起全部冲突。
+        //    现在每行独立兜底：失败只进软备注，其余行照常入库 —— 与"块级失败不影响整体"一致。
+        for (AppReportContentInstance instance : instances) {
+            try {
                 instanceMapper.insert(instance);
+            } catch (Exception e) {
+                log.error("内容实例落库失败 reportNo={} blockCode={}", reportNo, instance.getBlockCode(), e);
+                blockFailures.add("[" + instance.getBlockCode() + "/" + instance.getBlockName()
+                        + "] 内容实例落库失败：" + briefError(e));
             }
-            for (AppReportAiRisk risk : risks) {
+        }
+        for (AppReportAiRisk risk : risks) {
+            try {
                 riskMapper.insert(risk);
+            } catch (Exception e) {
+                log.error("AI 风险明细落库失败 reportNo={} blockCode={} agentCode={}",
+                        reportNo, risk.getBlockCode(), risk.getAgentCode(), e);
+                blockFailures.add("[" + risk.getBlockCode() + "/" + risk.getRuleName()
+                        + "] AI 风险明细落库失败：" + briefError(e));
             }
-        } catch (Exception e) {
-            // 落库级致命错误（DB 异常）：记录失败原因，generate 会置 888 + 软备注
-            log.error("报告实例落库失败 reportNo={}", reportNo, e);
-            result.setBlockTotal(blocks.size());
-            result.setFailReason("报告实例落库失败：" + e.getMessage());
-            result.setCostMs(System.currentTimeMillis() - start);
-            return result;
         }
 
         log.info("报告实例加工完成 reportNo={} 内容块={} 实例={} 空内容={} 隐藏={} AI风险={} 块失败={} 耗时={}ms",
@@ -1703,10 +1714,26 @@ public class ReportServiceImpl implements ReportService {
                 .orderByAsc(AppReportContentBlock::getBlockCode));
     }
 
-    /** 模板配置错误一律 fail-fast，避免生成残缺报告 */
+    /**
+     * 模板配置错误一律 fail-fast，避免生成残缺报告
+     *
+     * <p>⚠️ <b>校验的是 {@code blockCode} 唯一，不是 {@code agentCode} 唯一</b>（2026-09-17 修正）：</p>
+     * <p>行身份是 {@code blockCode}（模板表有 {@code uk_report_block_code}、实例表与风险表都是
+     * {@code (reportNo, blockCode)}）。而<b>同一个 agentCode 会在不同章节合法复用</b> ——
+     * 典型如 {@code feiyinrz}（非银债务）在「六、征信」按<b>借款人</b>口径（入参 {@code reportNo,entName}）、
+     * 在「十二、（二）担保人征信」按<b>担保人</b>口径（入参再加 {@code guarantorName}）各出现一次，
+     * 入参不同、结果不同，两块都必须生成。同理知识库编号也存在跨章节复用。</p>
+     * <p>旧版在这里按 agentCode 判重，会让这类报告在<b>校验阶段就被判失败</b>
+     * （报「智能体编码在模板内重复，要求报告内唯一」，整份报告只出空壳），
+     * 与 {@code buildRisk} 的口径自相矛盾。</p>
+     */
     private void validateTemplate(List<AppReportContentBlock> blocks, Map<String, AppReportCatalog> catalogMap) {
-        Set<String> ruleAgentCodes = new HashSet<>();
+        Set<String> blockCodes = new HashSet<>();
         for (AppReportContentBlock block : blocks) {
+            if (!blockCodes.add(block.getBlockCode())) {
+                // 模板表有 uk_report_block_code，DB 已兜底；这里给出可读的失败原因，便于定位脏数据
+                throw new ReportGenerateException("内容块编号在模板内重复（要求全局唯一）：" + block.getBlockCode());
+            }
             if (!StringUtils.hasText(block.getFillType())) {
                 throw new ReportGenerateException("内容块缺少填充类型（fillType）：" + block.getBlockCode());
             }
@@ -1715,8 +1742,17 @@ public class ReportServiceImpl implements ReportService {
                 throw new ReportGenerateException("内容块所属目录不存在或已停用：block="
                         + block.getBlockCode() + "，catalog=" + block.getCatalogCode());
             }
-            if (StringUtils.hasText(block.getAnalysisType()) && !FILL_TEXT.equalsIgnoreCase(block.getFillType())) {
-                throw new ReportGenerateException("分析文本类型仅文本类内容块可配置：block=" + block.getBlockCode());
+            // analysisType（RULE / ANALYSIS）的真实语义是「本块内容由智能体加工」，**TEXT 与 TABLE 都允许**：
+            // TABLE 的 content 就是「表格成品片段」（见 {@code ReportConstants.FILL_TABLE}），
+            // 同样由 agent 产出（如「我行结算账户与资产情况」「我行结算交易对手情况」这些知识库模板）。
+            // 🔴 只有 TITLE / SOURCE_LINK 才禁止配 analysisType。
+            // ⚠️ **这条不能反过来收紧**：{@code AgentReportContentProvider#provide} 是靠
+            //     `analysable = TEXT || TABLE` + `analysisType 非空` 才决定去调 agent 的，
+            //     给 TABLE 块清掉 analysisType 会让它直接 return null → 这些块**静默变空**（不报错）。
+            String fillType = block.getFillType();
+            if (StringUtils.hasText(block.getAnalysisType()) && !isAgentFillable(block)) {
+                throw new ReportGenerateException("分析文本类型仅文本/表格类内容块可配置（TEXT/TABLE）：block="
+                        + block.getBlockCode() + "，fillType=" + fillType);
             }
             if (!StringUtils.hasText(block.getBlockName())) {
                 throw new ReportGenerateException("内容块缺少名称（blockName）：" + block.getBlockCode());
@@ -1724,18 +1760,29 @@ public class ReportServiceImpl implements ReportService {
             if (!isRuleBlock(block)) {
                 continue;
             }
+            // ⛔ 这里**不要**再校验 agentCode 在报告内唯一 —— 同一规则跨章节按不同入参复用是合法配置，
+            //    详见方法注释；行身份是 blockCode，风险表那条 (reportNo, agentCode) 唯一索引也已移除。
             if (!StringUtils.hasText(block.getAgentCode())) {
                 throw new ReportGenerateException("经验规则类内容块缺少智能体编码（agentCode）：" + block.getBlockCode());
-            }
-            if (!ruleAgentCodes.add(block.getAgentCode())) {
-                throw new ReportGenerateException("智能体编码在模板内重复，要求报告内唯一：" + block.getAgentCode());
             }
         }
     }
 
+    /**
+     * TEXT / TABLE 两类都可能由智能体加工（**与 {@code AgentReportContentProvider} 的 `analysable` 同口径**）
+     *
+     * <p>🔴 两处判据必须一致：provider 用 `TEXT || TABLE` 决定要不要调 agent，
+     * 这边用同一口径决定「算不算规则块」。若这里收窄成只认 TEXT，
+     * 将来出现 `fillType=TABLE + analysisType=RULE` 的块时就会
+     * 「正文有内容、AI 风险列表却少一条」——provider 正常调了规则，而 {@link #isRuleBlock} 判 false。</p>
+     */
+    private boolean isAgentFillable(AppReportContentBlock block) {
+        String fillType = block.getFillType();
+        return FILL_TEXT.equalsIgnoreCase(fillType) || FILL_TABLE.equalsIgnoreCase(fillType);
+    }
+
     private boolean isRuleBlock(AppReportContentBlock block) {
-        return FILL_TEXT.equalsIgnoreCase(block.getFillType())
-                && ANALYSIS_RULE.equalsIgnoreCase(block.getAnalysisType());
+        return isAgentFillable(block) && ANALYSIS_RULE.equalsIgnoreCase(block.getAnalysisType());
     }
 
     /* ==================== 状态流转与渲染装配 ==================== */

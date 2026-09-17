@@ -33,3 +33,18 @@ logging:
 agent:
   rule:
     parse-model-code: bosz-report-ai
+
+# ══════════════════════════════════════════════════════════════════════════
+# 报告内容加工：本地走**真实智能体链路**（2026-09-17 联调开关）
+#
+# application.yml 里默认是 true（走 MockReportContentProvider，读
+# classpath:report-demo/demo-content.json 的预置内容，只用于演示）；
+# 这里覆盖成 false → 启用 AgentReportContentProvider，逐块真实调
+# 「知识配置 / 智策引擎」。
+#
+# ⚠️ @ConditionalOnProperty 是**启动期**判定的 → 改完必须**重启后端**才生效。
+# ⚠️ 本地自测若想退回演示模式，把这段注释掉即可（会回落 application.yml 的 true）。
+# ══════════════════════════════════════════════════════════════════════════
+report:
+  mock-content:
+    enabled: false

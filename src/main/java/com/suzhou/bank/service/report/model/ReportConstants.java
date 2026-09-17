@@ -16,7 +16,7 @@ public final class ReportConstants {
     /** 填充类型：标题（text=标题文案） */
     public static final String FILL_TITLE = "TITLE";
 
-    /** 填充类型：文本（analysisType/agentCode 仅本类型有值） */
+    /** 填充类型：文本（analysisType/agentCode 在 TEXT / TABLE 下才有值） */
     public static final String FILL_TEXT = "TEXT";
 
     /** 填充类型：表格（content 为表格成品片段） */
@@ -34,6 +34,32 @@ public final class ReportConstants {
 
     /** 分析文本类型：文本分析类 */
     public static final String ANALYSIS_TEXT = "ANALYSIS";
+
+    /**
+     * 分析文本类型：<b>表格溯源</b>（2026-09-17 新增）
+     *
+     * <p>内容来源是**业务表**而不是知识配置：{@code agentCode} 存表英文名（{@code app_*}），
+     * {@code agentParams} 存查询条件（`reportNo,entName`，可能再带 `列=值` 过滤令牌，
+     * 如 {@code subjectType=借款人}）。加工时查表 → 拼 md 表格存 content；
+     * <b>严格按条件查，不做担保人轮询</b>。fillType 恒 TABLE。</p>
+     */
+    public static final String ANALYSIS_TRACE_TABLE = "TRACE_TABLE";
+
+    /**
+     * 分析文本类型：<b>链接溯源</b>（2026-09-17 新增）
+     *
+     * <p>content 存"链接开头"（来自一张信贷还没给的配置表），前端拿到后调另一个接口补全 + SM4 加密后跳转。
+     * 本版配置表未接入 ⇒ 内容留空 + 模板 {@code emptyStrategy=HIDE}。fillType 为 TEXT。</p>
+     */
+    public static final String ANALYSIS_TRACE_LINK = "TRACE_LINK";
+
+    /**
+     * 分析文本类型：<b>外部灌入</b>（2026-09-17 新增）
+     *
+     * <p>内容**不由本服务调 agent 产出**，后续由别的接口直接落 content
+     * （如「风险归因分析」「行业宏观变化」两个编号）。block 内容为空 → 按 emptyStrategy 占位/隐藏。</p>
+     */
+    public static final String ANALYSIS_EXTERNAL = "EXTERNAL";
 
     /** 标题级别：报告主标题（承载报告头，如公司名称） */
     public static final int TITLE_LEVEL_REPORT = 1;

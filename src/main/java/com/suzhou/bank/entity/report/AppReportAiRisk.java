@@ -42,7 +42,7 @@ public class AppReportAiRisk {
     @TableField("blockCode")
     private String blockCode;
 
-    /** 智能体编码（已含经验规则编号，报告内唯一） */
+    /** 智能体编码（已含经验规则编号；⚠️ 报告内<b>不唯一</b>，同一规则跨章节按不同入参复用会有多行） */
     @TableField("agentCode")
     private String agentCode;
 

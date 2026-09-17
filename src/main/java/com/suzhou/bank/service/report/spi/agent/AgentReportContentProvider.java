@@ -27,7 +27,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 报告内容提供者 · 智能体实现（**正式链路**）
@@ -107,6 +109,9 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     private final AppGuarantorInfoMapper guarantorInfoMapper;
 
+    /** 表格溯源：按表名 + 条件查业务表 → 拼 md 表格（见该类注释） */
+    private final TraceTableBuilder traceTableBuilder;
+
     private final LargeModelGatewayClient largeModelGatewayClient;
 
     @Override
@@ -130,14 +135,56 @@ public class AgentReportContentProvider implements ReportContentProvider {
             return null;
         }
 
-        // ③ 只处理 TEXT / TABLE 类分析块；TITLE / SOURCE_LINK 不调智能体
+        // ③ 溯源（两类）/ 外部灌入：**不走知识库/智策引擎链路**
+        String analysisType = block.getAnalysisType();
+
+        // ③-1 表格溯源：agentCode = 表英文名（app_*），agentParams = 查询条件（可带 `列=值` 过滤令牌）。
+        //      🔴 严格按条件查，**不做担保人轮询**。
+        //      若放它去走知识库链路（拿表名当 moduleCode 查知识配置）→ 查不到 →
+        //      每次报告都往 fail_reason 里写"调用失败"。
+        if (ReportConstants.ANALYSIS_TRACE_TABLE.equals(analysisType)) {
+            long traceStart = System.currentTimeMillis();
+            try {
+                Map<String, String> values = new HashMap<>();
+                values.put(PARAM_REPORT_NO, context.getReportNo());
+                values.put(PARAM_ENT_NAME, context.getCustomerName());
+                String md = traceTableBuilder.buildMd(agentCode, block.getAgentParams(), values);
+                if (!StringUtils.hasText(md)) {
+                    log.info("【报告内容加工】表格溯源无内容 reportNo={} block={}({}) 表={} 入参={} 耗时={}ms",
+                            context.getReportNo(), blockCode, block.getBlockName(), agentCode,
+                            block.getAgentParams(), System.currentTimeMillis() - traceStart);
+                    return null;
+                }
+                log.info("【报告内容加工】表格溯源完成 reportNo={} block={}({}) 表={} 字数={} 耗时={}ms",
+                        context.getReportNo(), blockCode, block.getBlockName(), agentCode,
+                        md.length(), System.currentTimeMillis() - traceStart);
+                return new ContentPayload(md);
+            } catch (Throwable e) {
+                // 与其它块一致：绝不外抛，失败只记日志 → 块内容为空 → 模板 HIDE 兜底
+                log.error("【报告内容加工】表格溯源失败(跳过该块) reportNo={} block={}({}) 表={}",
+                        context.getReportNo(), blockCode, block.getBlockName(), agentCode, e);
+                return null;
+            }
+        }
+
+        // ③-2 链接溯源 / 外部灌入：内容**不由本服务产出**
+        //      · TRACE_LINK —— content 是"链接开头"（配置表未接入），本版留空；
+        //      · EXTERNAL   —— 后续由别的接口直接落 content。
+        if (ReportConstants.ANALYSIS_TRACE_LINK.equals(analysisType)
+                || ReportConstants.ANALYSIS_EXTERNAL.equals(analysisType)) {
+            log.info("【报告内容加工】非本服务产出(跳过该块) reportNo={} block={}({}) analysisType={} agentCode={}",
+                    context.getReportNo(), blockCode, block.getBlockName(), analysisType, agentCode);
+            return null;
+        }
+
+        // ④ 只处理 TEXT / TABLE 类分析块；TITLE / SOURCE_LINK 不调智能体
         String fillType = block.getFillType();
         boolean analysable = ReportConstants.FILL_TEXT.equalsIgnoreCase(fillType)
                 || ReportConstants.FILL_TABLE.equalsIgnoreCase(fillType);
         if (!analysable || !StringUtils.hasText(block.getAnalysisType()) || !StringUtils.hasText(agentCode)) {
             return null;
         }
-        // ④ 溯源块（SOURCE_LINK）在②之外单独处理，本版无链接来源 → 返回 null（emptyStrategy=HIDE 兜底）
+        // ⑤ 其余（知识库 ANALYSIS）走下面这条链路：「知识配置管理」该条详情页预览的大模型分析结果
 
         List<String> params = parseAgentParams(block.getAgentParams());
         boolean needGuarantor = params.contains(PARAM_GUARANTOR_NAME);

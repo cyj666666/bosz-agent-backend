@@ -48,12 +48,18 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 --    catalogCode 为 NULL 表示报告级内容块（如报告头，不进目录树，渲染在正文顶部）。
 --    fillType 填充类型枚举：
 --        TITLE       - 标题（整块仅为兼容固定标题展示，只有一个标题；级别见 titleLevel）
---        TEXT        - 文本（analysisType / agentCode 仅在该类型下有值）
---        TABLE       - 表格
+--        TEXT        - 文本（analysisType / agentCode 在 TEXT / TABLE 下才有值）
+--        TABLE       - 表格（content 为「表格成品片段」；同样可由智能体加工，故也允许配 analysisType / agentCode）
 --        SOURCE_LINK - 溯源按钮（块本身即按钮，其实例 content 存外部跳转链接，点击新开浏览器标签页）
---    analysisType 分析文本类型枚举（仅 fillType = TEXT 时有值）：
+--    analysisType 分析文本类型枚举（仅 fillType = TEXT / TABLE 时有值）：
 --        RULE        - 经验规则类（此时 blockName 即规则名称；agentCode 已含经验规则编号）
---        ANALYSIS    - 文本分析类
+--        ANALYSIS    - 文本分析类（知识库：content 存文本，有表格以 md 形式存）
+--        TRACE_TABLE - 表格溯源类（agentCode = 表英文名 app_*；agentParams 存查询条件，可带 `列=值` 过滤令牌；
+--                      加工时查表拼 md 表格；严格按条件查，**不做担保人轮询**）
+--        TRACE_LINK  - 链接溯源类（content 存"链接开头"，前端调接口补全 + SM4 加密后跳转）
+--        EXTERNAL    - 外部灌入类（内容不由本服务产出，后续由别的接口直接落 content）
+--        ⚠️ 只对 TEXT / TABLE 放开 —— 判据与 AgentReportContentProvider 的 analysable 同口径；
+--           TITLE / SOURCE_LINK 配了会在模板校验阶段 fail-fast。
 --    blockName 内容块名称（必填）：模板层与实例层同名同值；analysisType=RULE 时其业务含义即规则名称
 --    emptyStrategy 空数据策略：实例内容为空时，PLACEHOLDER-显示暂无数据占位（默认）/ HIDE-整块隐藏
 --    jumpAnchorCode 块间跳转目标锚点（单向）：值 = 目标块的 anchorCode（即目标块 blockCode）。
@@ -84,7 +90,7 @@ COMMENT ON COLUMN app_report_content_block.id IS '主键（自增）';
 COMMENT ON COLUMN app_report_content_block.blockCode IS '内容块编号（全局唯一）';
 COMMENT ON COLUMN app_report_content_block.catalogCode IS '所属目录编号（关联 app_report_catalog.catalogCode；报告级内容块（如报告头）为NULL，不进目录树）';
 COMMENT ON COLUMN app_report_content_block.fillType IS '填充类型：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源链接';
-COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT 时有值，否则为NULL）';
+COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类 TRACE_TABLE-表格溯源（agentCode=表名）TRACE_LINK-链接溯源 EXTERNAL-外部灌入（仅 fillType=TEXT/TABLE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT/TABLE 时有值，否则为NULL；已含经验规则编号；为与内容实例、AI 风险实例的关联键）';
 COMMENT ON COLUMN app_report_content_block.agentParams IS '调智能体入参清单（逗号分隔的参数名，仅 TEXT/TABLE 有值）：reportNo,entName 或 reportNo,entName,guarantorName（后者按担保人口径、多担保人时轮循）。2026-09-17 新增：同一 agentCode 在不同章节可能是借款人/担保人两种口径，入参不同结果不同，必须有此列区分';
 COMMENT ON COLUMN app_report_content_block.blockName IS '内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值）';

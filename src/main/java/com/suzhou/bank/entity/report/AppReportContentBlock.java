@@ -35,7 +35,7 @@ public class AppReportContentBlock {
     @TableField("fillType")
     private String fillType;
 
-    /** 分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT 时有值） */
+    /** 分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类（仅 fillType=TEXT/TABLE 时有值；TABLE 的 content 是表格成品片段，同样由智能体加工） */
     @TableField("analysisType")
     private String analysisType;
 
