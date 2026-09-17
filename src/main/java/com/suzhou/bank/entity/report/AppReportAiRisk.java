@@ -55,16 +55,14 @@ public class AppReportAiRisk {
     private String riskDesc;
 
     /**
-     * 智策引擎的「校验结果」JSON（仅 {@code analysisType=RULE} 的风险行有值）
+     * 智策引擎的「校验结论」（是否命中：命中 / 未命中）
      *
-     * <p>与 {@link #riskDesc}（补充分析文案）是**同一次规则调用的两个产物**，同一行关联：
-     * {@code result}（命中判定）/ {@code factExpression}（事实表达式）/
-     * {@code metrics}（本次校验用到的指标清单：编码、名称、命中值、单位）/
-     * {@code missingValueCount}·{@code totalMetricCount}（取数完整性）/
-     * {@code guarantorName}（担保人口径时的归属）。多担保人轮循时为 JSON 数组。</p>
+     * <p>⚠️ 只有<b>命中</b>的规则才落到本表（未命中的块内容为空、正文整块隐藏，也不生成风险行），
+     * 所以本列取值<b>恒为「命中」</b>。保留它有两个作用：语义自解释（一眼看出这行是规则判定命中的）、
+     * 以及将来若要落未命中记录时无需改表。</p>
      *
-     * <p>⚠️ 只有<b>命中</b>的规则才会生成风险行，所以 {@code result} 恒为「命中」；
-     * 未命中的规则在正文与风险列表里都不出现。</p>
+     * <p>⛔ <b>不要往这里塞校验溯源明细</b>（事实表达式 / 涉及指标 / 命中值 / 取数完整性）——
+     * 溯源是<b>单独的内容块设计</b>（{@code fillType=SOURCE_LINK}），与本表职责不同。</p>
      */
     @TableField("checkResult")
     private String checkResult;

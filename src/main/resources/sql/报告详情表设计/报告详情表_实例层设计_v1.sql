@@ -122,7 +122,7 @@ CREATE TABLE app_report_ai_risk (
     agentCode       VARCHAR(64) NOT NULL,
     ruleName        VARCHAR(128),
     riskDesc        TEXT,
-    checkResult     TEXT,
+    checkResult     VARCHAR(16),
     status          VARCHAR(16) DEFAULT 'PENDING',
     jumpAnchorCode  VARCHAR(64),
     sortNo          INT DEFAULT 0,
@@ -139,7 +139,7 @@ COMMENT ON COLUMN app_report_ai_risk.blockCode IS '内容块编号（关联 app_
 COMMENT ON COLUMN app_report_ai_risk.agentCode IS '智能体编码（已含经验规则编号；与正文内容实例的关联键，两侧同值）';
 COMMENT ON COLUMN app_report_ai_risk.ruleName IS '经验规则名称（列表展示；取值 = 对应内容实例的 blockName，两者同文）';
 COMMENT ON COLUMN app_report_ai_risk.riskDesc IS '风险描述（列表展示文案；与内容实例 content 同一份文案，编辑正文时同事务同步更新）';
-COMMENT ON COLUMN app_report_ai_risk.checkResult IS '智策引擎校验结果（JSON，仅 RULE 类风险行有值）：result-命中判定  factExpression-事实分析表达式  metrics-本次校验用到的指标清单(编码/名称/命中值/单位)  missingValueCount·totalMetricCount-取数完整性  guarantorName-担保人口径归属；多担保人轮循时为 JSON 数组。与 riskDesc（补充分析文案）为同一次规则调用的两个产物，同行关联';
+COMMENT ON COLUMN app_report_ai_risk.checkResult IS '智策引擎校验结论（是否命中）：命中/未命中。本表只落命中的规则，故恒为「命中」；留此列是为语义自解释与将来扩展。⚠️ 校验溯源明细（涉及指标/命中值）属「溯源块」的职责，不放本表';
 COMMENT ON COLUMN app_report_ai_risk.status IS '处置状态：PENDING-待处理 ADOPTED-已采纳 INVALID-已无效';
 COMMENT ON COLUMN app_report_ai_risk.jumpAnchorCode IS '块间跳转锚点（单向）：点击该风险行时滚动定位到的正文块 anchorCode；非外部跳转链接';
 COMMENT ON COLUMN app_report_ai_risk.sortNo IS '排序（风险列表内顺序）';

@@ -23,14 +23,11 @@ public class ReportRiskItem {
     private String riskDesc;
 
     /**
-     * 智策引擎的「校验结果」JSON（仅经验规则类风险有值）
+     * 智策引擎校验结论（是否命中：命中 / 未命中）
      *
-     * <p>与 {@link #riskDesc} 是同一次规则调用的两个产物，同行关联：
-     * {@code result} / {@code factExpression} / {@code metrics}（本次校验用到的指标清单）/
-     * {@code missingValueCount}·{@code totalMetricCount} / {@code guarantorName}。
-     * 担保人口径轮循多个担保人时为 JSON 数组。</p>
-     *
-     * <p>⚠️ 只读留痕：正文侧编辑正文会同步 {@code riskDesc}，但不会动本字段。</p>
+     * <p>⚠️ 本列表<b>只含命中的规则</b>（未命中的块内容为空、正文整块隐藏，也不生成风险行），
+     * 所以取值恒为「命中」；保留它是为了语义自解释。只读留痕：正文侧编辑会同步
+     * {@link #riskDesc}，但不会动本字段。</p>
      */
     private String checkResult;
 

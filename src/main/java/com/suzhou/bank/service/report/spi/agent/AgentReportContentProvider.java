@@ -1,13 +1,11 @@
 package com.suzhou.bank.service.report.spi.agent;
 
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.AgentRuleEntity;
 import com.suzhou.bank.agent.model.req.AgentRuleExecuteReq;
 import com.suzhou.bank.agent.model.vo.AgentRuleExecuteVO;
-import com.suzhou.bank.agent.model.vo.AgentRuleMetricVO;
 import com.suzhou.bank.agent.service.IAgentRuleService;
 import com.suzhou.bank.agent.service.IknowledgeBaseConfigService;
 import com.suzhou.bank.agent.util.QLExpressUtil;
@@ -42,15 +40,14 @@ import java.util.List;
  *   <li><b>RULE（智策引擎）</b> —— {@code agentCode} 是经验规则编号；
  *       先 {@code IAgentRuleService#executeRule} 判定：<b>命中</b>才按
  *       {@code disposalAdvice / thresholdConfig / riskRemark / ...} 走「补充分析」那条链路出文案，
- *       同时把<b>校验结果</b>（命中判定 + 事实表达式 + 校验溯源明细）放进
- *       {@link ContentPayload#getCheckResult()}；<b>未命中返回 null</b>
- *       （块内容为空 → 模板 {@code emptyStrategy=HIDE} → 正文整块不渲染，也不生成 AI 风险行）。</li>
+ *       同时把<b>校验结论</b>（{@code 命中}）放进 {@link ContentPayload#getCheckResult()}；
+ *       <b>未命中返回 null</b>（块内容为空 → 模板 {@code emptyStrategy=HIDE} → 正文整块不渲染，
+ *       也不生成 AI 风险行）。</li>
  * </ul>
  *
  * <p>⚠️ 由此得到一条重要语义：<b>AI 风险列表里的每一条都是"命中的规则"</b>，
- * 未命中的规则在正文和风险列表里都不出现。所以风险行的
- * {@code risk_desc}（补充分析文案）与 {@code check_result}（校验结果）是同一次调用的两个产物，
- * 天然一一关联。</p>
+ * 未命中的规则在正文和风险列表里都不出现 —— 这正是用户要的
+ * 「命中了才展示这个内容块，未命中就不会有这个内容块」。</p>
  *
  * <p><b>入参</b>：来自模板的 {@code agentParams}（逗号分隔），只有三种组合：
  * {@code reportNo,entName} / {@code reportNo,entName,guarantorName}。
@@ -94,6 +91,15 @@ public class AgentReportContentProvider implements ReportContentProvider {
     private static final String HEAD_MAIN_TITLE = "报告主标题";
     private static final String HEAD_SUB_TITLE = "报告副标题";
     private static final String HEAD_SUB_TITLE_TEXT = "日常贷后检查报告";
+
+    /**
+     * 智策引擎校验结论：命中
+     *
+     * <p>未命中与「校验失败」（表达式没算成）在 {@link #ruleContent} 里就返回 null 了，
+     * 不会走到落库；所以风险表 {@code checkResult} 列的值恒为本常量。
+     * 定义成常量而不是散落的字面量，是为了将来若要落"未命中"记录时只改一处。</p>
+     */
+    private static final String CHECK_RESULT_HIT = "命中";
 
     private final IknowledgeBaseConfigService knowledgeBaseConfigService;
 
@@ -288,47 +294,8 @@ public class AgentReportContentProvider implements ReportContentProvider {
         Object res = knowledgeBaseConfigService.getPromptContent(getParams.toJSONString(), sinkEmitter());
         String text = extractAnswer(res);
         logCallDone("智策引擎", context, block, guarantorName, text, start);
-        return new ContentPayload(text, buildCheckResult(vo, guarantorName));
-    }
-
-    /**
-     * 组装「校验结果」JSON —— 字段口径与智策引擎详情页的
-     * 「校验结论 + 校验溯源表」一致（前端 {@code resultText} / {@code traceColumns}）。
-     *
-     * <p>⚠️ {@code metrics} 是<b>本次校验用到的指标清单</b>（表达式引用即入列），
-     * <b>不是"命中的指标"</b>；是否取到值要看 {@code actualValue} 与 {@code missingValueCount}。</p>
-     *
-     * @param guarantorName 担保人口径时标明归属，借款人口径不落该键
-     */
-    private static String buildCheckResult(AgentRuleExecuteVO vo, String guarantorName) {
-        JSONObject check = new JSONObject();
-        // 走到这里必然命中（未命中/校验失败已在 ruleContent 里返回 null）
-        check.put("result", "命中");
-        if (StringUtils.hasText(vo.getFactExpression())) {
-            check.put("factExpression", vo.getFactExpression());
-        }
-        if (!CollectionUtils.isEmpty(vo.getMatchedMetrics())) {
-            JSONArray metrics = new JSONArray();
-            for (AgentRuleMetricVO metric : vo.getMatchedMetrics()) {
-                JSONObject item = new JSONObject();
-                item.put("indexCode", metric.getIndexCode());
-                item.put("indexName", metric.getIndexName());
-                item.put("actualValue", metric.getActualValue());
-                item.put("dataUnit", metric.getDataUnit());
-                metrics.add(item);
-            }
-            check.put("metrics", metrics);
-        }
-        if (vo.getMissingValueCount() != null) {
-            check.put("missingValueCount", vo.getMissingValueCount());
-        }
-        if (vo.getTotalMetricCount() != null) {
-            check.put("totalMetricCount", vo.getTotalMetricCount());
-        }
-        if (StringUtils.hasText(guarantorName)) {
-            check.put("guarantorName", guarantorName);
-        }
-        return check.toJSONString();
+        // 校验结论随内容一起回去，落 app_report_ai_risk.check_result
+        return new ContentPayload(text, CHECK_RESULT_HIT);
     }
 
     /**
@@ -375,10 +342,10 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     /**
      * 智策引擎口径：对每个企业担保人各跑一次「规则判定 + 补充分析」，
-     * 文案按段落拼接，**校验结果收成 JSON 数组**（每个担保人一个元素，带 {@code guarantorName} 便于区分）。
+     * 文案按段落拼接。
      *
-     * <p>注意：只要模板标了 {@code guarantorName}，校验结果就恒为数组
-     * （即使最终只有一个担保人命中），这样消费侧的形状是确定的。</p>
+     * <p>校验结论只记"这次判定命中"这一件事（{@code 命中}），与担保人无关，
+     * 所以多个担保人轮循时**不展开成数组** —— 一行一条结论即可。</p>
      *
      * <p>一个担保人都没命中 / 没有企业担保人 → 返回 null → 该块为空 → 整块隐藏。</p>
      */
@@ -391,21 +358,14 @@ public class AgentReportContentProvider implements ReportContentProvider {
             return null;
         }
         StringBuilder sb = new StringBuilder();
-        JSONArray checks = new JSONArray();
         for (String guarantor : guarantors) {
             ContentPayload piece = ruleContent(context, block, guarantor, start);
             if (piece == null) {
                 continue;
             }
             appendGuarantorPiece(sb, guarantors.size(), guarantor, piece.getContent());
-            if (StringUtils.hasText(piece.getCheckResult())) {
-                checks.add(JSONObject.parseObject(piece.getCheckResult()));
-            }
         }
-        if (sb.length() == 0) {
-            return null;
-        }
-        return new ContentPayload(sb.toString(), checks.isEmpty() ? null : checks.toJSONString());
+        return sb.length() == 0 ? null : new ContentPayload(sb.toString(), CHECK_RESULT_HIT);
     }
 
     /**

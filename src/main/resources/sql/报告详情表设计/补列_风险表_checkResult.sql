@@ -1,51 +1,34 @@
 -- =====================================================================
--- 补列脚本：app_report_ai_risk 增加 checkResult（智策引擎校验结果）
+-- 补列脚本：app_report_ai_risk 增加 checkResult（智策引擎校验结论）
 -- 数据库：高斯DB（GaussDB/openGauss）
 -- 日期  ：2026-09-17
 --
 -- 背景：报告详情页右侧「AI 风险识别」列表 = **命中的经验规则**。
---   用户口径（2026-09-17）：「智策的校验结果我也是要的，跟补充分析是一起关联的，
---   展示命中的规则，没有命中的就不用展示了。」
---   ⇒ 一条命中规则 = 校验结果 + 补充分析，两者是同一次规则调用的两个产物，同一行关联：
---        · riskDesc    = 补充分析（大模型出的风险文案）
---        · checkResult = 校验结果（本次新增）
+--   用户口径（2026-09-17，二次澄清后收敛）：
+--     「我其实只要要个是否命中的结果，再加一个补充分析落表即可，溯源啥的目前没这个诉求。」
+--   ⇒ 一条命中规则在风险表里只留两样东西：
+--        · riskDesc    = 补充分析（大模型出的风险文案，可编辑）
+--        · checkResult = 校验结论（是否命中，**只读留痕**，即本列）
 --
--- checkResult 存 JSON，字段口径**逐条对齐智策引擎详情页「开始校验」的展示**：
---   {
---     "result":            "命中",                 -- 命中判定（与前端 resultText 同口径）
---     "factExpression":    "近12个月逾期次数 >= 3", -- 事实分析表达式
---     "metrics": [                                  -- 本次校验用到的指标清单
---       { "indexCode": "...", "indexName": "...", "actualValue": "...", "dataUnit": "..." }
---     ],
---     "missingValueCount": 0,                       -- 未取到值的指标数（取数完整性）
---     "totalMetricCount":  3,                       -- 本次校验涉及指标总数
---     "guarantorName":     "某某集团有限公司"        -- 仅担保人口径有该键
---   }
+-- ⚠️ 本列取值只有「命中」/「未命中」。而**未命中的规则不落本表**
+--   （块内容为空 → 正文整块隐藏、也不生成风险行），所以落库值恒为「命中」。
+--   保留这一列是为语义自解释（一眼看出"这行是规则判定命中的"）与将来扩展。
 --
--- ⚠️ 「涉及指标」不是「命中的指标」：后端 matchedMetrics 是**表达式引用的全部指标**
---   （取数之前就构造好），与"取没取到值""算没算成"无关，所以未取到值的行 actualValue 为空。
---   是否取到值要看 missingValueCount。
---
--- ⚠️ 「校验失败」（规则表达式无法执行，resultStatus=null）**不等于「未命中」**，
---   但两种情况的块内容都为空 ⇒ 都不会生成风险行。所以落库的 result 恒为「命中」。
---
--- ⚠️ 担保人口径的块按企业担保人轮循 ⇒ checkResult 为 **JSON 数组**（每元素带 guarantorName）。
---   消费侧需同时兼容对象与数组两种形状。
---
--- 与 riskDesc 的分工：riskDesc 是**可编辑**的展示文案（正文侧改正文时会同步）；
---   checkResult 是**只读**的校验留痕，不随编辑变化。
+-- ⛔ **不要往本列塞校验溯源明细**（事实表达式 / 涉及指标 / 命中值 / 取数完整性）：
+--   用户明确说"溯源啥的目前没这个诉求"，且**溯源块是单独的内容块设计**
+--   （`fillType=SOURCE_LINK`，见 `doc/报告模板_设计说明_v1.md` §9），两者不混。
 --
 -- ⚠️ 幂等性：本脚本**不是**幂等的。若该列已存在，重复执行会报
 --   "column checkResult of relation app_report_ai_risk already exists"，
 --   属正常现象，跳过即可。
 -- =====================================================================
 
-ALTER TABLE app_report_ai_risk ADD COLUMN checkResult TEXT;
+ALTER TABLE app_report_ai_risk ADD COLUMN checkResult VARCHAR(16);
 
-COMMENT ON COLUMN app_report_ai_risk.checkResult IS '智策引擎校验结果（JSON，仅 RULE 类风险行有值）：result-命中判定  factExpression-事实分析表达式  metrics-本次校验用到的指标清单(编码/名称/命中值/单位)  missingValueCount·totalMetricCount-取数完整性  guarantorName-担保人口径归属；多担保人轮循时为 JSON 数组。与 riskDesc（补充分析文案）为同一次规则调用的两个产物，同行关联';
+COMMENT ON COLUMN app_report_ai_risk.checkResult IS '智策引擎校验结论（是否命中）：命中/未命中。本表只落命中的规则，故恒为「命中」；留此列是为语义自解释与将来扩展。⚠️ 校验溯源明细（涉及指标/命中值）属「溯源块」的职责，不放本表';
 
 -- =====================================================================
--- 校验（执行后应返回 1 行、is_nullable = YES）
+-- 校验（执行后应返回 1 行）
 -- =====================================================================
 -- SELECT column_name, data_type, character_maximum_length, is_nullable
 --   FROM information_schema.columns

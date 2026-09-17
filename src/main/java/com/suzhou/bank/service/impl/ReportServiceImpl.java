@@ -628,7 +628,7 @@ public class ReportServiceImpl implements ReportService {
             item.setAgentCode(row.getAgentCode());
             item.setRuleName(row.getRuleName());
             item.setRiskDesc(row.getRiskDesc());
-            // 补充分析（riskDesc）的同伴：智策引擎校验结果，前端「校验结果」列的数据源
+            // 补充分析（riskDesc）的同伴：智策引擎校验结论（是否命中），前端「校验结果」列的数据源
             item.setCheckResult(row.getCheckResult());
             item.setStatus(row.getStatus());
             item.setJumpAnchorCode(row.getJumpAnchorCode());
@@ -1645,7 +1645,7 @@ public class ReportServiceImpl implements ReportService {
      * 一条风险行同时装两个同源产物：</p>
      * <ul>
      *   <li>{@code riskDesc} —— 补充分析（大模型出的风险文案），与正文内容同一份：正文 content 为准、列表为副本；</li>
-     *   <li>{@code checkResult} —— 智策引擎的校验结果（命中判定 / 事实表达式 / 校验溯源明细），只读留痕。</li>
+     *   <li>{@code checkResult} —— 智策引擎校验结论（是否命中），只读留痕。</li>
      * </ul>
      *
      * <p>⚠️ <b>不要在这里按 agentCode 判重</b>（2026-09-17 修正）：报告模板里同一个 agentCode
@@ -1676,8 +1676,9 @@ public class ReportServiceImpl implements ReportService {
         risk.setRuleName(block.getBlockName());
         // 补充分析文案：与正文内容同一份（正文侧编辑正文时同事务同步本列）
         risk.setRiskDesc(instance.getContent());
-        // 校验结果（智策引擎）：与上面的补充分析文案是同一次规则调用的两个产物，同行关联。
-        // 只读留痕，不随正文编辑变化 —— 前端「校验结果」列的数据源。
+        // 校验结论（智策引擎）：走到这里必然是命中的规则，所以取值就是「命中」。
+        // 与上面的补充分析文案是同一次规则调用的两个产物，同行关联；只读留痕，
+        // 不随正文编辑变化。
         risk.setCheckResult(payload == null ? null : trimToNull(payload.getCheckResult()));
         risk.setStatus(RISK_PENDING);
         // 单向：风险行 → 正文块位置锚点（同样属于块间位置跳转）
