@@ -321,11 +321,18 @@ public class ReportServiceImpl implements ReportService {
             futures.add(reportBlockExecutor.submit(() -> {
                 long blockStart = System.currentTimeMillis();
                 try {
-                    AppReportContentInstance instance = buildInstance(
+                    BlockOutcome outcome = buildInstance(
                             reportNo, customerId, customerName, reportTitle, block, catalogMap);
+                    AppReportContentInstance instance = outcome.getInstance();
                     slots[idx] = instance;
-                    if (isRuleBlock(block)) {
-                        riskSlots[idx] = buildRisk(instance, block, seenBlockCodes);
+                    // 🔴 AI 风险行 = **命中的**规则（2026-09-17 用户口径）：
+                    //    「展示命中的规则，没有命中的就不用展示了」。
+                    //    规则未命中 / 校验失败时 provider 会返回 null → 块内容为空。
+                    //    所以「内容非空」就是"命中"的判定依据 —— 与下面 fillRiskSummaryBlocks
+                    //    挑选总结素材（同样要求内容非空）用的是同一口径，不会出现
+                    //    "风险列表有这条、风险要点总结里却没有"的错位。
+                    if (isRuleBlock(block) && StringUtils.hasText(instance.getContent())) {
+                        riskSlots[idx] = buildRisk(instance, block, outcome.getPayload(), seenBlockCodes);
                     }
                 } catch (Throwable e) {
                     // 单块失败：记日志 + 软备注，继续下一块（绝不中断整份报告）
@@ -508,7 +515,7 @@ public class ReportServiceImpl implements ReportService {
 
                 String content = payload == null ? null : payload.getContent();
                 slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
-                        content);
+                        content).getInstance();
             } catch (Throwable e) {
                 log.error("风险要点块加工失败(跳过该块) reportNo={} blockCode={}", reportNo, block.getBlockCode(), e);
                 String blockName = StringUtils.hasText(block.getBlockName())
@@ -621,6 +628,8 @@ public class ReportServiceImpl implements ReportService {
             item.setAgentCode(row.getAgentCode());
             item.setRuleName(row.getRuleName());
             item.setRiskDesc(row.getRiskDesc());
+            // 补充分析（riskDesc）的同伴：智策引擎校验结果，前端「校验结果」列的数据源
+            item.setCheckResult(row.getCheckResult());
             item.setStatus(row.getStatus());
             item.setJumpAnchorCode(row.getJumpAnchorCode());
             item.setSortNo(row.getSortNo());
@@ -1516,14 +1525,42 @@ public class ReportServiceImpl implements ReportService {
     /* ==================== 单块实例化 ==================== */
 
     /**
+     * 单块加工产物：内容实例 + 加工方原始产物
+     *
+     * <p>为什么要一起带出来：智策引擎类内容块除了正文文案，还产出<b>校验结果</b>
+     * （{@link ContentPayload#getCheckResult()}），它要落到 AI 风险表的 {@code checkResult} 列。
+     * 而 {@code AppReportContentInstance} 是不落这个字段的（正文侧不需要），
+     * 所以在装配期用本对象把两者一起传下去。</p>
+     */
+    private static final class BlockOutcome {
+
+        private final AppReportContentInstance instance;
+
+        private final ContentPayload payload;
+
+        BlockOutcome(AppReportContentInstance instance, ContentPayload payload) {
+            this.instance = instance;
+            this.payload = payload;
+        }
+
+        AppReportContentInstance getInstance() {
+            return instance;
+        }
+
+        ContentPayload getPayload() {
+            return payload;
+        }
+    }
+
+    /**
      * 实例化一个内容块：取加工产物 → 标题兜底 → 建锚点与跳转 → 快照模板结构性字段
      *
      * <p>正常路径：内容由 {@code contentProvider.provide()} 现取（阶段 1）。</p>
      */
-    private AppReportContentInstance buildInstance(String reportNo, String customerId, String customerName,
-                                                   String reportTitle,
-                                                   AppReportContentBlock block,
-                                                   Map<String, AppReportCatalog> catalogMap) {
+    private BlockOutcome buildInstance(String reportNo, String customerId, String customerName,
+                                       String reportTitle,
+                                       AppReportContentBlock block,
+                                       Map<String, AppReportCatalog> catalogMap) {
         return buildInstance(reportNo, customerId, customerName, reportTitle, block, catalogMap, null);
     }
 
@@ -1536,16 +1573,17 @@ public class ReportServiceImpl implements ReportService {
      *
      * @param presetContent 非 null 时直接用它当内容，跳过 provider 取数
      */
-    private AppReportContentInstance buildInstance(String reportNo, String customerId, String customerName,
-                                                   String reportTitle,
-                                                   AppReportContentBlock block,
-                                                   Map<String, AppReportCatalog> catalogMap,
-                                                   String presetContent) {
+    private BlockOutcome buildInstance(String reportNo, String customerId, String customerName,
+                                       String reportTitle,
+                                       AppReportContentBlock block,
+                                       Map<String, AppReportCatalog> catalogMap,
+                                       String presetContent) {
         AppReportCatalog catalog = StringUtils.hasText(block.getCatalogCode())
                 ? catalogMap.get(block.getCatalogCode()) : null;
         String catalogName = catalog == null ? null : catalog.getCatalogName();
 
         // ① 前置加工产物（由数据加工链路提供，本服务不取数）
+        ContentPayload payload = null;
         String content = presetContent;
         if (content == null) {
             ReportGenerateContext context = new ReportGenerateContext();
@@ -1554,7 +1592,7 @@ public class ReportServiceImpl implements ReportService {
             context.setCustomerName(customerName);
             context.setCatalogName(catalogName);
             context.setBlock(block);
-            ContentPayload payload = contentProvider.provide(context);
+            payload = contentProvider.provide(context);
             content = payload == null ? null : payload.getContent();
         }
         // ② 标题类内容块无加工产物时按模板兜底（报告头 / 章节标题）
@@ -1582,7 +1620,7 @@ public class ReportServiceImpl implements ReportService {
         //    跳转关系属报告结构、在模板层配置（block.jumpAnchorCode），此处直接快照到实例层。
         //    溯源类的外部跳转链接不在此处，随 content 写入。
         instance.setJumpAnchorCode(trimToNull(block.getJumpAnchorCode()));
-        return instance;
+        return new BlockOutcome(instance, payload);
     }
 
     /**
@@ -1601,8 +1639,14 @@ public class ReportServiceImpl implements ReportService {
     }
 
     /**
-     * 生成 AI 风险明细（1:1）
-     * <p>riskDesc 取正文内容同一份文案：正文 content 为准、列表为副本。</p>
+     * 生成 AI 风险明细（1:1）—— <b>只有命中的规则才会调到这里</b>
+     *
+     * <p>调用方（阶段 1）已确认 {@code instance.content} 非空，即该条经验规则**命中**。
+     * 一条风险行同时装两个同源产物：</p>
+     * <ul>
+     *   <li>{@code riskDesc} —— 补充分析（大模型出的风险文案），与正文内容同一份：正文 content 为准、列表为副本；</li>
+     *   <li>{@code checkResult} —— 智策引擎的校验结果（命中判定 / 事实表达式 / 校验溯源明细），只读留痕。</li>
+     * </ul>
      *
      * <p>⚠️ <b>不要在这里按 agentCode 判重</b>（2026-09-17 修正）：报告模板里同一个 agentCode
      * 会在不同章节<b>合法复用</b> —— 典型是征信类规则在「六、征信情况和潜在风险」按**借款人**口径、
@@ -1612,9 +1656,11 @@ public class ReportServiceImpl implements ReportService {
      * 对应地，DB 上那条 {@code uk_report_ai_risk_report_agent} 唯一索引也已移除
      * （见 {@code sql/报告详情表设计/补丁_移除风险表agent唯一约束.sql}）。</p>
      *
+     * @param payload        该块的加工产物（承载校验结果）；非 RULE 路径传 null
      * @param seenBlockCodes 本报告内已生成过风险的 blockCode 集合（跨块调用累积）
      */
-    private AppReportAiRisk buildRisk(AppReportContentInstance instance, AppReportContentBlock block, Set<String> seenBlockCodes) {
+    private AppReportAiRisk buildRisk(AppReportContentInstance instance, AppReportContentBlock block,
+                                      ContentPayload payload, Set<String> seenBlockCodes) {
         if (!seenBlockCodes.add(block.getBlockCode())) {
             // blockCode 由模板唯一键保证全局唯一，理论上到不了这里；真到了说明模板数据脏，跳过即可
             log.warn("内容块编号在报告内重复，跳过该风险明细 reportNo={} blockCode={}",
@@ -1628,7 +1674,11 @@ public class ReportServiceImpl implements ReportService {
         risk.setBlockCode(block.getBlockCode());
         risk.setAgentCode(block.getAgentCode());
         risk.setRuleName(block.getBlockName());
+        // 补充分析文案：与正文内容同一份（正文侧编辑正文时同事务同步本列）
         risk.setRiskDesc(instance.getContent());
+        // 校验结果（智策引擎）：与上面的补充分析文案是同一次规则调用的两个产物，同行关联。
+        // 只读留痕，不随正文编辑变化 —— 前端「校验结果」列的数据源。
+        risk.setCheckResult(payload == null ? null : trimToNull(payload.getCheckResult()));
         risk.setStatus(RISK_PENDING);
         // 单向：风险行 → 正文块位置锚点（同样属于块间位置跳转）
         risk.setJumpAnchorCode(instance.getAnchorCode());

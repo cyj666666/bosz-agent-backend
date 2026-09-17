@@ -19,8 +19,20 @@ public class ReportRiskItem {
 
     private String ruleName;
 
-    /** 风险描述（对应章节正文的同一份文案） */
+    /** 风险描述（对应章节正文的同一份文案）= 智策引擎的「补充分析」文案 */
     private String riskDesc;
+
+    /**
+     * 智策引擎的「校验结果」JSON（仅经验规则类风险有值）
+     *
+     * <p>与 {@link #riskDesc} 是同一次规则调用的两个产物，同行关联：
+     * {@code result} / {@code factExpression} / {@code metrics}（本次校验用到的指标清单）/
+     * {@code missingValueCount}·{@code totalMetricCount} / {@code guarantorName}。
+     * 担保人口径轮循多个担保人时为 JSON 数组。</p>
+     *
+     * <p>⚠️ 只读留痕：正文侧编辑正文会同步 {@code riskDesc}，但不会动本字段。</p>
+     */
+    private String checkResult;
 
     /** 处置状态：PENDING/ADOPTED/INVALID */
     private String status;

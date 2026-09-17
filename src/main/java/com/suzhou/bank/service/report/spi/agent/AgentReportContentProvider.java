@@ -1,11 +1,13 @@
 package com.suzhou.bank.service.report.spi.agent;
 
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.AgentRuleEntity;
 import com.suzhou.bank.agent.model.req.AgentRuleExecuteReq;
 import com.suzhou.bank.agent.model.vo.AgentRuleExecuteVO;
+import com.suzhou.bank.agent.model.vo.AgentRuleMetricVO;
 import com.suzhou.bank.agent.service.IAgentRuleService;
 import com.suzhou.bank.agent.service.IknowledgeBaseConfigService;
 import com.suzhou.bank.agent.util.QLExpressUtil;
@@ -38,10 +40,17 @@ import java.util.List;
  *       调 {@code KnowledgeBaseConfigService#getPromptContent}，由它按该条配置渲染 prompt 并
  *       调本地大模型，返回分析文案。</li>
  *   <li><b>RULE（智策引擎）</b> —— {@code agentCode} 是经验规则编号；
- *       先 {@code IAgentRuleService#executeRule} 判定，**命中后**才按
- *       {@code disposalAdvice / thresholdConfig / riskRemark / ...} 走「补充分析」那条链路出文案；
- *       未命中返回 null（块内容为空 → 前端按 emptyStrategy 占位或隐藏）。</li>
+ *       先 {@code IAgentRuleService#executeRule} 判定：<b>命中</b>才按
+ *       {@code disposalAdvice / thresholdConfig / riskRemark / ...} 走「补充分析」那条链路出文案，
+ *       同时把<b>校验结果</b>（命中判定 + 事实表达式 + 校验溯源明细）放进
+ *       {@link ContentPayload#getCheckResult()}；<b>未命中返回 null</b>
+ *       （块内容为空 → 模板 {@code emptyStrategy=HIDE} → 正文整块不渲染，也不生成 AI 风险行）。</li>
  * </ul>
+ *
+ * <p>⚠️ 由此得到一条重要语义：<b>AI 风险列表里的每一条都是"命中的规则"</b>，
+ * 未命中的规则在正文和风险列表里都不出现。所以风险行的
+ * {@code risk_desc}（补充分析文案）与 {@code check_result}（校验结果）是同一次调用的两个产物，
+ * 天然一一关联。</p>
  *
  * <p><b>入参</b>：来自模板的 {@code agentParams}（逗号分隔），只有三种组合：
  * {@code reportNo,entName} / {@code reportNo,entName,guarantorName}。
@@ -129,23 +138,29 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
         long start = System.currentTimeMillis();
         try {
-            String text;
+            ContentPayload payload;
             if (ReportConstants.ANALYSIS_RULE.equalsIgnoreCase(block.getAnalysisType())) {
-                text = needGuarantor
-                        ? provideForEachGuarantor(context, block, true, start)
+                // 智策引擎：命中才有内容，且必须把「校验结果」一并带回去
+                // （它要落到 app_report_ai_risk.check_result，与补充分析同一行关联展示）
+                payload = needGuarantor
+                        ? provideRuleForEachGuarantor(context, block, start)
                         : ruleContent(context, block, null, start);
             } else {
-                text = needGuarantor
-                        ? provideForEachGuarantor(context, block, false, start)
+                // 知识库：只有分析文案，没有校验结果
+                String text = needGuarantor
+                        ? provideForEachGuarantor(context, block, start)
                         : analysisContent(context, block, null, start);
+                payload = StringUtils.hasText(text) ? new ContentPayload(text) : null;
             }
-            if (!StringUtils.hasText(text)) {
+            if (payload == null || !StringUtils.hasText(payload.getContent())) {
+                // 未命中 / 无数据：内容为空。RULE 类块的模板 emptyStrategy=HIDE，
+                // 所以「没命中的规则」在正文里整块不渲染，也不会生成 AI 风险行。
                 log.info("【报告内容加工】无内容 reportNo={} block={}({}) agentCode={} 入参={} 耗时={}ms",
                         context.getReportNo(), blockCode, block.getBlockName(), agentCode,
                         block.getAgentParams(), System.currentTimeMillis() - start);
                 return null;
             }
-            return new ContentPayload(text);
+            return payload;
         } catch (Throwable e) {
             // 🔴 兜底：任何异常都不外抛，否则会中断整份报告的分块隔离语义
             log.error("【报告内容加工】失败(跳过该块) reportNo={} block={}({}) agentCode={} 入参={}",
@@ -200,11 +215,22 @@ public class AgentReportContentProvider implements ReportContentProvider {
     /* ==================== RULE（智策引擎） ==================== */
 
     /**
-     * 调智策引擎：先规则判定，命中后再取「补充分析」的大模型文案。
-     * <p>判定逻辑与 {@code AgentPromptController#getRule} 保持一致（同一 JVM 直接调 service，不走 HTTP）。</p>
+     * 调智策引擎：先规则判定，命中后再取「补充分析」的大模型文案，
+     * 并把**校验结果**（命中判定 + 事实表达式 + 校验溯源明细）一并带回。
+     *
+     * <p>判定与取数口径与 {@code AgentPromptController#getRule} 完全一致
+     * （同一 JVM 直接调 service，不走 HTTP）。</p>
+     *
+     * <p>🔴 <b>「校验失败」必须与「未命中」分开认</b>：表达式算不成时
+     * {@code resultStatus} 是 null，若直接按未命中处理，就把"这次校验根本没成立"
+     * 伪装成了业务结论（智策引擎前端 @ 2026-09-16 已专门修过这个问题）。</p>
+     *
+     * @param guarantorName 担保人口径时传入；借款人口径传 null
+     * @return 命中 → {@code content}=补充分析文案、{@code checkResult}=校验结果 JSON；
+     * 未命中 / 校验失败 → null（该块内容为空）
      */
-    private String ruleContent(ReportGenerateContext context, AppReportContentBlock block,
-                               String guarantorName, long start) {
+    private ContentPayload ruleContent(ReportGenerateContext context, AppReportContentBlock block,
+                                       String guarantorName, long start) {
         String ruleCode = block.getAgentCode();
         AgentRuleEntity rule = agentRuleService.getRule(ruleCode);
         if (rule == null) {
@@ -230,8 +256,14 @@ public class AgentReportContentProvider implements ReportContentProvider {
         req.setRequestParams(params);
 
         AgentRuleExecuteVO vo = agentRuleService.executeRule(req);
-        if (vo == null || !QLExpressUtil.getResultAsBool(vo.getResultStatus())) {
-            // 未命中 → 该块无内容 → 前端按 emptyStrategy 占位/隐藏，这不是错误
+        if (vo == null || vo.getResultStatus() == null) {
+            // 表达式没算成 → 校验失败（不是"未命中"），单列一类日志便于排查数据问题
+            log.warn("【报告内容加工】规则校验失败(表达式未执行) ruleCode={} reportNo={} guarantor={} 耗时={}ms",
+                    ruleCode, context.getReportNo(), guarantorName, System.currentTimeMillis() - start);
+            return null;
+        }
+        if (!QLExpressUtil.getResultAsBool(vo.getResultStatus())) {
+            // 未命中 → 该块无内容 → 前端按 emptyStrategy 隐藏，这不是错误
             log.info("【报告内容加工】规则未命中 ruleCode={} reportNo={} guarantor={} 耗时={}ms",
                     ruleCode, context.getReportNo(), guarantorName, System.currentTimeMillis() - start);
             return null;
@@ -256,7 +288,47 @@ public class AgentReportContentProvider implements ReportContentProvider {
         Object res = knowledgeBaseConfigService.getPromptContent(getParams.toJSONString(), sinkEmitter());
         String text = extractAnswer(res);
         logCallDone("智策引擎", context, block, guarantorName, text, start);
-        return text;
+        return new ContentPayload(text, buildCheckResult(vo, guarantorName));
+    }
+
+    /**
+     * 组装「校验结果」JSON —— 字段口径与智策引擎详情页的
+     * 「校验结论 + 校验溯源表」一致（前端 {@code resultText} / {@code traceColumns}）。
+     *
+     * <p>⚠️ {@code metrics} 是<b>本次校验用到的指标清单</b>（表达式引用即入列），
+     * <b>不是"命中的指标"</b>；是否取到值要看 {@code actualValue} 与 {@code missingValueCount}。</p>
+     *
+     * @param guarantorName 担保人口径时标明归属，借款人口径不落该键
+     */
+    private static String buildCheckResult(AgentRuleExecuteVO vo, String guarantorName) {
+        JSONObject check = new JSONObject();
+        // 走到这里必然命中（未命中/校验失败已在 ruleContent 里返回 null）
+        check.put("result", "命中");
+        if (StringUtils.hasText(vo.getFactExpression())) {
+            check.put("factExpression", vo.getFactExpression());
+        }
+        if (!CollectionUtils.isEmpty(vo.getMatchedMetrics())) {
+            JSONArray metrics = new JSONArray();
+            for (AgentRuleMetricVO metric : vo.getMatchedMetrics()) {
+                JSONObject item = new JSONObject();
+                item.put("indexCode", metric.getIndexCode());
+                item.put("indexName", metric.getIndexName());
+                item.put("actualValue", metric.getActualValue());
+                item.put("dataUnit", metric.getDataUnit());
+                metrics.add(item);
+            }
+            check.put("metrics", metrics);
+        }
+        if (vo.getMissingValueCount() != null) {
+            check.put("missingValueCount", vo.getMissingValueCount());
+        }
+        if (vo.getTotalMetricCount() != null) {
+            check.put("totalMetricCount", vo.getTotalMetricCount());
+        }
+        if (StringUtils.hasText(guarantorName)) {
+            check.put("guarantorName", guarantorName);
+        }
+        return check.toJSONString();
     }
 
     /**
@@ -280,13 +352,10 @@ public class AgentReportContentProvider implements ReportContentProvider {
     /* ==================== 担保人口径：多担保人轮循 ==================== */
 
     /**
-     * 标注了 {@code guarantorName} 的块要按**企业担保人**逐个轮循调用，结果按段落拼接。
-     * <p>一个担保人都取不到时返回 null（该块为空）。</p>
-     *
-     * @param rule true 表示该块是 RULE 类（走智策引擎），false 走知识库
+     * 知识库口径：标注了 {@code guarantorName} 的块要按**企业担保人**逐个轮循调用，
+     * 结果按段落拼接。一个担保人都取不到时返回 null（该块为空）。
      */
-    private String provideForEachGuarantor(ReportGenerateContext context, AppReportContentBlock block,
-                                           boolean rule, long start) {
+    private String provideForEachGuarantor(ReportGenerateContext context, AppReportContentBlock block, long start) {
         List<String> guarantors = listEnterpriseGuarantors(context.getReportNo());
         if (CollectionUtils.isEmpty(guarantors)) {
             log.info("【报告内容加工】无企业担保人(跳过该块) reportNo={} block={}",
@@ -295,22 +364,63 @@ public class AgentReportContentProvider implements ReportContentProvider {
         }
         StringBuilder sb = new StringBuilder();
         for (String guarantor : guarantors) {
-            String piece = rule
-                    ? ruleContent(context, block, guarantor, start)
-                    : analysisContent(context, block, guarantor, start);
+            String piece = analysisContent(context, block, guarantor, start);
             if (!StringUtils.hasText(piece)) {
                 continue;
             }
-            if (sb.length() > 0) {
-                sb.append('\n');
-            }
-            // 多担保人时加一行小标题，否则几段文案粘在一起分不清是谁的
-            if (guarantors.size() > 1) {
-                sb.append("<p><strong>担保人：").append(escapeHtml(guarantor)).append("</strong></p>\n");
-            }
-            sb.append(piece);
+            appendGuarantorPiece(sb, guarantors.size(), guarantor, piece);
         }
         return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /**
+     * 智策引擎口径：对每个企业担保人各跑一次「规则判定 + 补充分析」，
+     * 文案按段落拼接，**校验结果收成 JSON 数组**（每个担保人一个元素，带 {@code guarantorName} 便于区分）。
+     *
+     * <p>注意：只要模板标了 {@code guarantorName}，校验结果就恒为数组
+     * （即使最终只有一个担保人命中），这样消费侧的形状是确定的。</p>
+     *
+     * <p>一个担保人都没命中 / 没有企业担保人 → 返回 null → 该块为空 → 整块隐藏。</p>
+     */
+    private ContentPayload provideRuleForEachGuarantor(ReportGenerateContext context, AppReportContentBlock block,
+                                                       long start) {
+        List<String> guarantors = listEnterpriseGuarantors(context.getReportNo());
+        if (CollectionUtils.isEmpty(guarantors)) {
+            log.info("【报告内容加工】无企业担保人(跳过该块) reportNo={} block={}",
+                    context.getReportNo(), block.getBlockCode());
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        JSONArray checks = new JSONArray();
+        for (String guarantor : guarantors) {
+            ContentPayload piece = ruleContent(context, block, guarantor, start);
+            if (piece == null) {
+                continue;
+            }
+            appendGuarantorPiece(sb, guarantors.size(), guarantor, piece.getContent());
+            if (StringUtils.hasText(piece.getCheckResult())) {
+                checks.add(JSONObject.parseObject(piece.getCheckResult()));
+            }
+        }
+        if (sb.length() == 0) {
+            return null;
+        }
+        return new ContentPayload(sb.toString(), checks.isEmpty() ? null : checks.toJSONString());
+    }
+
+    /**
+     * 多担保人时在每段前加一行小标题，否则几段文案粘在一起分不清是谁的。
+     *
+     * @param total 担保人总数；只有 &gt;1 时才加标题
+     */
+    private static void appendGuarantorPiece(StringBuilder sb, int total, String guarantor, String piece) {
+        if (sb.length() > 0) {
+            sb.append('\n');
+        }
+        if (total > 1) {
+            sb.append("<p><strong>担保人：").append(escapeHtml(guarantor)).append("</strong></p>\n");
+        }
+        sb.append(piece);
     }
 
     /** 企业担保人名单：reportNo + subjectType=担保人 + guarantorType=法人，去重保序 */
