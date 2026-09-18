@@ -23,7 +23,9 @@
 --        NATURAL = 自然人担保人（guarantorType=自然人），**轮询**
 --      轮询 = 每个担保人产出一整块（前端按 .rpt-guarantor 分块渲染）；
 --      `guarantorEmph=1` 标记「担保人信息」块，前端加强调样式（多个担保人更醒目）
---   一、（一）风险要点 → 1 个总结块 + N 个要点条目块，条目块 jumpAnchorCode 指回对应 RULE 块
+--   一、（一）风险要点 → **三段式**：开篇总述块(A00) + N 个要点条目块(E**) + 收尾结论块(A99)。
+--      开篇与收尾由 provider 的同一次大模型调用产出（模型用 `#TAIL#` 分开）⇒ 不重复调模型；
+--      条目块 jumpAnchorCode 指回对应 RULE 块（前端点条目可跳转到正文对应位置）。
 --
 -- code 字母：A=知识库分析 R=经验规则 E=要点条目 T=表格溯源 L=链接溯源 X=外部灌入
 -- 🔴 全部 code 加 V2_ 前缀：旧模板行是「置 isEnabled=0 保留」而非删除，
@@ -120,7 +122,7 @@ INSERT INTO app_report_catalog (catalogCode, catalogName, catalogLevel, parentCo
 ('V2_CAT_12_GUARANTEE_02_11', '5.其他风险', 3, 'V2_CAT_12_GUARANTEE_02', 110, 1);
 
 -- ============================================================
--- ④ 内容块：报告头 3 + 正文/经验库/溯源 182 = 185
+-- ④ 内容块：报告头 3 + 正文/经验库/溯源 183 = 186
 -- ============================================================
 INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysisType, agentCode, agentParams, blockName, titleLevel, emptyStrategy, jumpAnchorCode, sortNo, isEnabled) VALUES
 ('V2_BLK_HEAD_01', NULL, 'TITLE', NULL, NULL, NULL, '报告主标题', 1, 'PLACEHOLDER', NULL, 10, 1),
@@ -175,6 +177,7 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_SUMMARY_E46', 'V2_CAT_01_SUMMARY_01', 'TEXT', 'ANALYSIS', 'RULE_ENTRY#V2_BLK_GUARANTEE_R28', NULL, '非银债务', NULL, 'HIDE', 'V2_BLK_GUARANTEE_R28', 470, 1),
 ('V2_BLK_SUMMARY_E47', 'V2_CAT_01_SUMMARY_01', 'TEXT', 'ANALYSIS', 'RULE_ENTRY#V2_BLK_GUARANTEE_R29', NULL, '实控人学历低', NULL, 'HIDE', 'V2_BLK_GUARANTEE_R29', 480, 1),
 ('V2_BLK_SUMMARY_E48', 'V2_CAT_01_SUMMARY_01', 'TEXT', 'ANALYSIS', 'RULE_ENTRY#V2_BLK_GUARANTEE_R30', NULL, '存在非银机构较高利率借款', NULL, 'HIDE', 'V2_BLK_GUARANTEE_R30', 490, 1),
+('V2_BLK_SUMMARY_A99', 'V2_CAT_01_SUMMARY_01', 'TEXT', 'ANALYSIS', 'RULE_SUMMARY_TAIL', 'reportNo,entName', '风险要点结论', NULL, 'HIDE', NULL, 9990, 1),
 ('V2_BLK_SUMMARY_A01', 'V2_CAT_01_SUMMARY_02', 'TEXT', 'ANALYSIS', 'scdhjcyj', 'reportNo,entName', '上一次贷后检查意见', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_SUMMARY_A02', 'V2_CAT_01_SUMMARY_02', 'TEXT', 'ANALYSIS', 'zjycyspyjyj', 'reportNo,entName', '最近一次（已审批）预警意见', NULL, 'PLACEHOLDER', NULL, 20, 1),
 ('V2_BLK_SUMMARY_L03', 'V2_CAT_01_SUMMARY_02', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9010, 1),
@@ -310,7 +313,7 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_GUARANTEE_L34', 'V2_CAT_12_GUARANTEE_02_11', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9030, 1);
 
 -- ============================================================
--- ⑤ 校验（可选，执行后应满足）：目录 56 行 / 内容块 185 行
+-- ⑤ 校验（可选，执行后应满足）：目录 56 行 / 内容块 186 行
 --    SELECT catalogLevel, COUNT(*) FROM app_report_catalog WHERE isEnabled = 1 AND catalogCode LIKE 'V2_%' GROUP BY catalogLevel ORDER BY 1;
 --    SELECT COUNT(*) FROM app_report_content_block WHERE isEnabled = 1 AND blockCode LIKE 'V2_%';
 -- ============================================================

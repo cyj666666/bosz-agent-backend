@@ -68,7 +68,7 @@ public interface ReportContentProvider {
      */
     class RuleSummaryResult {
 
-        /** 总结文案（落到总结块 content；可为 null 表示无内容） */
+        /** 开头总结（落到 {@code RULE_SUMMARY} 块；可为 null 表示无内容） */
         private final ContentPayload summary;
 
         /**
@@ -78,9 +78,24 @@ public interface ReportContentProvider {
          */
         private final List<String> keepRuleBlockCodes;
 
+        /**
+         * 结尾结论（落到 {@code RULE_SUMMARY_TAIL} 块；2026-09-18 新增）
+         *
+         * <p>用户口径：风险要点是「<b>总述 → 4~5 条要点 → 收尾结论</b>」三段式。
+         * 三段由**同一次**大模型调用产出，本字段拿的是最后那段收尾
+         * （"综上，上述几项风险分别指向……"）。为 {@code null} 时该块按 emptyStrategy 隐藏。</p>
+         */
+        private final ContentPayload tail;
+
         public RuleSummaryResult(ContentPayload summary, List<String> keepRuleBlockCodes) {
+            this(summary, keepRuleBlockCodes, null);
+        }
+
+        public RuleSummaryResult(ContentPayload summary, List<String> keepRuleBlockCodes,
+                                 ContentPayload tail) {
             this.summary = summary;
             this.keepRuleBlockCodes = keepRuleBlockCodes;
+            this.tail = tail;
         }
 
         public ContentPayload getSummary() {
@@ -89,6 +104,10 @@ public interface ReportContentProvider {
 
         public List<String> getKeepRuleBlockCodes() {
             return keepRuleBlockCodes;
+        }
+
+        public ContentPayload getTail() {
+            return tail;
         }
     }
 }

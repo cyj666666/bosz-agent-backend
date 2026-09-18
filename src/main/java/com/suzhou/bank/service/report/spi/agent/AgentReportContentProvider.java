@@ -593,21 +593,36 @@ public class AgentReportContentProvider implements ReportContentProvider {
      */
     private static final String PICK_MARK = "#PICK#";
 
+    /**
+     * 总结输出里「收尾结论」的机器可读分隔标记（2026-09-18 新增）
+     *
+     * <p>用户口径：风险要点是「<b>开篇总述 → 4~5 条要点 → 收尾结论</b>」三段式，
+     * 而开篇与收尾是两个**不同的模板块**（中间夹着条目块），所以让模型在一次调用里
+     * 用 {@code #TAIL#} 单独占一行把两段分开，后端拆开分别落到两个块上。</p>
+     */
+    private static final String TAIL_MARK = "#TAIL#";
+
     /** 总结用的系统提示词（可直接改这里，不必动代码结构） */
     private static final String RULE_SUMMARY_SYSTEM_PROMPT =
             "你是银行贷后检查报告的风险汇总助手。用户会给你一组已经判定命中的风险要点"
                     + "（每条含规则名称、所在章节、风险文案）。\n"
-                    + "请**严格按下面的两段式**输出，不要输出任何多余文字、不要用 markdown 代码块：\n"
+                    + "请**严格按下面的三段式**输出，不要输出任何多余文字、不要用 markdown 代码块：\n\n"
                     + "【第 1 行】必须以 " + PICK_MARK + " 开头，后面用 | 分隔你挑出的"
                     + "**最严重、最需要关注的最多 " + MAX_RISK_ITEMS + " 条**的**规则名称**；"
-                    + "名称必须与素材里给的规则名称**逐字一致**，不得改写、不得漏字或加字；\n"
-                    + "【第 2 行起】输出 HTML 片段：先用 <p> 给 1~2 句总体判断"
-                    + "（整体风险程度、主要涉及哪几个方面、最突出的问题），"
-                    + "再用 <ol><li> 按严重程度列出要点，**条数与第 1 行一一对应**，"
-                    + "每条写成「<strong>规则名称</strong>：一句话结论」。\n"
-                    + "🔴 全文控制在 300 字以内（最多不超过 400 字）；"
-                    + "**严禁把命中的每条规则逐条罗列** —— 必须合并同类项、只保留最关键的几条；"
-                    + "素材里可能给出几十条，那是原始明细，你的任务是**归纳 + 挑选**，不是复述。\n"
+                    + "名称必须与素材里给的规则名称**逐字一致**，不得改写、不得漏字或加字。\n\n"
+                    + "【第 2 段 · 开篇总述】用 <p> 输出一段 **200~300 字** 的整体总结，依次讲清："
+                    + "① 本次贷后检查共识别风险点几个（**用素材里给的条数**）、主要集中于哪几个方面；"
+                    + "② 其中哪 2~3 项是最突出的风险信号、建议优先处理；"
+                    + "③ 客户经理应做的动作（核实真实情况及成因、逐项落实整改措施、"
+                    + "评估对授信安全的影响、必要时启动授信策略重评或合同违约处理程序）。"
+                    + "**这一段必须以「其中最突出的风险信息情况如下：」单独一句收尾。**"
+                    + "⚠️ 这一段**不要**逐条罗列要点 —— 要点由正文的条目块单独渲染，你再列一遍就重复了。\n\n"
+                    + "【第 3 段】单独占一行，只输出 " + TAIL_MARK + " 作为分隔。\n\n"
+                    + "【第 4 段 · 收尾结论】用 <p> 输出一段 **80~150 字** 的收尾，必须以「综上，」开头："
+                    + "把上面挑出的那几项风险归纳成「分别指向什么问题」"
+                    + "（如持续经营能力弱化 / 偿债结构恶化 / 第二还款来源削弱），"
+                    + "点明已对银行授信安全构成何种压力，并给出总体管控建议"
+                    + "（如尽快采取针对性措施、防范风险叠加共振）。措辞不要与开篇总述重复。\n\n"
                     + "不要臆造材料里没有的信息。";
 
     /** 总结素材里「每条风险文案」的截断长度（素材太长会让模型倾向忠实罗列而不是归纳） */
@@ -646,7 +661,7 @@ public class AgentReportContentProvider implements ReportContentProvider {
             return null;
         }
 
-        // 拆「选中清单」与「总结正文」
+        // 拆「选中清单」「开篇总述」「收尾结论」
         String pickedLine = null;
         String html = raw;
         int nl = raw.indexOf('\n');
@@ -659,7 +674,15 @@ public class AgentReportContentProvider implements ReportContentProvider {
                 html = "";
             }
         }
+        // 按 #TAIL# 切「开篇总述」/「收尾结论」——   标记可能被模型写成单独一行（前后带空白）
+        String tailRaw = null;
+        int ti = html.indexOf(TAIL_MARK);
+        if (ti >= 0) {
+            tailRaw = html.substring(ti + TAIL_MARK.length());
+            html = html.substring(0, ti);
+        }
         html = stripFence(trimToNull(html));
+        String tailHtml = stripFence(trimToNull(tailRaw));
         if (!StringUtils.hasText(html)) {
             // 只有 PICK 行没正文（模型跑偏）→ 把整段原文当正文，至少不丢内容
             html = stripFence(raw);
@@ -681,11 +704,16 @@ public class AgentReportContentProvider implements ReportContentProvider {
             }
             fallback = true;
         }
-        log.info("【报告内容加工】风险要点总结完成 reportNo={} 素材条数={} 要点保留={} 条{} 字数={} 耗时={}ms",
+        log.info("【报告内容加工】风险要点总结完成 reportNo={} 素材条数={} 要点保留={} 条{} "
+                        + "开篇字数={} 收尾{} 耗时={}ms",
                 context.getReportNo(), ruleHits.size(), keep.size(),
                 fallback ? "（模型未按契约输出 #PICK#，按模板顺序兜底）" : "",
-                html == null ? 0 : html.length(), System.currentTimeMillis() - start);
-        return new ReportContentProvider.RuleSummaryResult(new ContentPayload(html), keep);
+                html == null ? 0 : html.length(),
+                tailHtml == null ? "缺失（该块按 emptyStrategy 处理）" : ("字数=" + tailHtml.length()),
+                System.currentTimeMillis() - start);
+        return new ReportContentProvider.RuleSummaryResult(
+                new ContentPayload(html), keep,
+                tailHtml == null ? null : new ContentPayload(tailHtml));
     }
 
     /**

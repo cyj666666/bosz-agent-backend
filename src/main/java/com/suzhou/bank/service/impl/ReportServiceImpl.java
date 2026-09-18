@@ -97,6 +97,15 @@ public class ReportServiceImpl implements ReportService {
     private static final String AGENT_RULE_SUMMARY = "RULE_SUMMARY";
 
     /**
+     * 风险要点「收尾结论块」的 agentCode（与 {@code AgentReportContentProvider#AGENT_RULE_SUMMARY_TAIL} 同值）
+     *
+     * <p>2026-09-18 用户口径：风险要点 = 开篇总述 → 4~5 条要点 → 收尾结论。开头与收尾是**两个块**，
+     * 中间夹着条目块；两段由同一次大模型调用产出（在 {@code summarizeRuleRisks} 里一起拿回来），
+     * 由本类的阶段 2 分别落到对应块上。</p>
+     */
+    private static final String AGENT_RULE_SUMMARY_TAIL = "RULE_SUMMARY_TAIL";
+
+    /**
      * 风险要点「条目块」的 agentCode 前缀（与 {@code AgentReportContentProvider#AGENT_RULE_ENTRY_PREFIX} 同值）。
      * <p>前缀之后存的是「它对应的那个 RULE 块的 blockCode」——条目块的内容就是复用那条规则的正文档内容。</p>
      */
@@ -440,6 +449,8 @@ public class ReportServiceImpl implements ReportService {
      *       而它排在这些 RULE 块之前（sortNo 20 vs 各章节 30+），阶段 1 跑它必然拿不到素材；</li>
      *   <li>{@code agentCode 以 RULE_ENTRY# 开头} —— 风险要点条目块，内容直接复用对应 RULE 块，
      *       同样要等阶段 1 结束。</li>
+     *   <li>{@code agentCode = RULE_SUMMARY_TAIL} —— 风险要点「收尾结论块」（2026-09-18 新增），
+     *       内容与开篇总述同一次模型调用产出，也要等阶段 2。</li>
      * </ul>
      * <p>阶段 1 遇到这两类**不建实例**（slots 留空），由
      * {@link #fillRiskSummaryBlocks} 统一补上。</p>
@@ -447,6 +458,7 @@ public class ReportServiceImpl implements ReportService {
     private boolean isDeferredBlock(AppReportContentBlock block) {
         String agentCode = block.getAgentCode();
         return AGENT_RULE_SUMMARY.equals(agentCode)
+                || AGENT_RULE_SUMMARY_TAIL.equals(agentCode)
                 || (agentCode != null && agentCode.startsWith(AGENT_RULE_ENTRY_PREFIX));
     }
 
@@ -504,10 +516,11 @@ public class ReportServiceImpl implements ReportService {
         }
         log.info("【报告内容加工】风险要点回填开始 reportNo={} 命中规则={} 条", reportNo, hits.size());
 
-        // ① 先算「总结」—— 它同时决定风险要点**只保留哪几条**（2026-09-18 用户口径：
-        //    不必如实罗列全部命中，挑最严重、最需要关注的最多 5 条即可）。
+        // ① 先算「总结」—— 它同时决定风险要点**只保留哪几条** + 收尾结论（2026-09-18 用户口径：
+        //    风险要点 = 开篇总述 → 4~5 条要点 → 收尾结论；开篇与收尾是**两个块**，中间夹着条目块）。
         //    必须先做：条目块要靠这份清单才知道自己该不该出内容。
         List<String> keepRuleCodes = null;
+        ContentPayload tailPayload = null;
         for (int i = 0; i < blocks.size(); i++) {
             AppReportContentBlock block = blocks.get(i);
             if (slots[i] != null || !AGENT_RULE_SUMMARY.equals(block.getAgentCode())) {
@@ -525,8 +538,9 @@ public class ReportServiceImpl implements ReportService {
                 if (result != null) {
                     payload = result.getSummary();
                     keepRuleCodes = result.getKeepRuleBlockCodes();
+                    tailPayload = result.getTail();
                 } else {
-                    // 加工方没实现新契约 → 回落老行为：只出总结、**不筛选**
+                    // 加工方没实现新契约 → 回落老行为：只出总结、**不筛选**、无收尾
                     payload = contentProvider.provideRuleSummary(ctx, hits);
                 }
                 String content = payload == null ? null : payload.getContent();
@@ -538,6 +552,26 @@ public class ReportServiceImpl implements ReportService {
                 String blockName = StringUtils.hasText(block.getBlockName())
                         ? block.getBlockName() : block.getBlockCode();
                 blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
+            }
+        }
+
+        // ①' 回填「收尾结论块」—— 内容来自同一次模型调用（{@code #TAIL#} 之后那一段）。
+        //    拿不到（模型没按契约输出 / 加工方是旧实现）就留空 ⇒ 模板 emptyStrategy=HIDE → 不渲染。
+        for (int i = 0; i < blocks.size(); i++) {
+            AppReportContentBlock block = blocks.get(i);
+            if (slots[i] != null || !AGENT_RULE_SUMMARY_TAIL.equals(block.getAgentCode())) {
+                continue;
+            }
+            try {
+                String content = tailPayload == null ? null : tailPayload.getContent();
+                slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
+                        content).getInstance();
+            } catch (Throwable e) {
+                log.error("风险要点收尾结论块加工失败(跳过该块) reportNo={} blockCode={}",
+                        reportNo, block.getBlockCode(), e);
+                String blockName = StringUtils.hasText(block.getBlockName())
+                        ? block.getBlockName() : block.getBlockCode();
+                blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "]" + briefError(e));
             }
         }
 

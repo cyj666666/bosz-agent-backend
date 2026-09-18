@@ -124,18 +124,45 @@ public class MockReportContentProvider implements ReportContentProvider {
         if (ruleHits == null || ruleHits.isEmpty()) {
             return null;
         }
-        StringBuilder sb = new StringBuilder(256);
-        sb.append("<p>").append(TAG).append("本次报告共命中 ").append(ruleHits.size())
-                .append(" 条经验规则，按章节归纳如下：</p>\n<ol>\n");
-        for (RuleHit hit : ruleHits) {
-            sb.append("  <li>");
-            if (StringUtils.hasText(hit.getCatalogName())) {
-                sb.append("<strong>").append(esc(hit.getCatalogName())).append("</strong>：");
+        // 开篇总述（条数用**全部命中数**，突出项取前 3 条 —— 模拟态没有判断力）
+        return new ContentPayload(mockOpening(ruleHits.size(), ruleHits));
+    }
+
+    /**
+     * 模拟态的「开篇总述」文案（2026-09-18 三段式的第 1 段）
+     *
+     * <p>用户口径：风险要点 = 开篇总述 → 4~5 条要点 → 收尾结论。本段**不罗列**要点
+     * （要点由条目块单独渲染，再列一遍就重复了），末尾固定以「其中最突出的风险信息情况如下：」收口。</p>
+     *
+     * @param total      全部命中条数（文案里"共识别风险点 N 个"用这个）
+     * @param highlights 用来点名的突出项（取前 3 个）
+     */
+    private String mockOpening(int total, List<RuleHit> highlights) {
+        StringBuilder sb = new StringBuilder(360);
+        sb.append("<p>").append(TAG).append("本次贷后检查经逐项核查，共识别风险点 ").append(total)
+                .append(" 个，主要集中于财务指标异常、征信状况弱化、资金用途合规性、结算真实性及担保效力等方面。其中，");
+        int n = 0;
+        for (RuleHit h : highlights) {
+            if (n >= 3) {
+                break;
             }
-            sb.append(esc(hit.getBlockName())).append("</li>\n");
+            if (n > 0) {
+                sb.append("、");
+            }
+            sb.append(esc(h.getBlockName()));
+            n++;
         }
-        sb.append("</ol>");
-        return new ContentPayload(sb.toString());
+        sb.append(" 等为当前最突出的风险信号，建议优先处理。客户经理应重点核实上述风险点的真实情况及成因，")
+                .append("逐项落实整改措施，评估对授信安全的影响，必要时启动授信策略重评或合同违约处理程序。")
+                .append("其中最突出的风险信息情况如下：</p>");
+        return sb.toString();
+    }
+
+    /** 模拟态的「收尾结论」文案（三段式的第 3 段，落到 RULE_SUMMARY_TAIL 块） */
+    private String mockTail(List<RuleHit> highlights) {
+        return "<p>综上，" + TAG + "上述 " + highlights.size()
+                + " 项风险信号分别指向企业持续经营能力弱化、偿债结构恶化及第二还款来源削弱，"
+                + "已对银行授信安全构成实质压力，建议经营机构尽快采取针对性管控措施，防范风险叠加共振。</p>";
     }
 
     /**
@@ -159,7 +186,10 @@ public class MockReportContentProvider implements ReportContentProvider {
             keep.add(hit.getBlockCode());
             picked.add(hit);
         }
-        return new RuleSummaryResult(provideRuleSummary(context, picked), keep);
+        return new RuleSummaryResult(
+                new ContentPayload(mockOpening(ruleHits.size(), picked)),
+                keep,
+                new ContentPayload(mockTail(picked)));
     }
 
     /* ==================== 内容生成 ==================== */
