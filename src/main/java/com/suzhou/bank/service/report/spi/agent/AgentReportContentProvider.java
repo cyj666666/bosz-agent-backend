@@ -87,10 +87,30 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     private static final String SUBJECT_GUARANTOR = "担保人";
     private static final String GUARANTOR_TYPE_LEGAL = "法人";
+    private static final String GUARANTOR_TYPE_NATURAL = "自然人";
 
     private static final String PARAM_REPORT_NO = "reportNo";
     private static final String PARAM_ENT_NAME = "entName";
     private static final String PARAM_GUARANTOR_NAME = "guarantorName";
+
+    /* ---------------- guarantorName 的三种口径（用户 2026-09-18） ----------------
+     * 模板的 {@code agentParams} 里用**元令牌** `guarantorMode=` 表达，令牌由本类读走后
+     * **不再透传给 agent**（它不是知识库/规则的入参）。
+     *
+     * <ul>
+     *   <li>{@code OWN}     —— guarantorName **就是借款人自己**（= entName），**不轮询**；</li>
+     *   <li>{@code LEGAL}   —— 借款人的**企业担保人**（{@code guarantorType='法人'}），**轮询**；</li>
+     *   <li>{@code NATURAL} —— 借款人的**自然人担保人**（{@code guarantorType='自然人'}），**轮询</tt>。</li>
+     * </ul>
+     *
+     * <p>⚠️ 没有令牌时按 {@code LEGAL} 处理 —— 那是 2026-09-17 之前的唯一行为，保证老模板不炸。</p>
+     */
+    private static final String GUARANTOR_MODE_TOKEN = "guarantorMode";
+    private static final String MODE_OWN = "OWN";
+    private static final String MODE_NATURAL = "NATURAL";
+
+    /** 「担保人信息」块要凸显（`guarantorEmph=1`）—— 多个担保人时要明显看出来 */
+    private static final String GUARANTOR_EMPH_TOKEN = "guarantorEmph=1";
 
     /** 报告头块名 → 固定文案（说明块恒为空串，配合 emptyStrategy=HIDE 不渲染） */
     private static final String HEAD_MAIN_TITLE = "报告主标题";
@@ -204,6 +224,12 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
         List<String> params = parseAgentParams(block.getAgentParams());
         boolean needGuarantor = params.contains(PARAM_GUARANTOR_NAME);
+        // 🔴 guarantorName 口径（2026-09-18）：OWN 借款人本人（不轮询）/ 未标记或 LEGAL 企业担保人 /
+        //    NATURAL 自然人担保人 —— 后两者都要**按人轮询**、每人产出一整块。
+        String mode = tokenValue(params, GUARANTOR_MODE_TOKEN);
+        boolean own = MODE_OWN.equalsIgnoreCase(mode);
+        boolean natural = MODE_NATURAL.equalsIgnoreCase(mode);
+        boolean emph = params.contains(GUARANTOR_EMPH_TOKEN);
 
         long start = System.currentTimeMillis();
         try {
@@ -211,14 +237,24 @@ public class AgentReportContentProvider implements ReportContentProvider {
             if (ReportConstants.ANALYSIS_RULE.equalsIgnoreCase(block.getAnalysisType())) {
                 // 智策引擎：命中才有内容，且必须把「校验结果」一并带回去
                 // （它要落到 app_report_ai_risk.check_result，与补充分析同一行关联展示）
-                payload = needGuarantor
-                        ? provideRuleForEachGuarantor(context, block, start)
-                        : ruleContent(context, block, null, start);
+                if (!needGuarantor) {
+                    payload = ruleContent(context, block, null, start);
+                } else if (own) {
+                    // 借款人本人：guarantorName 就用 entName，**不轮询**
+                    payload = ruleContent(context, block, context.getCustomerName(), start);
+                } else {
+                    payload = provideRuleForEachGuarantor(context, block, natural, emph, start);
+                }
             } else {
                 // 知识库：只有分析文案，没有校验结果
-                String text = needGuarantor
-                        ? provideForEachGuarantor(context, block, start)
-                        : analysisContent(context, block, null, start);
+                String text;
+                if (!needGuarantor) {
+                    text = analysisContent(context, block, null, start);
+                } else if (own) {
+                    text = analysisContent(context, block, context.getCustomerName(), start);
+                } else {
+                    text = provideForEachGuarantor(context, block, natural, emph, start);
+                }
                 payload = StringUtils.hasText(text) ? new ContentPayload(text) : null;
             }
             if (payload == null || !StringUtils.hasText(payload.getContent())) {
@@ -435,14 +471,18 @@ public class AgentReportContentProvider implements ReportContentProvider {
     /* ==================== 担保人口径：多担保人轮循 ==================== */
 
     /**
-     * 知识库口径：标注了 {@code guarantorName} 的块要按**企业担保人**逐个轮循调用，
-     * 结果按段落拼接。一个担保人都取不到时返回 null（该块为空）。
+     * 知识库口径：标注了 {@code guarantorName} 的块按**担保人逐个轮循**调用，
+     * 每个担保人产出一整块（{@code rpt-guarantor}）。一个担保人都取不到时返回 null（该块为空）。
+     *
+     * @param natural true = 自然人担保人（{@code guarantorType='自然人'}）；false = 企业担保人（法人）
+     * @param emph    是否给这些分块加强调样式（「担保人信息」块要凸显）
      */
-    private String provideForEachGuarantor(ReportGenerateContext context, AppReportContentBlock block, long start) {
-        List<String> guarantors = listEnterpriseGuarantors(context.getReportNo());
+    private String provideForEachGuarantor(ReportGenerateContext context, AppReportContentBlock block,
+                                           boolean natural, boolean emph, long start) {
+        List<String> guarantors = listGuarantors(context.getReportNo(), natural);
         if (CollectionUtils.isEmpty(guarantors)) {
-            log.info("【报告内容加工】无企业担保人(跳过该块) reportNo={} block={}",
-                    context.getReportNo(), block.getBlockCode());
+            log.info("【报告内容加工】无{}担保人(跳过该块) reportNo={} block={}",
+                    natural ? "自然人" : "企业", context.getReportNo(), block.getBlockCode());
             return null;
         }
         StringBuilder sb = new StringBuilder();
@@ -451,26 +491,25 @@ public class AgentReportContentProvider implements ReportContentProvider {
             if (!StringUtils.hasText(piece)) {
                 continue;
             }
-            appendGuarantorPiece(sb, guarantors.size(), guarantor, piece);
+            appendGuarantorPiece(sb, natural, guarantors.size(), guarantor, piece, emph);
         }
         return sb.length() == 0 ? null : sb.toString();
     }
 
     /**
-     * 智策引擎口径：对每个企业担保人各跑一次「规则判定 + 补充分析」，
-     * 文案按段落拼接。
+     * 智策引擎口径：对每个担保人各跑一次「规则判定 + 补充分析」，每个担保人产出一整块。
      *
      * <p>校验结论只记"这次判定命中"这一件事（{@code 命中}），与担保人无关，
      * 所以多个担保人轮循时**不展开成数组** —— 一行一条结论即可。</p>
      *
-     * <p>一个担保人都没命中 / 没有企业担保人 → 返回 null → 该块为空 → 整块隐藏。</p>
+     * <p>一个担保人都没命中 / 没有担保人 → 返回 null → 该块为空 → 整块隐藏。</p>
      */
     private ContentPayload provideRuleForEachGuarantor(ReportGenerateContext context, AppReportContentBlock block,
-                                                       long start) {
-        List<String> guarantors = listEnterpriseGuarantors(context.getReportNo());
+                                                       boolean natural, boolean emph, long start) {
+        List<String> guarantors = listGuarantors(context.getReportNo(), natural);
         if (CollectionUtils.isEmpty(guarantors)) {
-            log.info("【报告内容加工】无企业担保人(跳过该块) reportNo={} block={}",
-                    context.getReportNo(), block.getBlockCode());
+            log.info("【报告内容加工】无{}担保人(跳过该块) reportNo={} block={}",
+                    natural ? "自然人" : "企业", context.getReportNo(), block.getBlockCode());
             return null;
         }
         StringBuilder sb = new StringBuilder();
@@ -479,32 +518,49 @@ public class AgentReportContentProvider implements ReportContentProvider {
             if (piece == null) {
                 continue;
             }
-            appendGuarantorPiece(sb, guarantors.size(), guarantor, piece.getContent());
+            appendGuarantorPiece(sb, natural, guarantors.size(), guarantor, piece.getContent(), emph);
         }
         return sb.length() == 0 ? null : new ContentPayload(sb.toString(), CHECK_RESULT_HIT);
     }
 
     /**
-     * 多担保人时在每段前加一行小标题，否则几段文案粘在一起分不清是谁的。
+     * 多担保人轮询时的**分块**渲染（用户 2026-09-18 口径）
      *
-     * @param total 担保人总数；只有 &gt;1 时才加标题
+     * <p>🔴 轮询的单位是<b>一整块</b>：有 N 个担保人，报告内容里就要出现 <b>N 块</b>，
+     * 每块以「企业担保人：XXX」/「自然人担保人：XXX」开头，前端再按
+     * {@code .rpt-guarantor} 渲染成独立卡片 —— 这样才看得出"有几个担保人、各自什么情况"。</p>
+     *
+     * <p>⚠️ 即使只有 1 个担保人也照样包一层（名称标题有用：一眼知道这段说的是谁）。</p>
+     *
+     * @param natural true = 自然人担保人；false = 企业担保人（决定标题文字）
+     * @param total   担保人总数（仅用于日志语义，渲染不再依赖它）
+     * @param emph    是否加强调样式（{@code dbrxx} 担保人信息块 → {@code rpt-guarantor-emph}）
      */
-    private static void appendGuarantorPiece(StringBuilder sb, int total, String guarantor, String piece) {
+    private static void appendGuarantorPiece(StringBuilder sb, boolean natural, int total,
+                                             String guarantor, String piece, boolean emph) {
         if (sb.length() > 0) {
             sb.append('\n');
         }
-        if (total > 1) {
-            sb.append("<p><strong>担保人：").append(escapeHtml(guarantor)).append("</strong></p>\n");
-        }
-        sb.append(piece);
+        String label = natural ? "自然人担保人" : "企业担保人";
+        sb.append("<div class=\"rpt-guarantor").append(emph ? " rpt-guarantor-emph" : "").append("\">\n")
+                .append("<p class=\"rpt-guarantor-name\">").append(escapeHtml(label)).append("：")
+                .append(escapeHtml(guarantor)).append("</p>\n")
+                .append(piece)
+                .append("\n</div>");
     }
 
-    /** 企业担保人名单：reportNo + subjectType=担保人 + guarantorType=法人，去重保序 */
-    private List<String> listEnterpriseGuarantors(String reportNo) {
+    /**
+     * 担保人名单：{@code reportNo + subjectType='担保人' + guarantorType}，去重保序
+     *
+     * @param natural true 取 {@code guarantorType='自然人'}（个人担保人）；
+     *                false 取 {@code '法人'}（企业担保人）
+     */
+    private List<String> listGuarantors(String reportNo, boolean natural) {
         List<AppGuarantorInfo> rows = guarantorInfoMapper.selectList(Wrappers.<AppGuarantorInfo>lambdaQuery()
                 .eq(AppGuarantorInfo::getReportNo, reportNo)
                 .eq(AppGuarantorInfo::getSubjectType, SUBJECT_GUARANTOR)
-                .eq(AppGuarantorInfo::getGuarantorType, GUARANTOR_TYPE_LEGAL));
+                .eq(AppGuarantorInfo::getGuarantorType,
+                        natural ? GUARANTOR_TYPE_NATURAL : GUARANTOR_TYPE_LEGAL));
         List<String> names = new ArrayList<>();
         if (rows == null) {
             return names;
@@ -776,6 +832,28 @@ public class AgentReportContentProvider implements ReportContentProvider {
             params.add(PARAM_REPORT_NO);
         }
         return params;
+    }
+
+    /**
+     * 取 {@code 键=值} 型**元令牌**的值（如 {@code guarantorMode=LEGAL} → {@code LEGAL}）
+     *
+     * <p>元令牌是模板给本类看的"开关"，<b>不会透传给 agent</b> —— 真正发给 agent 的入参
+     * 由 {@link #baseParams} 从上下文拼（只有 {@code reportNo/entName/guarantorName}），
+     * 所以令牌不会被知识库/规则当成未知参数。</p>
+     *
+     * @return 取不到时返回 {@code null}
+     */
+    private static String tokenValue(List<String> params, String key) {
+        if (params == null) {
+            return null;
+        }
+        for (String p : params) {
+            int eq = p.indexOf('=');
+            if (eq > 0 && key.equalsIgnoreCase(p.substring(0, eq).trim())) {
+                return p.substring(eq + 1).trim();
+            }
+        }
+        return null;
     }
 
     /**
