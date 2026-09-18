@@ -1,5 +1,5 @@
 -- =====================================================================
--- 报告模板数据（DML）· 依据《报告详情设计.xlsx》Sheet2 生成
+-- 报告模板数据（DML）· 依据《报告详情设计.xlsx》Sheet3 生成
 -- ⚠️ 本文件由脚本生成（_tools/gen_report_template.py），改 Excel 后重新生成，不要手工改。
 -- 数据库：高斯DB（GaussDB/openGauss）
 -- 前置：先执行 补列_内容块_agentParams.sql（本模板用到了新列 agentParams）
@@ -12,6 +12,10 @@
 --   外部灌入 → fillType = TEXT   analysisType = EXTERNAL（暂未接入，后续接口直接落 content）
 --   A/B/C 列章节 → **完整三级目录树**（catalogLevel 1/2/3），标题由 catalogName 渲染
 --   E 列 → agentCode；G 列 → agentParams；F 列 → blockName
+--   🔴 表格溯源块的 blockName 取**「溯源表展示中文名」**（Sheet3 第 4 列，2026-09-18 用户口径）：
+--      报告里溯源的中文名显示的就是 blockName（前端溯源按钮文案 + 弹窗标题都取它），
+--      要的是配置里这条展示名，**不是**数据库表结构的中文注释口径（F 列那种）。
+--      新列为空时回落 F → E；F 列不再进库，只留在 Excel 作设计参考。
 --   🔴 轮询只发生在 经验库/正文（G 列带 guarantorName 的知识库/规则块）；溯源严格按条件查
 --   一、（一）风险要点 → 1 个总结块 + N 个要点条目块，条目块 jumpAnchorCode 指回对应 RULE 块
 --
@@ -104,7 +108,7 @@ INSERT INTO app_report_catalog (catalogCode, catalogName, catalogLevel, parentCo
 ('V2_CAT_12_GUARANTEE_02_09', '5.其他风险', 3, 'V2_CAT_12_GUARANTEE_02', 90, 1);
 
 -- ============================================================
--- ④ 内容块：报告头 3 + 正文/经验库/溯源 179 = 182
+-- ④ 内容块：报告头 3 + 正文/经验库/溯源 181 = 184
 -- ============================================================
 INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysisType, agentCode, agentParams, blockName, titleLevel, emptyStrategy, jumpAnchorCode, sortNo, isEnabled) VALUES
 ('V2_BLK_HEAD_01', NULL, 'TITLE', NULL, NULL, NULL, '报告主标题', 1, 'PLACEHOLDER', NULL, 10, 1),
@@ -168,19 +172,20 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_CUSTOMER_R04', 'V2_CAT_02_CUSTOMER', 'TEXT', 'RULE', 'zygdbg', 'reportNo,entName', '重要股东变更', NULL, 'HIDE', NULL, 40, 1),
 ('V2_BLK_CUSTOMER_R05', 'V2_CAT_02_CUSTOMER', 'TEXT', 'RULE', 'ysjgz', 'reportNo,entName', '疑似假国资', NULL, 'HIDE', NULL, 50, 1),
 ('V2_BLK_CUSTOMER_R06', 'V2_CAT_02_CUSTOMER', 'TEXT', 'RULE', 'zdfmyq', 'reportNo,entName', '重大负面舆情', NULL, 'HIDE', NULL, 60, 1),
-('V2_BLK_CUSTOMER_T07', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_customer_info', 'reportNo,entName', '客户工商概况表', NULL, 'HIDE', NULL, 9010, 1),
-('V2_BLK_CUSTOMER_T08', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_ic_info', 'reportNo,entName', '工商登记信息表（客户级）', NULL, 'HIDE', NULL, 9020, 1),
-('V2_BLK_CUSTOMER_T09', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_shareholder_info', 'reportNo,entName', '股东股权信息表', NULL, 'HIDE', NULL, 9030, 1),
-('V2_BLK_CUSTOMER_T10', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_ic_shareholder_info', 'reportNo,entName', '工商股东变更表', NULL, 'HIDE', NULL, 9040, 1),
-('V2_BLK_CUSTOMER_T11', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_reputation_event_info', 'reportNo,entName', '舆情事件明细表', NULL, 'HIDE', NULL, 9050, 1),
+('V2_BLK_CUSTOMER_T07', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_customer_info', 'reportNo,entName', '系统基本信息', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_CUSTOMER_T08', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_ic_info', 'reportNo,entName', '工商登记信息', NULL, 'HIDE', NULL, 9020, 1),
+('V2_BLK_CUSTOMER_T09', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_xd_shareholder_info', 'reportNo,entName', '信贷股东信息', NULL, 'HIDE', NULL, 9030, 1),
+('V2_BLK_CUSTOMER_T10', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_shareholder_info', 'reportNo,entName', '工商股东信息', NULL, 'HIDE', NULL, 9040, 1),
+('V2_BLK_CUSTOMER_T11', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_ic_shareholder_info', 'reportNo,entName', '工商股权变更', NULL, 'HIDE', NULL, 9050, 1),
+('V2_BLK_CUSTOMER_T12', 'V2_CAT_02_CUSTOMER', 'TABLE', 'TRACE_TABLE', 'app_reputation_event_info', 'reportNo,entName', '舆情事件', NULL, 'HIDE', NULL, 9060, 1),
 ('V2_BLK_BUSINESS_A01', 'V2_CAT_03_BUSINESS', 'TEXT', 'ANALYSIS', 'qiyesxyxqk', 'reportNo,entName', '企业授信用信情况', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_BUSINESS_A02', 'V2_CAT_03_BUSINESS', 'TEXT', 'ANALYSIS', 'qiyezhuyaoywchanpin', 'reportNo,entName', '企业主要业务产品', NULL, 'PLACEHOLDER', NULL, 20, 1),
 ('V2_BLK_BUSINESS_A03', 'V2_CAT_03_BUSINESS', 'TEXT', 'ANALYSIS', 'gdcphkjh', 'reportNo,entName', '固贷类下次还款计划', NULL, 'PLACEHOLDER', NULL, 30, 1),
 ('V2_BLK_BUSINESS_A04', 'V2_CAT_03_BUSINESS', 'TEXT', 'ANALYSIS', 'fdckflcphkjh', 'reportNo,entName', '房地产开发类下次还款计划', NULL, 'PLACEHOLDER', NULL, 40, 1),
 ('V2_BLK_BUSINESS_A05', 'V2_CAT_03_BUSINESS', 'TEXT', 'ANALYSIS', 'xmdkytzs', 'reportNo,entName', '固定资产贷款、房地产开发贷款用途展示', NULL, 'PLACEHOLDER', NULL, 50, 1),
 ('V2_BLK_BUSINESS_A06', 'V2_CAT_03_BUSINESS', 'TEXT', 'ANALYSIS', 'jkrsjfljyq', 'reportNo,entName', '借款人十级分类及逾期', NULL, 'PLACEHOLDER', NULL, 60, 1),
-('V2_BLK_BUSINESS_T07', 'V2_CAT_03_BUSINESS', 'TABLE', 'TRACE_TABLE', 'app_credit_use_info', 'reportNo,entName', '授信用信概况表', NULL, 'HIDE', NULL, 9010, 1),
-('V2_BLK_BUSINESS_T08', 'V2_CAT_03_BUSINESS', 'TABLE', 'TRACE_TABLE', 'app_loan_receipt_info', 'reportNo,entName', '借据信息表', NULL, 'HIDE', NULL, 9020, 1),
+('V2_BLK_BUSINESS_T07', 'V2_CAT_03_BUSINESS', 'TABLE', 'TRACE_TABLE', 'app_credit_use_info', 'reportNo,entName', '授信用信概况', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_BUSINESS_T08', 'V2_CAT_03_BUSINESS', 'TABLE', 'TRACE_TABLE', 'app_loan_receipt_info', 'reportNo,entName', '借据信息', NULL, 'HIDE', NULL, 9020, 1),
 ('V2_BLK_BUSINESS_L09', 'V2_CAT_03_BUSINESS', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9030, 1),
 ('V2_BLK_POSTLOAN_A01', 'V2_CAT_04_POSTLOAN_01', 'TEXT', 'ANALYSIS', 'xcdkqk', 'reportNo,entName', '现场打卡情况', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_POSTLOAN_L02', 'V2_CAT_04_POSTLOAN_01', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9010, 1),
@@ -212,9 +217,9 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_FINANCE_R20', 'V2_CAT_05_FINANCE_04_08', 'TEXT', 'RULE', 'chzutsyc', 'reportNo,entName', '存货周转天数延长', NULL, 'HIDE', NULL, 30, 1),
 ('V2_BLK_FINANCE_R21', 'V2_CAT_05_FINANCE_04_08', 'TEXT', 'RULE', 'yyzkchyingchang', 'reportNo,entName', '应收账款/存货增速异常', NULL, 'HIDE', NULL, 40, 1),
 ('V2_BLK_FINANCE_R22', 'V2_CAT_05_FINANCE_04_08', 'TEXT', 'RULE', 'bbzsxi', 'reportNo,entName', '报表真实性', NULL, 'HIDE', NULL, 50, 1),
-('V2_BLK_FINANCE_T23', 'V2_CAT_05_FINANCE_04_08', 'TABLE', 'TRACE_TABLE', 'app_finance_indicator_info', 'reportNo,entName,subjectType=借款人', '财务指标表', NULL, 'HIDE', NULL, 9010, 1),
-('V2_BLK_FINANCE_T24', 'V2_CAT_05_FINANCE_04_08', 'TABLE', 'TRACE_TABLE', 'app_guofa_report_info', 'reportNo,entName', '国发征信信息表', NULL, 'HIDE', NULL, 9020, 1),
-('V2_BLK_FINANCE_T25', 'V2_CAT_05_FINANCE_04_08', 'TABLE', 'TRACE_TABLE', 'app_gs_finance_data_info', 'reportNo,entName', '国税财务数据表', NULL, 'HIDE', NULL, 9030, 1),
+('V2_BLK_FINANCE_T23', 'V2_CAT_05_FINANCE_04_08', 'TABLE', 'TRACE_TABLE', 'app_finance_indicator_info', 'reportNo,entName,subjectType=借款人', '报表指标信息', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_FINANCE_T24', 'V2_CAT_05_FINANCE_04_08', 'TABLE', 'TRACE_TABLE', 'app_guofa_report_info', 'reportNo,entName', '国发财务信息', NULL, 'HIDE', NULL, 9020, 1),
+('V2_BLK_FINANCE_T25', 'V2_CAT_05_FINANCE_04_08', 'TABLE', 'TRACE_TABLE', 'app_gs_finance_data_info', 'reportNo,entName', '国税财务信息', NULL, 'HIDE', NULL, 9030, 1),
 ('V2_BLK_FINANCE_L26', 'V2_CAT_05_FINANCE_04_08', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9040, 1),
 ('V2_BLK_CREDIT_A01', 'V2_CAT_06_CREDIT_01', 'TEXT', 'ANALYSIS', 'zxcxsjmsqy', 'reportNo,entName,guarantorName', '征信查询时间', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_CREDIT_R02', 'V2_CAT_06_CREDIT_01', 'TEXT', 'RULE', 'zxcxbzyxq', 'reportNo,entName,guarantorName', '征信查询不在有效期内', NULL, 'HIDE', NULL, 20, 1),
@@ -226,7 +231,7 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_CREDIT_R08', 'V2_CAT_06_CREDIT_04', 'TEXT', 'RULE', 'yinzurongzifs', 'reportNo,entName,guarantorName', '银租融资过于分散', NULL, 'HIDE', NULL, 20, 1),
 ('V2_BLK_CREDIT_R09', 'V2_CAT_06_CREDIT_04', 'TEXT', 'RULE', 'fyjgjgll', 'reportNo,entName,guarantorName', '存在非银机构较高利率借款', NULL, 'HIDE', NULL, 30, 1),
 ('V2_BLK_CREDIT_R10', 'V2_CAT_06_CREDIT_04', 'TEXT', 'RULE', 'ldyebh', 'reportNo,entName,guarantorName', '流贷余额变化', NULL, 'HIDE', NULL, 40, 1),
-('V2_BLK_CREDIT_T11', 'V2_CAT_06_CREDIT_04', 'TABLE', 'TRACE_TABLE', 'app_credit_report_info', 'reportNo,entName,subjectType=借款人', '企业征信快照表', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_CREDIT_T11', 'V2_CAT_06_CREDIT_04', 'TABLE', 'TRACE_TABLE', 'app_credit_report_info', 'reportNo,entName,subjectType=借款人', '企业征信信息', NULL, 'HIDE', NULL, 9010, 1),
 ('V2_BLK_CREDIT_L12', 'V2_CAT_06_CREDIT_04', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9020, 1),
 ('V2_BLK_FUND_A01', 'V2_CAT_07_FUND_01', 'TEXT', 'ANALYSIS', 'yszjhlyc', 'reportNo,entName', '疑似资金回流异常', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_FUND_R02', 'V2_CAT_07_FUND_01', 'TEXT', 'RULE', 'yszjllwbrd', 'reportNo,entName', '疑似资金回流未被认定', NULL, 'HIDE', NULL, 20, 1),
@@ -245,11 +250,12 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_SETTLEMENT_R06', 'V2_CAT_09_SETTLEMENT_02', 'TEXT', 'RULE', 'jsyjybpp', 'reportNo,entName', '结算与经营不匹配', NULL, 'HIDE', NULL, 20, 1),
 ('V2_BLK_SETTLEMENT_A07', 'V2_CAT_09_SETTLEMENT_03', 'TEXT', 'ANALYSIS', 'whywdfk', 'reportNo,entName', '我行代发业务情况', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_SETTLEMENT_R08', 'V2_CAT_09_SETTLEMENT_03', 'TEXT', 'RULE', 'daifgzyc', 'reportNo,entName', '代发工资异常', NULL, 'HIDE', NULL, 20, 1),
-('V2_BLK_SETTLEMENT_T09', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_settle_account_info', 'reportNo,entName', '结算账户表', NULL, 'HIDE', NULL, 9010, 1),
-('V2_BLK_SETTLEMENT_T10', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_settle_asset_info', 'reportNo,entName', '结算资产表', NULL, 'HIDE', NULL, 9020, 1),
-('V2_BLK_SETTLEMENT_T11', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_entrust_pay_info', 'reportNo,entName', '受托支付明细表', NULL, 'HIDE', NULL, 9030, 1),
-('V2_BLK_SETTLEMENT_T12', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_top_five_updown_info', 'reportNo,entName', '前五大上下游表', NULL, 'HIDE', NULL, 9040, 1),
-('V2_BLK_SETTLEMENT_T13', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_payroll_stat_info', 'reportNo,entName', '代发统计表（月粒度）', NULL, 'HIDE', NULL, 9050, 1),
+('V2_BLK_SETTLEMENT_T09', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_settle_account_info', 'reportNo,entName', '结算账户', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_SETTLEMENT_T10', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_settle_asset_info', 'reportNo,entName', '结算资产', NULL, 'HIDE', NULL, 9020, 1),
+('V2_BLK_SETTLEMENT_T11', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_entrust_pay_info', 'reportNo,entName', '受托支付明细', NULL, 'HIDE', NULL, 9030, 1),
+('V2_BLK_SETTLEMENT_T12', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_top_five_updown_info', 'reportNo,entName', '前五大上下游', NULL, 'HIDE', NULL, 9040, 1),
+('V2_BLK_SETTLEMENT_T13', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_settle_counterparty_info', 'reportNo,entName', '结算交易对手', NULL, 'HIDE', NULL, 9050, 1),
+('V2_BLK_SETTLEMENT_T14', 'V2_CAT_09_SETTLEMENT_03', 'TABLE', 'TRACE_TABLE', 'app_payroll_stat_info', 'reportNo,entName', '代发月度统计', NULL, 'HIDE', NULL, 9060, 1),
 ('V2_BLK_LOCALZG_L01', 'V2_CAT_10_LOCALZG', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9010, 1),
 ('V2_BLK_WARNING_A01', 'V2_CAT_11_WARNING_01', 'TEXT', 'ANALYSIS', 'yjrwjyjxh', 'reportNo,entName', '预警任务及预警信号情况', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_WARNING_L02', 'V2_CAT_11_WARNING_01', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9010, 1),
@@ -259,9 +265,9 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_GUARANTEE_A01', 'V2_CAT_12_GUARANTEE_01', 'TEXT', 'ANALYSIS', 'dyawuqingkuang', 'reportNo,entName', '抵押物情况', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_GUARANTEE_R02', 'V2_CAT_12_GUARANTEE_01', 'TEXT', 'RULE', 'yapindywdcdy', 'reportNo,entName', '抵押物多次抵押', NULL, 'HIDE', NULL, 20, 1),
 ('V2_BLK_GUARANTEE_R03', 'V2_CAT_12_GUARANTEE_01', 'TEXT', 'RULE', 'yapinczxzql', 'reportNo,entName', '存在限制权利', NULL, 'HIDE', NULL, 30, 1),
-('V2_BLK_GUARANTEE_T04', 'V2_CAT_12_GUARANTEE_01', 'TABLE', 'TRACE_TABLE', 'app_collateral_info', 'reportNo,entName', '押品主档表', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_GUARANTEE_T04', 'V2_CAT_12_GUARANTEE_01', 'TABLE', 'TRACE_TABLE', 'app_collateral_info', 'reportNo,entName', '押品基本信息', NULL, 'HIDE', NULL, 9010, 1),
 ('V2_BLK_GUARANTEE_T05', 'V2_CAT_12_GUARANTEE_01', 'TABLE', 'TRACE_TABLE', 'app_collateral_mortgage_info', 'reportNo,entName', '押品他项权利', NULL, 'HIDE', NULL, 9020, 1),
-('V2_BLK_GUARANTEE_T06', 'V2_CAT_12_GUARANTEE_01', 'TABLE', 'TRACE_TABLE', 'app_collateral_restricted_right', 'reportNo,entName', '限制权利表', NULL, 'HIDE', NULL, 9030, 1),
+('V2_BLK_GUARANTEE_T06', 'V2_CAT_12_GUARANTEE_01', 'TABLE', 'TRACE_TABLE', 'app_collateral_restricted_right', 'reportNo,entName', '押品限制权利', NULL, 'HIDE', NULL, 9030, 1),
 ('V2_BLK_GUARANTEE_L07', 'V2_CAT_12_GUARANTEE_01', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9040, 1),
 ('V2_BLK_GUARANTEE_A08', 'V2_CAT_12_GUARANTEE_02', 'TEXT', 'ANALYSIS', 'dbrxx', 'reportNo,entName', '担保人信息', NULL, 'PLACEHOLDER', NULL, 10, 1),
 ('V2_BLK_GUARANTEE_A09', 'V2_CAT_12_GUARANTEE_02_01', 'TEXT', 'ANALYSIS', 'zxcxsjmsqy', 'reportNo,entName,guarantorName', '征信查询时间', NULL, 'PLACEHOLDER', NULL, 10, 1),
@@ -285,13 +291,13 @@ INSERT INTO app_report_content_block (blockCode, catalogCode, fillType, analysis
 ('V2_BLK_GUARANTEE_R27', 'V2_CAT_12_GUARANTEE_02_09', 'TEXT', 'RULE', 'fyzwgr', 'reportNo,entName,guarantorName', '非银债务', NULL, 'HIDE', NULL, 10, 1),
 ('V2_BLK_GUARANTEE_R28', 'V2_CAT_12_GUARANTEE_02_09', 'TEXT', 'RULE', 'skrxldgr', 'reportNo,entName,guarantorName', '实控人学历低', NULL, 'HIDE', NULL, 20, 1),
 ('V2_BLK_GUARANTEE_R29', 'V2_CAT_12_GUARANTEE_02_09', 'TEXT', 'RULE', 'czfyjgglvgr', 'reportNo,entName,guarantorName', '存在非银机构较高利率借款', NULL, 'HIDE', NULL, 30, 1),
-('V2_BLK_GUARANTEE_T30', 'V2_CAT_12_GUARANTEE_02_09', 'TABLE', 'TRACE_TABLE', 'app_guarantor_info', 'reportNo,entName,subjectType=担保人', '担保人信息表', NULL, 'HIDE', NULL, 9010, 1),
-('V2_BLK_GUARANTEE_T31', 'V2_CAT_12_GUARANTEE_02_09', 'TABLE', 'TRACE_TABLE', 'app_credit_report_info', 'reportNo,entName,subjectType=担保人', '企业征信快照表', NULL, 'HIDE', NULL, 9020, 1),
-('V2_BLK_GUARANTEE_T32', 'V2_CAT_12_GUARANTEE_02_09', 'TABLE', 'TRACE_TABLE', 'app_guarantor_credit_info', 'reportNo,entName', '担保人征信表', NULL, 'HIDE', NULL, 9030, 1),
+('V2_BLK_GUARANTEE_T30', 'V2_CAT_12_GUARANTEE_02_09', 'TABLE', 'TRACE_TABLE', 'app_guarantor_info', 'reportNo,entName,subjectType=担保人', '担保人信息', NULL, 'HIDE', NULL, 9010, 1),
+('V2_BLK_GUARANTEE_T31', 'V2_CAT_12_GUARANTEE_02_09', 'TABLE', 'TRACE_TABLE', 'app_credit_report_info', 'reportNo,entName,subjectType=担保人', '企业担保人征信信息', NULL, 'HIDE', NULL, 9020, 1),
+('V2_BLK_GUARANTEE_T32', 'V2_CAT_12_GUARANTEE_02_09', 'TABLE', 'TRACE_TABLE', 'app_guarantor_credit_info', 'reportNo,entName', '个人担保人征信信息', NULL, 'HIDE', NULL, 9030, 1),
 ('V2_BLK_GUARANTEE_L33', 'V2_CAT_12_GUARANTEE_02_09', 'TEXT', 'TRACE_LINK', NULL, NULL, '溯源信息', NULL, 'HIDE', NULL, 9040, 1);
 
 -- ============================================================
--- ⑤ 校验（可选，执行后应满足）：目录 54 行 / 内容块 182 行
+-- ⑤ 校验（可选，执行后应满足）：目录 54 行 / 内容块 184 行
 --    SELECT catalogLevel, COUNT(*) FROM app_report_catalog WHERE isEnabled = 1 AND catalogCode LIKE 'V2_%' GROUP BY catalogLevel ORDER BY 1;
 --    SELECT COUNT(*) FROM app_report_content_block WHERE isEnabled = 1 AND blockCode LIKE 'V2_%';
 -- ============================================================

@@ -39,12 +39,15 @@ import java.util.Map;
  *   <li><b>ANALYSIS（知识库）</b> —— {@code agentCode} 是「知识配置管理」里的知识库编号；
  *       调 {@code KnowledgeBaseConfigService#getPromptContent}，由它按该条配置渲染 prompt 并
  *       调本地大模型，返回分析文案。</li>
- *   <li><b>RULE（智策引擎）</b> —— {@code agentCode} 是经验规则编号；
+ *   <li><b>RULE（智策引擎 · 补充分析）</b> —— {@code agentCode} 是经验规则编号；
  *       先 {@code IAgentRuleService#executeRule} 判定：<b>命中</b>才按
  *       {@code disposalAdvice / thresholdConfig / riskRemark / ...} 走「补充分析」那条链路出文案，
  *       同时把<b>校验结论</b>（{@code 命中}）放进 {@link ContentPayload#getCheckResult()}；
  *       <b>未命中返回 null</b>（块内容为空 → 模板 {@code emptyStrategy=HIDE} → 正文整块不渲染，
- *       也不生成 AI 风险行）。</li>
+ *       也不生成 AI 风险行）。
+ *       <p>🔴 「补充分析」的 moduleCode 取 <b>{@code agent_rule.additional_analysis}</b>，
+ *       与智策引擎前端 {@code startSupplementaryAnalysis} 完全同源；
+ *       ⛔ <b>不是</b>「AI分析」那个写死的 {@code IntelligentStrategyEngine}。</p></li>
  * </ul>
  *
  * <p>⚠️ 由此得到一条重要语义：<b>AI 风险列表里的每一条都是"命中的规则"</b>，
@@ -79,8 +82,8 @@ public class AgentReportContentProvider implements ReportContentProvider {
     /** 风险要点「条目块」的 agentCode 前缀（后接对应 RULE 块的 blockCode）——同样由 doProcess 回填 */
     public static final String AGENT_RULE_ENTRY_PREFIX = "RULE_ENTRY#";
 
-    /** 智策引擎「补充分析」用的 moduleCode（与 AgentPromptController#getRule 一致） */
-    private static final String MODULE_STRATEGY_ENGINE = "IntelligentStrategyEngine";
+    /** 智策引擎「补充分析」用的 moduleCode 取自 {@code agent_rule.additional_analysis}（见 {@link #ruleContent}） */
+    private static final String MODULE_AI_ANALYSIS = "IntelligentStrategyEngine";
 
     private static final String SUBJECT_GUARANTOR = "担保人";
     private static final String GUARANTOR_TYPE_LEGAL = "法人";
@@ -290,13 +293,19 @@ public class AgentReportContentProvider implements ReportContentProvider {
      * <p>判定与取数口径与 {@code AgentPromptController#getRule} 完全一致
      * （同一 JVM 直接调 service，不走 HTTP）。</p>
      *
+     * <p>🔴 <b>出文案用的是「补充分析」，不是「AI分析」</b>：
+     * moduleCode = {@code agent_rule.additional_analysis}（前端「补充分析」下拉选的那个知识库编号，
+     * 形如 {@code jyk-yszk}），与智策引擎前端 {@code startSupplementaryAnalysis} 同链路。
+     * 而「AI分析」的 moduleCode 是前端写死的 {@code IntelligentStrategyEngine} ——
+     * 2026-09-18 之前这里就写死成了它，于是报告 RULE 块跑出来的是 AI分析 的文案（用户报的正是这个）。</p>
+     *
      * <p>🔴 <b>「校验失败」必须与「未命中」分开认</b>：表达式算不成时
      * {@code resultStatus} 是 null，若直接按未命中处理，就把"这次校验根本没成立"
      * 伪装成了业务结论（智策引擎前端 @ 2026-09-16 已专门修过这个问题）。</p>
      *
      * @param guarantorName 担保人口径时传入；借款人口径传 null
      * @return 命中 → {@code content}=补充分析文案、{@code checkResult}=校验结果 JSON；
-     * 未命中 / 校验失败 → null（该块内容为空）
+     * 未命中 / 校验失败 / 未配补充分析 → null（该块内容为空）
      */
     private ContentPayload ruleContent(ReportGenerateContext context, AppReportContentBlock block,
                                        String guarantorName, long start) {
@@ -338,7 +347,30 @@ public class AgentReportContentProvider implements ReportContentProvider {
             return null;
         }
 
-        // 命中：按 getRule 的同一口径拼「补充分析」素材
+        // 🔴 命中后取的是「补充分析」—— moduleCode = agent_rule.additional_analysis，
+        //    与智策引擎前端 startSupplementaryAnalysis（moduleCode = supplementaryValue.key）**同一条链路**。
+        //    ⛔ 千万别在这里写死 IntelligentStrategyEngine：那个是「AI分析」那一格的 moduleCode
+        //       （前端 startAiAnalysis 写死），跑出来是"AI分析"的文案，不是用户要的「补充分析」。
+        String suppModuleCode = rule.getAdditionalAnalysis();
+        if (!StringUtils.hasText(suppModuleCode)) {
+            // 规则没配「补充分析」→ 没有可用的提示词。宁可该块为空（模板 emptyStrategy=HIDE），
+            // 也不能退回 AI分析 顶上一段不对口径的文案。
+            log.warn("【报告内容加工】规则未配置「补充分析」(additional_analysis 为空)，跳过该块"
+                            + " ruleCode={} ruleName={} reportNo={}",
+                    ruleCode, rule.getRuleName(), context.getReportNo());
+            return null;
+        }
+        suppModuleCode = suppModuleCode.trim();
+        if (MODULE_AI_ANALYSIS.equalsIgnoreCase(suppModuleCode)) {
+            // 数据兜底提示：规则把「补充分析」也指到了 AI分析 那个通用配置上。
+            // 不拦（配置是数据的自由），但必须留痕 —— 这正是"RULE 块出来是 AI分析"的另一种成因。
+            log.warn("【报告内容加工】规则的「补充分析」指向 AI分析 的 moduleCode({}) —— 请到「智策引擎」"
+                            + "把该规则的补充分析改成对应的「经验库文案-XXX」 ruleCode={} reportNo={}",
+                    MODULE_AI_ANALYSIS, ruleCode, context.getReportNo());
+        }
+
+        // 素材口径与 AgentPromptController#getRule 一致（处置意见/阈值/命中明细/风险释义/命中结果/检查项名称），
+        // 另加「补充分析」侧要用的 factExpression。多给不会出错，少给才会让提示词里出现空变量。
         JSONObject getParams = new JSONObject();
         getParams.put("content", rule.getDisposalAdvice());
         getParams.put("input", rule.getThresholdConfig());
@@ -349,7 +381,9 @@ public class AgentReportContentProvider implements ReportContentProvider {
         if (StringUtils.hasText(vo.getFactExpression())) {
             getParams.put("factExpression", vo.getFactExpression());
         }
-        getParams.put("moduleCode", MODULE_STRATEGY_ENGINE);
+        // moduleCode 必须在 params 之前放好：params 里没有 moduleCode，不会被覆盖，
+        // 但顺序保持"固定键 → 透传入参"的写法与 getRule 一致，便于对照排查。
+        getParams.put("moduleCode", suppModuleCode);
         params.forEach(getParams::put);
         getParams.put("withModelSummary", true);
         getParams.put("stream", true);
@@ -358,7 +392,8 @@ public class AgentReportContentProvider implements ReportContentProvider {
         CollectingSseEmitter emitter = new CollectingSseEmitter();
         Object res = knowledgeBaseConfigService.getPromptContent(getParams.toJSONString(), emitter);
         String text = pickLlmText(emitter, res);
-        logCallDone("智策引擎", context, block, guarantorName, text, start);
+        // 日志里带上 moduleCode，排查时一眼能分清这次跑的是「补充分析」还是被写死的「AI分析」
+        logCallDone("智策引擎补充分析[" + suppModuleCode + "]", context, block, guarantorName, text, start);
         // 校验结论随内容一起回去，落 app_report_ai_risk.check_result
         return new ContentPayload(text, CHECK_RESULT_HIT);
     }
