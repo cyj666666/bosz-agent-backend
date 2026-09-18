@@ -455,11 +455,17 @@ public class ReportServiceImpl implements ReportService {
      *
      * <ul>
      *   <li><b>总结块</b>（{@code agentCode=RULE_SUMMARY}）—— 收齐阶段 1 已生成的**全部 RULE 块内容**，
-     *       回调 {@link ReportContentProvider#provideRuleSummary} 由加工方调大模型归纳成一段；</li>
+     *       回调 {@link ReportContentProvider#summarizeRuleRisks}，由加工方调大模型
+     *       **归纳成一段 + 挑出最严重的最多 N 条**；</li>
      *   <li><b>条目块</b>（{@code agentCode=RULE_ENTRY#<目标RULE块code>}）—— 直接复用对应 RULE 块的
      *       正文内容（本地截取，**不再调模型**）；对应规则未命中（内容为空）时该块内容留空，
      *       由模板的 {@code emptyStrategy=HIDE} 让它整块不渲染 —— 「命中的才出现」就是这么实现的。</li>
      * </ul>
+     *
+     * <p>🔴 <b>本方法分两趟</b>（2026-09-18）：<b>先算总结</b>（它同时给出"只保留哪几条"的清单），
+     * <b>再回填条目块</b> —— 有清单时只有清单里的条目出内容，其余留空。
+     * 用户口径：报告里的「风险要点」不必如实罗列全部命中，挑最严重的几条即可
+     * （此前 48 条全列，一片糊）。加工方未给清单（{@code null}）时回落为**不筛选**，即旧行为。</p>
      *
      * <p>本方法不抛异常：任何失败只记软备注。</p>
      *
@@ -498,43 +504,82 @@ public class ReportServiceImpl implements ReportService {
         }
         log.info("【报告内容加工】风险要点回填开始 reportNo={} 命中规则={} 条", reportNo, hits.size());
 
+        // ① 先算「总结」—— 它同时决定风险要点**只保留哪几条**（2026-09-18 用户口径：
+        //    不必如实罗列全部命中，挑最严重、最需要关注的最多 5 条即可）。
+        //    必须先做：条目块要靠这份清单才知道自己该不该出内容。
+        List<String> keepRuleCodes = null;
         for (int i = 0; i < blocks.size(); i++) {
             AppReportContentBlock block = blocks.get(i);
-            if (!isDeferredBlock(block) || slots[i] != null) {
+            if (slots[i] != null || !AGENT_RULE_SUMMARY.equals(block.getAgentCode())) {
                 continue;
             }
             try {
-                ContentPayload payload = null;
-                String agentCode = block.getAgentCode();
-
-                if (AGENT_RULE_SUMMARY.equals(agentCode)) {
-                    // 总结块：交给加工方（智能体侧）拼素材调模型
-                    ReportGenerateContext ctx = new ReportGenerateContext();
-                    ctx.setReportNo(reportNo);
-                    ctx.setCustomerId(customerId);
-                    ctx.setCustomerName(customerName);
-                    ctx.setBlock(block);
+                ReportGenerateContext ctx = new ReportGenerateContext();
+                ctx.setReportNo(reportNo);
+                ctx.setCustomerId(customerId);
+                ctx.setCustomerName(customerName);
+                ctx.setBlock(block);
+                ContentPayload payload;
+                ReportContentProvider.RuleSummaryResult result =
+                        contentProvider.summarizeRuleRisks(ctx, hits);
+                if (result != null) {
+                    payload = result.getSummary();
+                    keepRuleCodes = result.getKeepRuleBlockCodes();
+                } else {
+                    // 加工方没实现新契约 → 回落老行为：只出总结、**不筛选**
                     payload = contentProvider.provideRuleSummary(ctx, hits);
-                } else if (agentCode != null && agentCode.startsWith(AGENT_RULE_ENTRY_PREFIX)) {
-                    // 条目块：agentCode 里存的就是「对应 RULE 块的 blockCode」
-                    String targetBlockCode = agentCode.substring(AGENT_RULE_ENTRY_PREFIX.length());
-                    AppReportContentInstance ruleInstance = ruleInstanceOf.get(targetBlockCode);
-                    if (ruleInstance != null) {
-                        payload = new ContentPayload(ruleInstance.getContent());
-                    }
                 }
-
                 String content = payload == null ? null : payload.getContent();
                 slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
                         content).getInstance();
             } catch (Throwable e) {
-                log.error("风险要点块加工失败(跳过该块) reportNo={} blockCode={}", reportNo, block.getBlockCode(), e);
+                log.error("风险要点总结块加工失败(跳过该块) reportNo={} blockCode={}",
+                        reportNo, block.getBlockCode(), e);
                 String blockName = StringUtils.hasText(block.getBlockName())
                         ? block.getBlockName() : block.getBlockCode();
                 blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
             }
         }
-        log.info("【报告内容加工】风险要点回填结束 reportNo={}", reportNo);
+
+        // ② 再回填「条目块」：有保留清单 ⇒ 只回填选中的那几条，其余**留空**
+        //    （模板 emptyStrategy=HIDE → 整块不渲染 ⇒ 风险要点里只出现挑中的几条）
+        boolean filter = keepRuleCodes != null && !keepRuleCodes.isEmpty();
+        int kept = 0;
+        int dropped = 0;
+        for (int i = 0; i < blocks.size(); i++) {
+            AppReportContentBlock block = blocks.get(i);
+            String agentCode = block.getAgentCode();
+            if (slots[i] != null || agentCode == null
+                    || !agentCode.startsWith(AGENT_RULE_ENTRY_PREFIX)) {
+                continue;
+            }
+            try {
+                // 条目块：agentCode 里存的就是「对应 RULE 块的 blockCode」
+                String targetBlockCode = agentCode.substring(AGENT_RULE_ENTRY_PREFIX.length());
+                ContentPayload payload = null;
+                if (!filter || keepRuleCodes.contains(targetBlockCode)) {
+                    AppReportContentInstance ruleInstance = ruleInstanceOf.get(targetBlockCode);
+                    if (ruleInstance != null) {
+                        payload = new ContentPayload(ruleInstance.getContent());
+                        kept++;
+                    }
+                } else {
+                    dropped++;
+                }
+                String content = payload == null ? null : payload.getContent();
+                slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
+                        content).getInstance();
+            } catch (Throwable e) {
+                log.error("风险要点条目块加工失败(跳过该块) reportNo={} blockCode={}",
+                        reportNo, block.getBlockCode(), e);
+                String blockName = StringUtils.hasText(block.getBlockName())
+                        ? block.getBlockName() : block.getBlockCode();
+                blockFailures.add("[" + block.getBlockCode() + "/" + blockName + "] " + briefError(e));
+            }
+        }
+        log.info("【报告内容加工】风险要点回填结束 reportNo={} 命中={} 要点保留={} 要点过滤={}{}",
+                reportNo, hits.size(), kept, dropped,
+                filter ? "" : "（未筛选：加工方未给出保留清单）");
     }
 
     /** 清理某报告的内容实例与 AI 风险（重跑前调用，避免唯一键 (reportNo, blockCode) 冲突） */

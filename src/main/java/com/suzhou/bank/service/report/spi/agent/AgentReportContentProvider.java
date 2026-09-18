@@ -520,32 +520,132 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     /* ==================== 风险要点总结（阶段2回调） ==================== */
 
+    /**
+     * 风险要点最多列几条
+     *
+     * <p>用户 2026-09-18 口径：报告里的「风险要点」**不必如实罗列全部命中**，
+     * 挑最严重、最需要关注的最多 5 条就够了（此前 48 条全列，一片糊）。</p>
+     */
+    private static final int MAX_RISK_ITEMS = 5;
+
+    /**
+     * 总结输出里「选中清单」的机器可读标记
+     *
+     * <p>🔴 让模型在**第一行**输出 {@code #PICK#规则名1|规则名2|…}，后端据此决定
+     * 「风险要点」只回填哪几条条目块 —— 比从 HTML 里正则捞规则名稳得多
+     * （模型可能把名称加粗、换行、加书名号）。解析不到时按模板顺序兜底取前 N 条。</p>
+     */
+    private static final String PICK_MARK = "#PICK#";
+
     /** 总结用的系统提示词（可直接改这里，不必动代码结构） */
     private static final String RULE_SUMMARY_SYSTEM_PROMPT =
             "你是银行贷后检查报告的风险汇总助手。用户会给你一组已经判定命中的风险要点"
-                    + "（每条含规则名称、所在章节、风险文案）。请把它们**高度精炼**成一段中文总结：\n"
-                    + "① 先用 1~2 句话给出总体判断（整体风险程度、主要涉及哪几个方面、最突出的问题）；\n"
-                    + "② 再按重要程度列出**最多 5 条**要点，每条用「规则名称：一句话结论」的形式；\n"
-                    + "③ 🔴 **全文控制在 300 字以内（最多不超过 400 字）**，"
-                    + "**严禁把命中的每条规则逐条罗列** —— 必须合并同类项、只保留最关键的几条；\n"
-                    + "④ 素材里可能给出几十条，那是原始明细，你的任务是**归纳**而不是**复述**；\n"
-                    + "⑤ 不要臆造材料里没有的信息。\n"
-                    + "直接输出 HTML 片段（用 <p> 和 <ol><li> 标签），不要输出 markdown 代码块。";
+                    + "（每条含规则名称、所在章节、风险文案）。\n"
+                    + "请**严格按下面的两段式**输出，不要输出任何多余文字、不要用 markdown 代码块：\n"
+                    + "【第 1 行】必须以 " + PICK_MARK + " 开头，后面用 | 分隔你挑出的"
+                    + "**最严重、最需要关注的最多 " + MAX_RISK_ITEMS + " 条**的**规则名称**；"
+                    + "名称必须与素材里给的规则名称**逐字一致**，不得改写、不得漏字或加字；\n"
+                    + "【第 2 行起】输出 HTML 片段：先用 <p> 给 1~2 句总体判断"
+                    + "（整体风险程度、主要涉及哪几个方面、最突出的问题），"
+                    + "再用 <ol><li> 按严重程度列出要点，**条数与第 1 行一一对应**，"
+                    + "每条写成「<strong>规则名称</strong>：一句话结论」。\n"
+                    + "🔴 全文控制在 300 字以内（最多不超过 400 字）；"
+                    + "**严禁把命中的每条规则逐条罗列** —— 必须合并同类项、只保留最关键的几条；"
+                    + "素材里可能给出几十条，那是原始明细，你的任务是**归纳 + 挑选**，不是复述。\n"
+                    + "不要臆造材料里没有的信息。";
 
     /** 总结素材里「每条风险文案」的截断长度（素材太长会让模型倾向忠实罗列而不是归纳） */
     private static final int SUMMARY_MATERIAL_PER_HIT_CHARS = 120;
 
     /**
-     * 风险要点总结：把本报告命中的全部 RULE 块内容交给大模型归纳成一段。
+     * 风险要点：**一次产出**总结文案 + 只保留哪几条要点（2026-09-18）
      *
      * <p>素材为空（本次一条规则都没命中）时返回 null，该块按 emptyStrategy 处理。</p>
+     *
+     * <p>容错：模型没按契约输出 {@code #PICK#} 行时，取**模板顺序前 N 条**兜底
+     * （宁可少列、不可全列 —— 全列正是用户要修的问题），并在日志里留痕。</p>
      */
     @Override
-    public ContentPayload provideRuleSummary(ReportGenerateContext context, List<RuleHit> ruleHits) {
+    public ReportContentProvider.RuleSummaryResult summarizeRuleRisks(
+            ReportGenerateContext context, List<RuleHit> ruleHits) {
         if (CollectionUtils.isEmpty(ruleHits)) {
             log.info("【报告内容加工】风险要点总结：本次无命中的规则，跳过 reportNo={}", context.getReportNo());
             return null;
         }
+        long start = System.currentTimeMillis();
+        String raw;
+        try {
+            // 用报告模块自己的大模型配置（report.ai-analysis.lm-code），与全文分析/预警建议一致
+            LargeModelGatewayClient.LlmResult res = largeModelGatewayClient.chat(
+                    RULE_SUMMARY_SYSTEM_PROMPT, buildSummaryMaterial(context, ruleHits));
+            raw = res == null ? null : trimToNull(res.getContent());
+        } catch (Throwable e) {
+            // 🔴 与单块取数同一口径：总结失败只记日志，不中断整份报告
+            log.error("【报告内容加工】风险要点总结失败 reportNo={} 素材条数={}",
+                    context.getReportNo(), ruleHits.size(), e);
+            return null;
+        }
+        if (raw == null) {
+            log.warn("【报告内容加工】风险要点总结：模型没返回内容 reportNo={}", context.getReportNo());
+            return null;
+        }
+
+        // 拆「选中清单」与「总结正文」
+        String pickedLine = null;
+        String html = raw;
+        int nl = raw.indexOf('\n');
+        if (raw.startsWith(PICK_MARK)) {
+            if (nl > 0) {
+                pickedLine = raw.substring(PICK_MARK.length(), nl);
+                html = raw.substring(nl + 1);
+            } else {
+                pickedLine = raw.substring(PICK_MARK.length());
+                html = "";
+            }
+        }
+        html = stripFence(trimToNull(html));
+        if (!StringUtils.hasText(html)) {
+            // 只有 PICK 行没正文（模型跑偏）→ 把整段原文当正文，至少不丢内容
+            html = stripFence(raw);
+        }
+
+        List<String> keep = null;
+        if (StringUtils.hasText(pickedLine)) {
+            keep = matchRuleBlockCodes(pickedLine, ruleHits);
+        }
+        boolean fallback = false;
+        if (keep == null || keep.isEmpty()) {
+            // 没解析出来 / 解析出的名字都对不上 → 按模板顺序取前 N 条兜底
+            keep = new ArrayList<>();
+            for (RuleHit hit : ruleHits) {
+                if (keep.size() >= MAX_RISK_ITEMS) {
+                    break;
+                }
+                keep.add(hit.getBlockCode());
+            }
+            fallback = true;
+        }
+        log.info("【报告内容加工】风险要点总结完成 reportNo={} 素材条数={} 要点保留={} 条{} 字数={} 耗时={}ms",
+                context.getReportNo(), ruleHits.size(), keep.size(),
+                fallback ? "（模型未按契约输出 #PICK#，按模板顺序兜底）" : "",
+                html == null ? 0 : html.length(), System.currentTimeMillis() - start);
+        return new ReportContentProvider.RuleSummaryResult(new ContentPayload(html), keep);
+    }
+
+    /**
+     * 兼容老契约：只出总结、**不筛选**要点条目
+     *
+     * <p>生成器现在优先调 {@link #summarizeRuleRisks}；本方法保留是为了
+     * 「老实现只实现了它」时照旧能跑（以及单测直接调它的情况）。</p>
+     */
+    @Override
+    public ContentPayload provideRuleSummary(ReportGenerateContext context, List<RuleHit> ruleHits) {
+        ReportContentProvider.RuleSummaryResult result = summarizeRuleRisks(context, ruleHits);
+        return result == null ? null : result.getSummary();
+    }
+
+    /** 总结素材：报告号 + 企业名 + 逐条（章节 / 规则名 / 截断后的风险文案） */
+    private String buildSummaryMaterial(ReportGenerateContext context, List<RuleHit> ruleHits) {
         StringBuilder material = new StringBuilder();
         material.append("【报告编号】").append(context.getReportNo()).append('\n');
         if (StringUtils.hasText(context.getCustomerName())) {
@@ -561,24 +661,69 @@ public class AgentReportContentProvider implements ReportContentProvider {
                     .append(abbreviate(stripHtml(hit.getContent()), SUMMARY_MATERIAL_PER_HIT_CHARS))
                     .append('\n');
         }
-        material.append("\n（以上为原始明细，请按要求归纳，不要逐条复述。）\n");
+        material.append("\n（以上为原始明细，请按要求**归纳并挑选**，不要逐条复述。）\n");
+        return material.toString();
+    }
 
-        long start = System.currentTimeMillis();
-        try {
-            // 用报告模块自己的大模型配置（report.ai-analysis.lm-code），与全文分析/预警建议一致
-            LargeModelGatewayClient.LlmResult res =
-                    largeModelGatewayClient.chat(RULE_SUMMARY_SYSTEM_PROMPT, material.toString());
-            String text = res == null ? null : trimToNull(res.getContent());
-            log.info("【报告内容加工】风险要点总结完成 reportNo={} 素材条数={} 模型={} 字数={} 耗时={}ms",
-                    context.getReportNo(), ruleHits.size(), res == null ? "-" : res.getModelName(),
-                    text == null ? 0 : text.length(), System.currentTimeMillis() - start);
-            return text == null ? null : new ContentPayload(text);
-        } catch (Throwable e) {
-            // 🔴 与单块取数同一口径：总结失败只记日志，不中断整份报告
-            log.error("【报告内容加工】风险要点总结失败 reportNo={} 素材条数={}",
-                    context.getReportNo(), ruleHits.size(), e);
-            return null;
+    /**
+     * 把模型给的「规则名清单」映射回 RULE 块编号
+     *
+     * <p>匹配口径：先**逐字相等**，再退一步做「去空白 / 去书名号」后的相等 —— 模型偶尔会给名称加
+     * 空格或书名号。匹配不上的名字直接丢弃（不猜）。最多取 {@link #MAX_RISK_ITEMS} 条。</p>
+     */
+    private static List<String> matchRuleBlockCodes(String pickedLine, List<RuleHit> ruleHits) {
+        List<String> codes = new ArrayList<>();
+        for (String piece : pickedLine.split("[|｜]")) {
+            String name = normalizeRuleName(piece);
+            if (name.isEmpty()) {
+                continue;
+            }
+            for (RuleHit hit : ruleHits) {
+                String hitName = normalizeRuleName(hit.getBlockName());
+                if (!hitName.isEmpty() && hitName.equals(name)) {
+                    String code = hit.getBlockCode();
+                    if (!codes.contains(code)) {
+                        codes.add(code);
+                    }
+                    break;
+                }
+            }
+            if (codes.size() >= MAX_RISK_ITEMS) {
+                break;
+            }
         }
+        return codes;
+    }
+
+    /** 规则名归一：去空白、去书名号（`《》`）、去掉列表前缀符号 */
+    private static String normalizeRuleName(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.replaceAll("[\\s\\u3000]", "")
+                .replace("《", "").replace("》", "")
+                .replaceAll("^[0-9]+[.、)）]?", "")
+                .replaceAll("^[-*·]+", "")
+                .trim();
+    }
+
+    /** 去掉模型习惯包上的 markdown 代码围栏 */
+    private static String stripFence(String text) {
+        if (!StringUtils.hasText(text)) {
+            return text;
+        }
+        String s = text.trim();
+        if (s.startsWith("```")) {
+            int first = s.indexOf('\n');
+            if (first > 0) {
+                s = s.substring(first + 1);
+            }
+            int last = s.lastIndexOf("```");
+            if (last >= 0) {
+                s = s.substring(0, last);
+            }
+        }
+        return trimToNull(s);
     }
 
     private static String nullToDash(String text) {

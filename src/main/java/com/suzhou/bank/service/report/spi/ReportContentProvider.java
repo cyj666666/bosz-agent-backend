@@ -40,4 +40,55 @@ public interface ReportContentProvider {
     default ContentPayload provideRuleSummary(ReportGenerateContext context, List<RuleHit> ruleHits) {
         return null;
     }
+
+    /**
+     * 「风险要点」一次产出：<b>总结文案</b> + <b>只保留哪几条要点</b>（2026-09-18 新增）
+     *
+     * <p><b>为什么需要它</b>：用户口径是「风险要点不必如实罗列全部命中，挑最严重的 5 条即可」。
+     * 而"哪几条最重要"只有**模型**能判断 ⇒ 让它在出总结的同时把选中的规则名一并吐出来，
+     * 生成器据此**只回填这几条条目块**，其余留空（模板 {@code emptyStrategy=HIDE} → 整块不渲染）。</p>
+     *
+     * <p><b>与 {@link #provideRuleSummary} 的关系</b>：本方法返回 {@code null} 时，
+     * 生成器回落到 {@link #provideRuleSummary}（只出总结、**不筛选**，等于旧行为）。
+     * 老的实现只实现 {@code provideRuleSummary} 也能照旧跑。</p>
+     *
+     * @param context  加工上下文（block 即总结块）
+     * @param ruleHits 本报告已生成内容、且内容非空的全部 RULE 块（按模板顺序）
+     * @return 总结 + 保留清单；不支持时返回 {@code null}
+     */
+    default RuleSummaryResult summarizeRuleRisks(ReportGenerateContext context, List<RuleHit> ruleHits) {
+        return null;
+    }
+
+    /**
+     * 风险要点总结的产物
+     *
+     * @author cyj666666
+     * @since 1.4.0
+     */
+    class RuleSummaryResult {
+
+        /** 总结文案（落到总结块 content；可为 null 表示无内容） */
+        private final ContentPayload summary;
+
+        /**
+         * 要点条目**只保留**这些 RULE 块（元素 = {@link RuleHit#getBlockCode()}）
+         *
+         * <p>{@code null} 或空集合 = <b>不筛选</b>，全部条目照旧回填。</p>
+         */
+        private final List<String> keepRuleBlockCodes;
+
+        public RuleSummaryResult(ContentPayload summary, List<String> keepRuleBlockCodes) {
+            this.summary = summary;
+            this.keepRuleBlockCodes = keepRuleBlockCodes;
+        }
+
+        public ContentPayload getSummary() {
+            return summary;
+        }
+
+        public List<String> getKeepRuleBlockCodes() {
+            return keepRuleBlockCodes;
+        }
+    }
 }

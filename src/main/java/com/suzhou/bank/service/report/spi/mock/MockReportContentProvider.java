@@ -17,6 +17,7 @@ import org.springframework.util.StringUtils;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,9 @@ public class MockReportContentProvider implements ReportContentProvider {
 
     /** 未命中判定：RULE 块在真实链路里只对"命中"的规则出内容，模拟态统一给"命中" */
     private static final String CHECK_RESULT_HIT = "命中";
+
+    /** 风险要点最多列几条（与真实链路 {@code AgentReportContentProvider#MAX_RISK_ITEMS} 一致） */
+    private static final int MAX_RISK_ITEMS = 5;
 
     private static final String TABLE_HEADER =
             "| 序号 | 项目 | 数值 | 单位 | 备注 |\n"
@@ -132,6 +136,30 @@ public class MockReportContentProvider implements ReportContentProvider {
         }
         sb.append("</ol>");
         return new ContentPayload(sb.toString());
+    }
+
+    /**
+     * 模拟态的风险要点总结（2026-09-18 新增）
+     *
+     * <p>与真实链路**同契约**：同时给出总结 + 「只保留哪几条」。真实链路是模型挑
+     * 「最严重的 N 条」；模拟态没有判断力，固定取**模板顺序前 {@value #MAX_RISK_ITEMS} 条**，
+     * 这样切 mock 也能看到"风险要点只列 5 条"的版面，不至于又变回罗列全部。</p>
+     */
+    @Override
+    public RuleSummaryResult summarizeRuleRisks(ReportGenerateContext context, List<RuleHit> ruleHits) {
+        if (ruleHits == null || ruleHits.isEmpty()) {
+            return null;
+        }
+        List<String> keep = new ArrayList<String>();
+        List<RuleHit> picked = new ArrayList<RuleHit>();
+        for (RuleHit hit : ruleHits) {
+            if (keep.size() >= MAX_RISK_ITEMS) {
+                break;
+            }
+            keep.add(hit.getBlockCode());
+            picked.add(hit);
+        }
+        return new RuleSummaryResult(provideRuleSummary(context, picked), keep);
     }
 
     /* ==================== 内容生成 ==================== */
