@@ -239,17 +239,21 @@ public class ReportController {
     /* ===================== AI 全文分析（前端手动触发，后台异步执行） ===================== */
 
     /**
-     * 取「某日检流水号下最新版本报告」的最新一次全文分析
-     * <p>前端打开「AI分析全文」面板时调用。从未分析过返回 data=null，
+     * 取**某份报告**（reportNo）的最新一次全文分析
+     * <p>前端打开「AI分析全文」面板、切换报告版本时调用。从未分析过返回 data=null，
      * 前端据此显示空态与「开始分析」按钮。</p>
      *
-     * @param checkTaskNo 日检流水号
-     * @return 最新一次分析（RUNNING/DONE/FAILED）；从未分析过为 null
+     * <p>🔴 入参由 checkTaskNo 改为 <b>reportNo</b>（2026-09-19），与
+     * {@code /instance/warning-advice} 同口径 —— 全文分析按报告版本跑，按流水号取
+     * 「最新已完成版本」会让历史版本页面显示新版本的分析结果。</p>
+     *
+     * @param reportNo 报告编号
+     * @return 该报告最新一次分析（RUNNING/DONE/FAILED）；从未分析过为 null
      */
     @GetMapping("/instance/ai-analysis")
-    public Result<ReportAiAnalysisVO> latestAiAnalysis(@RequestParam String checkTaskNo) {
+    public Result<ReportAiAnalysisVO> latestAiAnalysis(@RequestParam String reportNo) {
         try {
-            return Result.ok(reportService.latestAiAnalysis(checkTaskNo));
+            return Result.ok(reportService.latestAiAnalysis(reportNo));
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }

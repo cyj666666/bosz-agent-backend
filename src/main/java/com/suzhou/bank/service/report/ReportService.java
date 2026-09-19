@@ -157,13 +157,19 @@ public interface ReportService {
     ReportAiAnalysisVO startAiAnalysis(String reportNo, String operatorNo, String operatorName);
 
     /**
-     * 取「某日检流水号下最新版本报告」的最新一次全文分析
-     * <p>前端打开面板时调用：该报告一次都没分析过则返回 {@code null}（前端显示空态 + 开始分析按钮）。</p>
+     * 取**某份报告**（reportNo）的最新一次全文分析
+     * <p>前端打开面板、切换报告版本时调用：该报告一次都没分析过则返回 {@code null}
+     * （前端显示空态 + 开始分析按钮）。</p>
      *
-     * @param checkTaskNo 日检流水号
-     * @return 最新一次分析；从未分析过返回 null
+     * <p>🔴 <b>必须按 reportNo、不能按 checkTaskNo</b>：全文分析本身就是按报告版本跑的
+     * （{@link #startAiAnalysis} 的入参就是 reportNo）。若先按流水号取「最新已完成版本」再拿它的
+     * reportNo 去查，切到历史版本（如 V1）时面板里显示的会是<b>新版本（V2）</b>的分析结果
+     * —— 版本之间会串。这也正是 {@link #latestWarningAdvice(String)} 一直按 reportNo 取的口径。</p>
+     *
+     * @param reportNo 报告编号
+     * @return 该报告最新一次分析（RUNNING/DONE/FAILED）；从未分析过返回 null
      */
-    ReportAiAnalysisVO latestAiAnalysis(String checkTaskNo);
+    ReportAiAnalysisVO latestAiAnalysis(String reportNo);
 
     /**
      * 查某份报告的全部全文分析记录（保留多次，按 id 倒序 —— 最新在上）

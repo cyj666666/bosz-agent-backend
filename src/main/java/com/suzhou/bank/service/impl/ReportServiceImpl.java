@@ -1200,17 +1200,17 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public ReportAiAnalysisVO latestAiAnalysis(String checkTaskNo) {
-        if (!StringUtils.hasText(checkTaskNo)) {
+    public ReportAiAnalysisVO latestAiAnalysis(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
             return null;
         }
-        Report latest = latestDoneReport(checkTaskNo);
-        if (latest == null || !StringUtils.hasText(latest.getReportNo())) {
-            return null;
-        }
+        // 🔴 直接按**本份报告**取，不再先取「最新已完成版本」（2026-09-19 修）：
+        //    全文分析是按报告版本跑的（startAiAnalysis 的入参就是 reportNo）。原口径
+        //    `latestDoneReport(checkTaskNo) → 用它自己的 reportNo 查` 会让详情页切到 V1 时
+        //    仍显示 V2 的分析结果（版本串味）。口径对齐 latestWarningAdvice(reportNo)。
         AppReportAiAnalysis row = aiAnalysisMapper.selectOne(
                 Wrappers.<AppReportAiAnalysis>lambdaQuery()
-                        .eq(AppReportAiAnalysis::getReportNo, latest.getReportNo())
+                        .eq(AppReportAiAnalysis::getReportNo, reportNo)
                         .orderByDesc(AppReportAiAnalysis::getId)
                         .last("LIMIT 1"));
         return row == null ? null : toAiAnalysisVO(row);
@@ -1882,22 +1882,32 @@ public class ReportServiceImpl implements ReportService {
      *   <li>{@link #latestDoneReport(String)}：列表点「查看」进详情（{@link #latest(String)}）
      *       与「更新报告」的复制模板（{@link #renew(String)}）</li>
      * </ul>
-     * <p>发起时 version 刻意留空（落表即 111），若不在置 888 时补上，报告虽然已完成却永远
+     * <p>「发起」时 version 刻意留空（落表即 111），若不在置 888 时补上，报告虽然已完成却永远
      * 找不到"已完成版本"，点「查看」会直接报「该日检流水号下不存在已完成（含版本号）的报告」。</p>
      *
-     * <p><b>取号口径</b>：与 {@link #renew(String)} 一致，取该流水号下最大版本号 +1（首份为 V1）。
-     * 这里不加分布式锁，沿用全服务「不声明事务、互斥交给上游」的既定口径；同流水号的并发由
-     * 「发起时 checkTaskNo 不允许重复」+「renew 时该流水号已有进行中报告则拒绝」两道前置校验挡住。</p>
+     * <p>🔴 <b>取号口径：记录上已有版本号就沿用，只有为空时才取号</b>（2026-09-19 修正）。</p>
+     * <p>那条老写法是"无条件 {@code nextVersionOf()} = 该流水号下 max(version) + 1"，
+     * 对「发起」路径没问题（建记录时 version 为 NULL，被 {@code isNotNull} 过滤掉）；
+     * 但 <b>「更新报告」路径会算错</b>：{@link #renew(String)} 早已取号并落库（V2 写进库里），
+     * 生成完成时再取号，<b>max 里就包含了它自己那条</b> ⇒ 取到 3 ⇒ 把 V2 覆盖成 <b>V3</b>。
+     * 表现：版本下拉里<b>永远看不到 V2</b>，每点一次「更新」跳 2 个号（1 → 3 → 5 …）。</p>
      *
-     * @param reportInfo 报告记录（用其 reportNo 定位、checkTaskNo 取号）
+     * <p>同流水号的并发由「发起时 checkTaskNo 不允许重复」+「renew 时该流水号已有进行中报告则拒绝」
+     * 两道前置校验挡住，所以"沿用已有值"不会撞号。</p>
+     *
+     * @param reportInfo 报告记录（用其 reportNo 定位、其 version 沿用、无 version 时才用 checkTaskNo 取号）
      * @param failReason 失败/软备注；成功传 null 表示清空历史失败原因
-     * @return 本次写入的版本号
+     * @return 本记录的版本号
      */
     private Integer markDone(Report reportInfo, String failReason) {
-        Integer version = StringUtils.hasText(reportInfo.getCheckTaskNo())
-                ? nextVersionOf(reportInfo.getCheckTaskNo())
-                // 无流水号无法按流水号取号（也不参与版本下拉/最新版本查询），兜底给 V1
-                : 1;
+        Integer version = reportInfo.getVersion();
+        if (version == null) {
+            // 尚无版本号（= 「发起」流程，建记录时 version 留空）→ 现在取号，首份为 V1
+            version = StringUtils.hasText(reportInfo.getCheckTaskNo())
+                    ? nextVersionOf(reportInfo.getCheckTaskNo())
+                    // 无流水号无法按流水号取号（也不参与版本下拉/最新版本查询），兜底给 V1
+                    : 1;
+        }
         reportMapper.update(null, Wrappers.<Report>lambdaUpdate()
                 .eq(Report::getReportNo, reportInfo.getReportNo())
                 .set(Report::getStatus, REPORT_STATUS_DONE)
