@@ -74,6 +74,53 @@ public class TraceTableBuilder {
     }
 
     /**
+     * 「这份报告有没有业务数据」的探测表。
+     *
+     * <p>客户主体 / 担保人 / 财务指标 —— 这三个是本报告链路取数的核心基础；
+     * <b>任一有数据</b>即认为这份报告编号下确实有业务数据。反过来，三张都空
+     * 说明这个报告编号在业务表里根本不存在（典型场景：手工发起时填的编号刚好有数据，
+     * 而「更新报告」换出的新编号没人往里落数）。</p>
+     */
+    private static final String[] CORE_DATA_TABLES = {
+            "app_customer_info", "app_guarantor_info", "app_finance_indicator_info"};
+
+    /**
+     * 业务数据探测：该报告编号在核心业务表里是否存在数据。
+     *
+     * <p>用途见 {@code AgentReportContentProvider#hasBusinessData} ——
+     * 用户口径（2026-09-19）：<b>业务表没有这份报告编号的数据，就不要调 agent
+     * （知识库 / 智策引擎），正文展示"暂无数据"即可</b>。</p>
+     *
+     * <p>探测失败（表不存在 / 库异常）返回 {@code true} —— <b>宁可多调，不可误判为无数据</b>。</p>
+     */
+    public boolean hasBusinessData(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
+            return false;
+        }
+        boolean probed = false;
+        for (String table : CORE_DATA_TABLES) {
+            try {
+                Integer n = jdbc.queryForObject(
+                        "SELECT count(*) FROM " + table + " WHERE reportno = :p0",
+                        Collections.singletonMap("p0", reportNo), Integer.class);
+                probed = true;
+                if (n != null && n > 0) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                log.warn("【报告内容加工】业务数据探测失败(该表跳过) table={} reportNo={} err={}",
+                        table, reportNo, e.getMessage());
+            }
+        }
+        if (!probed) {
+            // 三张表一张都没探成 ⇒ 无法判断，不拦（避免因探测本身故障把整份报告打成空）
+            log.warn("【报告内容加工】业务数据探测全部失败，按\"有数据\"处理 reportNo={}", reportNo);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * 拼 md 表格。
      *
      * @param table       表英文名（模板 E 列，如 {@code app_customer_info}）

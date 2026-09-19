@@ -2673,16 +2673,43 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         return true;
     }
 
-    /** 取数结果是否"有值"（null / 空串 / 空数组 / 空对象 / 字面量 "null" 都算无值） */
+    /**
+     * 取数结果是否"有值"（null / 空串 / 空数组 / 空对象 / 字面量 "null" 都算无值）
+     *
+     * <p>🔴 2026-09-19 补的一条：<b>「查到一行，但这一行的每个列都是 null」也是无值</b>。
+     * 实测新报告编号下的取数就是这种形态 ——
+     * {@code [{在非银机构对外担保余额最新值=null, ...}]}，集合非空、内容全空，
+     * 上一版只看 {@code !isEmpty()} 就判成"有数据"，于是块级短路失效、照样去调大模型。</p>
+     *
+     * <p>注意 {@code 0} 仍算<b>有值</b>（"命中次数为 0"是有效业务结论，不能当无数据抹掉）。</p>
+     */
     private static boolean hasIndexValue(Object value) {
         if (value == null) {
             return false;
         }
         if (value instanceof Collection) {
-            return !((Collection<?>) value).isEmpty();
+            Collection<?> coll = (Collection<?>) value;
+            if (coll.isEmpty()) {
+                return false;
+            }
+            for (Object item : coll) {
+                if (hasIndexValue(item)) {
+                    return true;
+                }
+            }
+            return false;
         }
         if (value instanceof Map) {
-            return !((Map<?, ?>) value).isEmpty();
+            Map<?, ?> map = (Map<?, ?>) value;
+            if (map.isEmpty()) {
+                return false;
+            }
+            for (Object item : map.values()) {
+                if (hasIndexValue(item)) {
+                    return true;
+                }
+            }
+            return false;
         }
         String text = String.valueOf(value).trim();
         return !text.isEmpty() && !"[]".equals(text) && !"{}".equals(text) && !"null".equals(text);

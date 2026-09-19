@@ -588,7 +588,12 @@ public class ReportServiceImpl implements ReportService {
                     // 加工方没实现新契约 → 回落老行为：只出总结、**不筛选**、无收尾
                     payload = contentProvider.provideRuleSummary(ctx, hits);
                 }
-                String content = payload == null ? null : payload.getContent();
+                // 🔴 空内容也要传 "" 而不是 null：buildInstance 里 `content == null` 是
+                //    「去问 provider 要内容」的信号，而这三类块的内容**在阶段 2 已经定死**
+                //    （没有就是没有），再回调 provider 只会走错链路 ——
+                //    RULE_SUMMARY_TAIL 会被当成知识库 moduleCode 去调 agent，日志刷
+                //    `{"code":500,"message":"非法的大模型CODE:"}`。
+                String content = payload == null ? "" : payload.getContent();
                 slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
                         content).getInstance();
             } catch (Throwable e) {
@@ -608,7 +613,8 @@ public class ReportServiceImpl implements ReportService {
                 continue;
             }
             try {
-                String content = tailPayload == null ? null : tailPayload.getContent();
+                // 同上：拿不到收尾结论就是拿不到（空字符串 ≠ null，避免回调 provider）
+                String content = tailPayload == null ? "" : tailPayload.getContent();
                 slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
                         content).getInstance();
             } catch (Throwable e) {
@@ -645,7 +651,7 @@ public class ReportServiceImpl implements ReportService {
                 } else {
                     dropped++;
                 }
-                String content = payload == null ? null : payload.getContent();
+                String content = payload == null ? "" : payload.getContent();
                 slots[i] = buildInstance(reportNo, customerId, customerName, null, block, catalogMap,
                         content).getInstance();
             } catch (Throwable e) {

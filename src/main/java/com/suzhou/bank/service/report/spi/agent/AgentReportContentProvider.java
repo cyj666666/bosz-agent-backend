@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 报告内容提供者 · 智能体实现（**正式链路**）
@@ -81,6 +82,18 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     /** 风险要点「条目块」的 agentCode 前缀（后接对应 RULE 块的 blockCode）——同样由 doProcess 回填 */
     public static final String AGENT_RULE_ENTRY_PREFIX = "RULE_ENTRY#";
+
+    /**
+     * 风险要点「收尾结论块」的 agentCode —— 同样由 doProcess 二阶段回填。
+     *
+     * <p>⚠️ 这个常量的存在本身就是一个坑的补丁：本类 {@link #provide} 的「风险要点相关块」
+     * 拦截最初只写了 {@code RULE_SUMMARY} 与 {@code RULE_ENTRY#}，漏了这一类 ⇒ 阶段 2
+     * 兜底回调时它会被当成**普通知识库块**去调 agent，moduleCode 就是
+     * {@code RULE_SUMMARY_TAIL}（知识库里当然没有这条配置）→ 日志刷
+     * {@code {"code":500,"message":"非法的大模型CODE:"}}。</p>
+     */
+    public static final String AGENT_RULE_SUMMARY_TAIL = "RULE_SUMMARY_TAIL";
+
 
     /** 智策引擎「补充分析」用的 moduleCode 取自 {@code agent_rule.additional_analysis}（见 {@link #ruleContent}） */
     private static final String MODULE_AI_ANALYSIS = "IntelligentStrategyEngine";
@@ -150,6 +163,49 @@ public class AgentReportContentProvider implements ReportContentProvider {
 
     private final LargeModelGatewayClient largeModelGatewayClient;
 
+    /**
+     * 「这份报告有没有业务数据」的进程内缓存（键 = reportNo）。
+     *
+     * <p>报告级闸门每个内容块都要判一次（一份报告 90+ 个块），不去重就是 90+ 次
+     * count 查询。缓存只在生成本轮有意义，量小；超过 {@link #BUSINESS_DATA_CACHE_MAX}
+     * 直接清空重来，不做 LRU（简单且不会长期涨）。</p>
+     */
+    private final Map<String, Boolean> businessDataCache = new ConcurrentHashMap<>();
+
+    /** 缓存上限（超过就整体清空 —— 只求不无限增长，不求命中率） */
+    private static final int BUSINESS_DATA_CACHE_MAX = 500;
+
+    /**
+     * 这份报告编号在业务表里到底有没有数据（{@link TraceTableBuilder#hasBusinessData}）。
+     *
+     * <p>🔴 用户口径（2026-09-19）：<b>业务表不支持、不满足 ⇒ 不要调 agent，
+     * 正文展示"暂无数据"就行</b>。没有数据还去调大模型，模型只会照抄提示词里的
+     * 示例数值、甚至凭空编造企业名与金额（2026-09-19 实测过）。</p>
+     */
+    private boolean hasBusinessData(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
+            return false;
+        }
+        if (businessDataCache.size() > BUSINESS_DATA_CACHE_MAX) {
+            businessDataCache.clear();
+        }
+        Boolean cached = businessDataCache.get(reportNo);
+        if (cached != null) {
+            return cached;
+        }
+        boolean present;
+        try {
+            present = traceTableBuilder.hasBusinessData(reportNo);
+        } catch (Throwable e) {
+            // 探测本身别把块加工搞崩；探不了就按"有数据"处理（宁可多调一次，不可误判为空）
+            log.warn("【报告内容加工】业务数据探测异常，按\"有数据\"处理 reportNo={}", reportNo, e);
+            present = true;
+        }
+        businessDataCache.put(reportNo, present);
+        return present;
+    }
+
+
     @Override
     public ContentPayload provide(ReportGenerateContext context) {
         if (context == null || context.getBlock() == null) {
@@ -167,6 +223,7 @@ public class AgentReportContentProvider implements ReportContentProvider {
         //    这里必须返回 null（不能自己调 agent），否则会拿不到素材、生成错误的总结。
         String agentCode = block.getAgentCode();
         if (AGENT_RULE_SUMMARY.equals(agentCode)
+                || AGENT_RULE_SUMMARY_TAIL.equals(agentCode)
                 || (agentCode != null && agentCode.startsWith(AGENT_RULE_ENTRY_PREFIX))) {
             return null;
         }
@@ -220,7 +277,21 @@ public class AgentReportContentProvider implements ReportContentProvider {
         if (!analysable || !StringUtils.hasText(block.getAnalysisType()) || !StringUtils.hasText(agentCode)) {
             return null;
         }
-        // ⑤ 其余（知识库 ANALYSIS）走下面这条链路：「知识配置管理」该条详情页预览的大模型分析结果
+        // ⑤ 🔴 报告级「业务数据」闸门（用户 2026-09-19 口径）：
+        //    业务表里没有这份报告编号的数据 ⇒ 一律不调 agent（知识库 / 智策引擎），
+        //    该块内容为空 → 按模板 emptyStrategy 展示「暂无数据」。
+        //
+        //    为什么必须放在**报告级**而不是各知识库自己判：单条知识库的取数只要
+        //    "查到一行、值全是 null/0"（实测 V2 就有 2 条如此），块级判定就会以为有数据；
+        //    而报告编号换了、业务表一行都没落，是**整份报告没有数据支撑**这个事实本身。
+        if (!hasBusinessData(context.getReportNo())) {
+            log.info("【业务数据缺失】报告[{}] 在业务表中无数据，跳过调用 agent（知识库/智策引擎），"
+                            + "该块按 emptyStrategy 展示暂无数据 block={}({}) agentCode={}",
+                    context.getReportNo(), blockCode, block.getBlockName(), agentCode);
+            return null;
+        }
+
+        // ⑥ 其余（知识库 ANALYSIS）走下面这条链路：「知识配置管理」该条详情页预览的大模型分析结果
 
         List<String> params = parseAgentParams(block.getAgentParams());
         boolean needGuarantor = params.contains(PARAM_GUARANTOR_NAME);
