@@ -1,0 +1,3009 @@
+{
+  "_comment": "由 _tools/gen_trace_table_fields.py 从《报告详情设计.xlsx》Sheet4 生成，请勿手改；改 Excel 后重跑生成器",
+  "sheet": "Sheet4",
+  "tableCount": 23,
+  "fieldCount": 308,
+  "rawFieldRowCount": 347,
+  "groupCount": 24,
+  "tables": {
+    "app_customer_info": {
+      "tableLabel": "客户工商概况表",
+      "sections": [
+        "二、客户基本情况"
+      ],
+      "fields": [
+        {
+          "field": "customerId",
+          "label": "客户编号"
+        },
+        {
+          "field": "customerName",
+          "label": "客户名称"
+        },
+        {
+          "field": "legalPerson",
+          "label": "法定代表人"
+        },
+        {
+          "field": "registerCapital",
+          "label": "注册资本（万元）"
+        },
+        {
+          "field": "paidInCapital",
+          "label": "实收资本（万元）"
+        },
+        {
+          "field": "industryType",
+          "label": "行业分类"
+        },
+        {
+          "field": "holdType",
+          "label": "控股类型"
+        },
+        {
+          "field": "actualController",
+          "label": "实际控制人"
+        },
+        {
+          "field": "officeAddress",
+          "label": "办公地址"
+        },
+        {
+          "field": "businessScope",
+          "label": "经营范围"
+        },
+        {
+          "field": "dangerLevel",
+          "label": "十级分类"
+        },
+        {
+          "field": "warningLevel",
+          "label": "预警等级"
+        },
+        {
+          "field": "isListedCompany",
+          "label": "借款人是否上市公司"
+        },
+        {
+          "field": "isTechCompany",
+          "label": "是否科创企业"
+        }
+      ]
+    },
+    "app_ic_info": {
+      "tableLabel": "工商登记信息表（客户级）",
+      "sections": [
+        "二、客户基本情况"
+      ],
+      "fields": [
+        {
+          "field": "customerName",
+          "label": "客户名称"
+        },
+        {
+          "field": "icLegalPerson",
+          "label": "工商法定代表人"
+        },
+        {
+          "field": "icRegisterCapital",
+          "label": "工商注册资本（万元）"
+        },
+        {
+          "field": "icPaidInCapital",
+          "label": "工商实缴资本（万元）"
+        },
+        {
+          "field": "icBeneficiaryName",
+          "label": "工商受益人名称"
+        },
+        {
+          "field": "isStateOwned",
+          "label": "是否国有企业"
+        },
+        {
+          "field": "isFakeStateOwned",
+          "label": "是否假冒国企"
+        },
+        {
+          "field": "cancellationDate",
+          "label": "注销日期"
+        }
+      ]
+    },
+    "app_xd_shareholder_info": {
+      "tableLabel": "信贷股东信息表",
+      "sections": [
+        "二、客户基本情况"
+      ],
+      "fields": [
+        {
+          "field": "name",
+          "label": "股东名称"
+        },
+        {
+          "field": "investmentProp",
+          "label": "持股比例"
+        },
+        {
+          "field": "relationShip",
+          "label": "出资方式"
+        },
+        {
+          "field": "currencyType",
+          "label": "币种"
+        },
+        {
+          "field": "oughtSum",
+          "label": "投资金额"
+        },
+        {
+          "field": "investmentSum",
+          "label": "实缴金额"
+        },
+        {
+          "field": "investDate",
+          "label": "投资时间"
+        },
+        {
+          "field": "inputUserId",
+          "label": "登记人"
+        },
+        {
+          "field": "inputOrgId",
+          "label": "登记机构"
+        }
+      ]
+    },
+    "app_shareholder_info": {
+      "tableLabel": "股东股权信息表",
+      "sections": [
+        "二、客户基本情况"
+      ],
+      "fields": [
+        {
+          "field": "name",
+          "label": "股东名称"
+        },
+        {
+          "field": "stock_num",
+          "label": "持股数"
+        },
+        {
+          "field": "amount",
+          "label": "投资金额"
+        },
+        {
+          "field": "stock_percent",
+          "label": "持股比例（%）"
+        },
+        {
+          "field": "is_quoted",
+          "label": "是否上市"
+        },
+        {
+          "field": "is_state_owned",
+          "label": "是否国有"
+        },
+        {
+          "field": "is_fake_state_owned",
+          "label": "股东假冒国企标签"
+        }
+      ]
+    },
+    "app_ic_shareholder_info": {
+      "tableLabel": "工商股东变更表",
+      "sections": [
+        "二、客户基本情况"
+      ],
+      "fields": [
+        {
+          "field": "icShareholderName",
+          "label": "工商股东名称"
+        },
+        {
+          "field": "icStockNum",
+          "label": "工商股东持股数"
+        },
+        {
+          "field": "icAmount",
+          "label": "工商股东出资金额（万元）"
+        },
+        {
+          "field": "changeTime",
+          "label": "股权变更时间"
+        },
+        {
+          "field": "percentBefore",
+          "label": "变更前持股比例（%）"
+        },
+        {
+          "field": "percentAfter",
+          "label": "变更后持股比例（%）"
+        }
+      ]
+    },
+    "app_reputation_event_info": {
+      "tableLabel": "舆情事件明细表",
+      "sections": [
+        "二、客户基本情况"
+      ],
+      "fields": [
+        {
+          "field": "subjectType",
+          "label": "主体类型（码值：借款人/股东）"
+        },
+        {
+          "field": "subjectName",
+          "label": "主体名称（借款人名称/股东名称）"
+        },
+        {
+          "field": "eventTime",
+          "label": "舆情发生时间"
+        },
+        {
+          "field": "eventType",
+          "label": "舆情类型（码值：证券市场违规/股票戴帽/退市风险/评级下调/高管无法履职/财务造假/其他，待确认）"
+        },
+        {
+          "field": "eventTypeCode",
+          "label": "舆情类型编码"
+        },
+        {
+          "field": "eventTypeOrder",
+          "label": "舆情事件排序"
+        },
+        {
+          "field": "eventDesc",
+          "label": "舆情事件描述"
+        }
+      ]
+    },
+    "app_credit_use_info": {
+      "tableLabel": "授信用信概况表",
+      "sections": [
+        "三、业务基本情况"
+      ],
+      "fields": [
+        {
+          "field": "creditSum",
+          "label": "授信金额（万元）"
+        },
+        {
+          "field": "balance",
+          "label": "总余额（万元）"
+        },
+        {
+          "field": "exposureAmount",
+          "label": "敞口金额（万元）"
+        },
+        {
+          "field": "limitBalance",
+          "label": "敞口余额（万元）"
+        },
+        {
+          "field": "groupAmount",
+          "label": "集团授信金额（万元）"
+        },
+        {
+          "field": "groupBalance",
+          "label": "集团总余额（万元）"
+        },
+        {
+          "field": "isGroup",
+          "label": "是否集团客户（码值：是/否）"
+        },
+        {
+          "field": "groupName",
+          "label": "所属集团名称"
+        },
+        {
+          "field": "creditDate",
+          "label": "授信日期"
+        },
+        {
+          "field": "latestOverdueDate",
+          "label": "企业当前最近一次逾期日期"
+        },
+        {
+          "field": "gdOverdueCounts",
+          "label": "固贷产品近一年历史逾期次数"
+        },
+        {
+          "field": "ajOverdueCounts",
+          "label": "按揭贷款产品近一年历史逾期次数"
+        }
+      ]
+    },
+    "app_loan_receipt_info": {
+      "tableLabel": "借据信息表",
+      "sections": [
+        "三、业务基本情况"
+      ],
+      "fields": [
+        {
+          "field": "loanSerialNo",
+          "label": "借据号"
+        },
+        {
+          "field": "loanStatus",
+          "label": "借据状态"
+        },
+        {
+          "field": "productName",
+          "label": "基础产品名称"
+        },
+        {
+          "field": "productBelongName",
+          "label": "产品归属"
+        },
+        {
+          "field": "purposeName",
+          "label": "用途"
+        },
+        {
+          "field": "balance",
+          "label": "借据余额（万元）"
+        },
+        {
+          "field": "businessSum",
+          "label": "借款金额"
+        },
+        {
+          "field": "overdueBalance",
+          "label": "期供欠本金额（万元）"
+        },
+        {
+          "field": "overdueInterestAmt",
+          "label": "期供欠息金额（万元）"
+        },
+        {
+          "field": "isRestructed",
+          "label": "是否重组优化贷款"
+        },
+        {
+          "field": "loanChangeRptCounts",
+          "label": "还款方式变更笔数"
+        },
+        {
+          "field": "loanChangeRptBalance",
+          "label": "还款方式变更贷款余额（万元）"
+        },
+        {
+          "field": "occurType",
+          "label": "发生类型"
+        },
+        {
+          "field": "isExtend",
+          "label": "是否展期"
+        },
+        {
+          "field": "fixedAssetLoan",
+          "label": "是否固贷产品"
+        },
+        {
+          "field": "realEstateDevLoan",
+          "label": "是否房地产开发产"
+        },
+        {
+          "field": "nextPayDate",
+          "label": "下次还款日"
+        },
+        {
+          "field": "payPrinciPalamt",
+          "label": "下次还款本金"
+        },
+        {
+          "field": "payInterestamt",
+          "label": "下次还款利息"
+        },
+        {
+          "field": "payFineAmt",
+          "label": "下次还款罚息"
+        },
+        {
+          "field": "compoundinterest",
+          "label": "下次还款复利"
+        },
+        {
+          "field": "businessRate",
+          "label": "执行年利率%"
+        }
+      ]
+    },
+    "app_finance_indicator_info": {
+      "tableLabel": "财务指标表",
+      "sections": [
+        "五、指标变化和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "finReportno",
+          "label": "财报编号"
+        },
+        {
+          "field": "accountmonth",
+          "label": "会计月"
+        },
+        {
+          "field": "reportscope",
+          "label": "报表口径"
+        },
+        {
+          "field": "reportperiod",
+          "label": "报表周期"
+        },
+        {
+          "field": "auditflag",
+          "label": "是否审计"
+        },
+        {
+          "field": "currency",
+          "label": "报表币种"
+        },
+        {
+          "field": "monetaryunit",
+          "label": "货币单位"
+        },
+        {
+          "field": "reportstatusname",
+          "label": "报表状态中文"
+        },
+        {
+          "field": "reportstatus",
+          "label": "报表状态码值"
+        },
+        {
+          "field": "reporttypeno",
+          "label": "报表类型"
+        },
+        {
+          "field": "reporttypename",
+          "label": "报表类型名称"
+        },
+        {
+          "field": "revenue",
+          "label": "营业收入（万元）"
+        },
+        {
+          "field": "revenueyoy",
+          "label": "营业收入同比（%）"
+        },
+        {
+          "field": "netprofit",
+          "label": "净利润（万元）"
+        },
+        {
+          "field": "netprofityoy",
+          "label": "净利润同比（%）"
+        },
+        {
+          "field": "paidincapital",
+          "label": "实收资本（万元）"
+        },
+        {
+          "field": "totalequity",
+          "label": "所有者权益合计（万元）"
+        },
+        {
+          "field": "accountsreceivable",
+          "label": "应收账款（万元）"
+        },
+        {
+          "field": "archangefromyearstart",
+          "label": "应收账款较年初变动（万元）"
+        },
+        {
+          "field": "archangefromyearstartrate",
+          "label": "应收账款较年初增幅（%）"
+        },
+        {
+          "field": "otherreceivable",
+          "label": "其他应收款（万元）"
+        },
+        {
+          "field": "orchangefromyearstart",
+          "label": "其他应收款较年初变动（万元）"
+        },
+        {
+          "field": "orchangefromyearstartrate",
+          "label": "其他应收款较年初增幅（%）"
+        },
+        {
+          "field": "arortotalassetratio",
+          "label": "应收账款和其他应收款合计占总资产比例（%）"
+        },
+        {
+          "field": "shortloan",
+          "label": "短期借款（万元）"
+        },
+        {
+          "field": "shortloanchangefromyearstart",
+          "label": "短期借款较年初变动（万元）"
+        },
+        {
+          "field": "shortloanchangefromyearstartrate",
+          "label": "短期借款较年初增幅（%）"
+        },
+        {
+          "field": "longloan",
+          "label": "长期借款（万元）"
+        },
+        {
+          "field": "longloanchangefromyearstart",
+          "label": "长期借款较年初变动（万元）"
+        },
+        {
+          "field": "longloanchangefromyearstartrate",
+          "label": "长期借款较年初增幅（%）"
+        },
+        {
+          "field": "longloanduewithin1y",
+          "label": "一年内到期的长期借款（万元）"
+        },
+        {
+          "field": "salesloanratio",
+          "label": "销贷比"
+        },
+        {
+          "field": "NOTESPAYABLE",
+          "label": "应付票据（万元）"
+        },
+        {
+          "field": "notepayablechangefromyearstart",
+          "label": "应付票据较年初变动（万元）"
+        },
+        {
+          "field": "notepayablechangefromyearstartrate",
+          "label": "应付票据较年初增幅（%）"
+        },
+        {
+          "field": "otherpayable",
+          "label": "其他应付款（万元）"
+        },
+        {
+          "field": "otherpayablechangefromyearstart",
+          "label": "其他应付款较年初变动（万元）"
+        },
+        {
+          "field": "otherpayablechangefromyearstartrate",
+          "label": "其他应付款较年初增幅（%）"
+        },
+        {
+          "field": "sltotalloanyoy",
+          "label": "短期借款和长期借款合计同比（%）"
+        },
+        {
+          "field": "aryoy",
+          "label": "应收账款同比（%）"
+        },
+        {
+          "field": "arturnoverdays",
+          "label": "应收账款周转天数"
+        },
+        {
+          "field": "inventoryturnoverdays",
+          "label": "存货周转天数"
+        },
+        {
+          "field": "inventoryyoy",
+          "label": "存货同比（%）"
+        },
+        {
+          "field": "accountspayable",
+          "label": "应付账款（万元）"
+        },
+        {
+          "field": "inventory",
+          "label": "存货（万元）"
+        },
+        {
+          "field": "debtratio",
+          "label": "资产负债率（%）"
+        },
+        {
+          "field": "salesprofitratio",
+          "label": "销售利率（%）"
+        },
+        {
+          "field": "netprofitratio",
+          "label": "净利率（%）"
+        }
+      ]
+    },
+    "app_guofa_report_info": {
+      "tableLabel": "国发征信信息表",
+      "sections": [
+        "五、指标变化和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "dataDate",
+          "label": "数据日期"
+        },
+        {
+          "field": "beforeYear",
+          "label": "前年日期"
+        },
+        {
+          "field": "lastYear",
+          "label": "去年日期"
+        },
+        {
+          "field": "thisYear",
+          "label": "最新一期日期"
+        },
+        {
+          "field": "gfRevenue",
+          "label": "最近一期营收（万元）"
+        },
+        {
+          "field": "lastYearRevenue",
+          "label": "去年营收（万元）"
+        },
+        {
+          "field": "beforeYearRevenue",
+          "label": "前年营收（万元）"
+        },
+        {
+          "field": "gfReceivable",
+          "label": "最近一期应收账款（万元）"
+        },
+        {
+          "field": "lastYearReceivable",
+          "label": "去年应收账款（万元）"
+        },
+        {
+          "field": "beforeYearReceivable",
+          "label": "前年应收账款（万元）"
+        },
+        {
+          "field": "gfPayable",
+          "label": "最近一期应付账款（万元）"
+        },
+        {
+          "field": "lastYearPayable",
+          "label": "去年应付账款（万元）"
+        },
+        {
+          "field": "beforeYearPayable",
+          "label": "前年应付账款（万元）"
+        },
+        {
+          "field": "gfInventory",
+          "label": "最近一期存货（万元）"
+        },
+        {
+          "field": "lastYearInventory",
+          "label": "去年存货（万元）"
+        },
+        {
+          "field": "beforeYearInventory",
+          "label": "前年存货（万元）"
+        }
+      ]
+    },
+    "app_gs_finance_data_info": {
+      "tableLabel": "国税财务数据表",
+      "sections": [
+        "五、指标变化和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "beforeYear",
+          "label": "前年日期"
+        },
+        {
+          "field": "lastYear",
+          "label": "去年日期"
+        },
+        {
+          "field": "thisYear",
+          "label": "最新一期日期"
+        },
+        {
+          "field": "gfRevenue",
+          "label": "最近一期营收（万元）"
+        },
+        {
+          "field": "lastYearRevenue",
+          "label": "去年营收（万元）"
+        },
+        {
+          "field": "beforeYearRevenue",
+          "label": "前年营收（万元）"
+        },
+        {
+          "field": "gfReceivable",
+          "label": "最近一期应收账款（万元）"
+        },
+        {
+          "field": "lastYearReceivable",
+          "label": "去年应收账款（万元）"
+        },
+        {
+          "field": "beforeYearReceivable",
+          "label": "前年应收账款（万元）"
+        },
+        {
+          "field": "gfPayable",
+          "label": "最近一期应付账款（万元）"
+        },
+        {
+          "field": "lastYearPayable",
+          "label": "去年应付账款（万元）"
+        },
+        {
+          "field": "beforeYearPayable",
+          "label": "前年应付账款（万元）"
+        },
+        {
+          "field": "gfInventory",
+          "label": "最近一期存货（万元）"
+        },
+        {
+          "field": "lastYearInventory",
+          "label": "去年存货（万元）"
+        },
+        {
+          "field": "beforeYearInventory",
+          "label": "前年存货（万元）"
+        }
+      ]
+    },
+    "app_credit_report_info": {
+      "tableLabel": "企业征信快照表",
+      "sections": [
+        "六、征信情况和潜在风险",
+        "十二、担保情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "queryTime",
+          "label": "征信查询时间"
+        },
+        {
+          "field": "zxReportNo",
+          "label": "征信报告记录号"
+        },
+        {
+          "field": "overdueTotal",
+          "label": "未结清信贷的逾期总额（万元）"
+        },
+        {
+          "field": "attentionCreditBal",
+          "label": "未结清关注类信贷余额（万元）"
+        },
+        {
+          "field": "badCreditBal",
+          "label": "未结清不良类借贷余额（万元）"
+        },
+        {
+          "field": "attentionGuaranteeBal",
+          "label": "未结清关注类担保交易余额（万元）"
+        },
+        {
+          "field": "badGuaranteeBal",
+          "label": "未结清不良类担保交易余额（万元）"
+        },
+        {
+          "field": "guaranteeOverdueTotal",
+          "label": "对外担保（相关还款责任）未结清逾期类负债总额（万元）"
+        },
+        {
+          "field": "guaranteeAttentionBal",
+          "label": "对外担保（相关还款责任）未结清关注类负债总额（万元）"
+        },
+        {
+          "field": "guaranteeBadBal",
+          "label": "对外担保（相关还款责任）未结清不良类负债总额（万元）"
+        },
+        {
+          "field": "extendDebtBal",
+          "label": "展期债务未结清余额（万元）"
+        },
+        {
+          "field": "restructureDebtBal",
+          "label": "重组债务未结清余额（万元）"
+        },
+        {
+          "field": "renewDebtBal",
+          "label": "无还本续贷未结清余额（万元）"
+        },
+        {
+          "field": "transferDebtBal",
+          "label": "其他机构转入未结清余额（万元）"
+        },
+        {
+          "field": "newOldDebtBal",
+          "label": "借新还旧债务未结清余额（万元）"
+        },
+        {
+          "field": "nonBankLiabTotal",
+          "label": "在非银机构负债合计（万元）"
+        },
+        {
+          "field": "nonBankHighRateLoan",
+          "label": "非银机构较高利率借款推算利率最大值（%）"
+        },
+        {
+          "field": "nonBankGuaranteeBal",
+          "label": "在非银机构对外担保余额（万元）"
+        },
+        {
+          "field": "workingCapitalLoanBal",
+          "label": "流动资金贷款余额（万元）"
+        },
+        {
+          "field": "workingCapitalLoan1yBal",
+          "label": "一年期以下的流动资金贷款余额（万元）"
+        },
+        {
+          "field": "loanBankOrgCount",
+          "label": "企业借贷交易合作银行及融资租赁机构数"
+        },
+        {
+          "field": "guaranteeBankOrgCount",
+          "label": "企业担保交易合作银行及融资租赁机构数"
+        },
+        {
+          "field": "shortTermLoanOrgCount",
+          "label": "短期借款未结清机构数合计"
+        },
+        {
+          "field": "midLongTermLoanOrgCount",
+          "label": "中长期借款未结清机构数合计"
+        },
+        {
+          "field": "revolvingOverdraftOrgCount",
+          "label": "循环透支未结清机构数合计"
+        },
+        {
+          "field": "discountOrgCount",
+          "label": "贴现未结清机构数合计"
+        },
+        {
+          "field": "bankAcceptanceBillOrgCount",
+          "label": "银行承兑汇票未结清机构数合计"
+        },
+        {
+          "field": "letterOfCreditOrgCount",
+          "label": "信用证未结清机构数合计"
+        },
+        {
+          "field": "bankGuaranteeOrgCount",
+          "label": "银行保函未结清机构数合计"
+        },
+        {
+          "field": "otherGuaranteeTradeOrgCount",
+          "label": "其他担保交易未结清机构数合计"
+        },
+        {
+          "field": "shortTermLoanBal",
+          "label": "短期借款未结清余额合计（万元）"
+        },
+        {
+          "field": "midLongTermLoanBal",
+          "label": "中长期借款未结清余额合计（万元）"
+        },
+        {
+          "field": "revolvingOverdraftBal",
+          "label": "循环透支未结清余额合计（万元）"
+        },
+        {
+          "field": "discountBal",
+          "label": "贴现未结清余额合计（万元）"
+        },
+        {
+          "field": "bankAcceptanceBillBal",
+          "label": "银行承兑汇票未结清余额合计（万元）"
+        },
+        {
+          "field": "letterOfCreditBal",
+          "label": "信用证未结清余额合计（万元）"
+        },
+        {
+          "field": "bankGuaranteeBal",
+          "label": "银行保函未结清余额合计（万元）"
+        },
+        {
+          "field": "otherGuaranteeTradeBal",
+          "label": "其他担保交易未结清余额合计（万元）"
+        },
+        {
+          "field": "guaranteeBalanceExBank",
+          "label": "对外担保（相关还款责任）余额（剔除我行）（万元）"
+        },
+        {
+          "field": "guarantorName",
+          "label": "担保人"
+        }
+      ]
+    },
+    "app_settle_account_info": {
+      "tableLabel": "结算账户表",
+      "sections": [
+        "九、结算情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "accountNo",
+          "label": "账号"
+        },
+        {
+          "field": "accountStatus",
+          "label": "账户状态"
+        },
+        {
+          "field": "accountBalance",
+          "label": "账户余额（万元）"
+        },
+        {
+          "field": "superviseFlag",
+          "label": "监管标识"
+        }
+      ]
+    },
+    "app_settle_asset_info": {
+      "tableLabel": "结算资产表",
+      "sections": [
+        "九、结算情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "frozenAmount",
+          "label": "冻结金额（万元）"
+        },
+        {
+          "field": "debitSameNameTransferRatio",
+          "label": "借方同名划转金额占比（%）"
+        },
+        {
+          "field": "creditSameNameTransferRatio",
+          "label": "贷方同名划转金额占比（%）"
+        },
+        {
+          "field": "yearAvgDeposit",
+          "label": "年日均存款（万元）"
+        },
+        {
+          "field": "lastYearAvgDeposit",
+          "label": "上年年日均存款（万元）"
+        },
+        {
+          "field": "propertyIncome",
+          "label": "当年物业收入（万元）"
+        },
+        {
+          "field": "propertyIncomeYoy",
+          "label": "当年物业收入累计较上年同期（万元）"
+        },
+        {
+          "field": "propertyIncomeSupervised",
+          "label": "当年监管账户物业收入（万元）"
+        },
+        {
+          "field": "electricFeeIncome",
+          "label": "当年电费收入（万元）"
+        },
+        {
+          "field": "electricFeeYoy",
+          "label": "当年电费收入累计较上年同期（万元）"
+        },
+        {
+          "field": "electricFeeSupervised",
+          "label": "当年监管账户当年电费收入（万元）"
+        },
+        {
+          "field": "keywordCounterpartyCreditAmount",
+          "label": "当年交易对手中出现小额贷款、担保等关键字的公司贷方发生额（万元）"
+        },
+        {
+          "field": "keywordRemarkCreditAmount",
+          "label": "当年备注中有担保、借款、投资关键字贷方发生额（万元）"
+        }
+      ]
+    },
+    "app_entrust_pay_info": {
+      "tableLabel": "受托支付明细表",
+      "sections": [
+        "九、结算情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "paymentMode",
+          "label": "支付方式"
+        },
+        {
+          "field": "payDate",
+          "label": "支付日期"
+        },
+        {
+          "field": "accountName",
+          "label": "收款人名称"
+        },
+        {
+          "field": "payeeCancelDate",
+          "label": "受托支付对象注销日期"
+        }
+      ]
+    },
+    "app_top_five_updown_info": {
+      "tableLabel": "前五大上下游表",
+      "sections": [
+        "九、结算情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "supplier",
+          "label": "供应商名称"
+        },
+        {
+          "field": "supplierType",
+          "label": "供应商类型"
+        },
+        {
+          "field": "supplierTypeName",
+          "label": "供应商类型名称"
+        }
+      ]
+    },
+    "app_settle_counterparty_info": {
+      "tableLabel": "结算交易对手表",
+      "sections": [
+        "九、结算情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "counterpartyName",
+          "label": "交易对手名称"
+        },
+        {
+          "field": "direction",
+          "label": "方向（借方/贷方）"
+        },
+        {
+          "field": "amount",
+          "label": "发生额（万元）"
+        },
+        {
+          "field": "rankNo",
+          "label": "排名（TOP1-10）"
+        }
+      ]
+    },
+    "app_payroll_stat_info": {
+      "tableLabel": "代发统计表（月粒度）",
+      "sections": [
+        "九、结算情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "statMonth",
+          "label": "统计月份"
+        },
+        {
+          "field": "payrollCount",
+          "label": "代发人数"
+        },
+        {
+          "field": "payrollAmount",
+          "label": "代发金额（万元）"
+        },
+        {
+          "field": "countMom",
+          "label": "代发人数环比"
+        },
+        {
+          "field": "amountMom",
+          "label": "代发金额环比"
+        },
+        {
+          "field": "countYoy",
+          "label": "代发人数同比"
+        },
+        {
+          "field": "amountYoy",
+          "label": "代发金额同比"
+        }
+      ]
+    },
+    "app_collateral_info": {
+      "tableLabel": "押品主档表",
+      "sections": [
+        "十二、担保情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "clrId",
+          "label": "押品编号"
+        },
+        {
+          "field": "owner",
+          "label": "权属人"
+        },
+        {
+          "field": "clrType",
+          "label": "押品类型"
+        },
+        {
+          "field": "clrName",
+          "label": "押品名称"
+        },
+        {
+          "field": "clrStatus",
+          "label": "押品状态"
+        },
+        {
+          "field": "valuationDate",
+          "label": "押品最新评估日期"
+        },
+        {
+          "field": "choiceTypeName",
+          "label": "评估方式"
+        },
+        {
+          "field": "evaluateValue",
+          "label": "评估价值（万元）"
+        },
+        {
+          "field": "rightOrder",
+          "label": "顺位"
+        },
+        {
+          "field": "rightSum",
+          "label": "权证金额（万元）"
+        },
+        {
+          "field": "confirmDate",
+          "label": "认定日期"
+        },
+        {
+          "field": "DYQDJ",
+          "label": "地役权登记"
+        },
+        {
+          "field": "YYDJ",
+          "label": "异议登记"
+        },
+        {
+          "field": "CFDJ",
+          "label": "查封登记"
+        },
+        {
+          "field": "YGDJ",
+          "label": "预告登记"
+        }
+      ]
+    },
+    "app_collateral_mortgage_info": {
+      "tableLabel": "押品他项权利",
+      "sections": [
+        "十二、担保情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "clrId",
+          "label": "押品编号"
+        },
+        {
+          "field": "pledgeSerialNo",
+          "label": "不动产登记编号"
+        },
+        {
+          "field": "pledgeeName",
+          "label": "他项权姓名"
+        },
+        {
+          "field": "guaranteeScope",
+          "label": "担保范围"
+        },
+        {
+          "field": "pledgeTypeName",
+          "label": "抵押方式"
+        },
+        {
+          "field": "maxCreditorAmt",
+          "label": "债权数额（万元）"
+        },
+        {
+          "field": "startEnd",
+          "label": "债务履行期限"
+        },
+        {
+          "field": "registerTimestamp",
+          "label": "设定日期"
+        }
+      ]
+    },
+    "app_collateral_restricted_right": {
+      "tableLabel": "限制权利表",
+      "sections": [
+        "十二、担保情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "clrId",
+          "label": "押品编号"
+        },
+        {
+          "field": "attachmentOrg",
+          "label": "限制权人"
+        },
+        {
+          "field": "attachmentTypeName",
+          "label": "查封类型"
+        }
+      ]
+    },
+    "app_guarantor_info": {
+      "tableLabel": "担保人信息表",
+      "sections": [
+        "十二、担保情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "guarantorName",
+          "label": "担保人"
+        },
+        {
+          "field": "guarantorType",
+          "label": "担保人类型"
+        },
+        {
+          "field": "holdType",
+          "label": "控股类型"
+        },
+        {
+          "field": "zxReportNoZX",
+          "label": "征信报告记录号-最新"
+        },
+        {
+          "field": "zxReportNosq",
+          "label": "征信报告记录号-上期"
+        },
+        {
+          "field": "zxReportNoSX",
+          "label": "征信报告记录号-授信"
+        }
+      ]
+    },
+    "app_guarantor_credit_info": {
+      "tableLabel": "担保人征信表",
+      "sections": [
+        "十二、担保情况和潜在风险"
+      ],
+      "fields": [
+        {
+          "field": "guarantorName",
+          "label": "担保人"
+        },
+        {
+          "field": "zxReportNo",
+          "label": "征信报告记录号"
+        },
+        {
+          "field": "queryTime",
+          "label": "征信查询时间"
+        },
+        {
+          "field": "education",
+          "label": "学历"
+        },
+        {
+          "field": "totalLoanBal",
+          "label": "贷款余额合计（万元）"
+        },
+        {
+          "field": "operateLoanBal",
+          "label": "经营性贷款余额合计（万元）"
+        },
+        {
+          "field": "consumeLoanBal",
+          "label": "消费类贷款余额合计（万元）"
+        },
+        {
+          "field": "houseLoanBal",
+          "label": "住房类贷款余额合计（万元）"
+        },
+        {
+          "field": "otherLoanBal",
+          "label": "其他贷款余额合计（万元）"
+        },
+        {
+          "field": "totalLoanCount",
+          "label": "贷款机构数"
+        },
+        {
+          "field": "operateLoanCount",
+          "label": "经营性贷款机构数"
+        },
+        {
+          "field": "consumeLoanCount",
+          "label": "消费类贷款机构数"
+        },
+        {
+          "field": "houseLoanCount",
+          "label": "住房类贷款机构数"
+        },
+        {
+          "field": "otherLoanCount",
+          "label": "其他贷款机构数"
+        },
+        {
+          "field": "bzcBal",
+          "label": "被追偿余额（万元）"
+        },
+        {
+          "field": "badBal",
+          "label": "呆账余额（万元）"
+        },
+        {
+          "field": "loanCurrentOverdue",
+          "label": "贷款当前逾期总金额（万元）"
+        },
+        {
+          "field": "cardCurrentOverdue",
+          "label": "贷记卡当前逾期总金额（万元）"
+        },
+        {
+          "field": "guaranteeOverdueAmt",
+          "label": "对外担保（相关还款责任）当前逾期金额（万元）"
+        },
+        {
+          "field": "nonBankGuaranteeBal",
+          "label": "在非银机构对外担保余额（万元）"
+        },
+        {
+          "field": "nonBankHighRateLoan",
+          "label": "非银机构较高利率借款推算利率最大值（%）"
+        },
+        {
+          "field": "guaranteeAbnormalBal",
+          "label": "对外担保（相关还款责任）五级分类非正常余额（万元）"
+        },
+        {
+          "field": "extendBal",
+          "label": "展期债务余额（万元）"
+        },
+        {
+          "field": "delayBal",
+          "label": "落实金融困等政策银行主动延期债务余额（万元）"
+        },
+        {
+          "field": "creditAbnormalBal",
+          "label": "未结清信贷五级分类非正常余额（万元）"
+        },
+        {
+          "field": "acctAbnormalBal",
+          "label": "未结清账户状态非正常余额（万元）"
+        },
+        {
+          "field": "cardAbnormalBal",
+          "label": "未销户贷记卡账户状态非正常余额（万元）"
+        },
+        {
+          "field": "guaranteeHkAbnormalBal",
+          "label": "对外担保（相关还款责任）还款状态非正常余额（万元）"
+        },
+        {
+          "field": "creditUseRate",
+          "label": "信用卡使用率（%）"
+        },
+        {
+          "field": "nonBankLiabTotal",
+          "label": "在非银机构负债合计（万元）"
+        },
+        {
+          "field": "loanQuery12m",
+          "label": "近一年贷款审批征信查询次数"
+        },
+        {
+          "field": "loanQuery6m",
+          "label": "近6个月贷款审批征信查询次数"
+        },
+        {
+          "field": "loanQuery3m",
+          "label": "近3个月贷款审批征信查询次数"
+        },
+        {
+          "field": "cardQuery12m",
+          "label": "近一年信用卡审批征信查询次数"
+        },
+        {
+          "field": "cardQuery6m",
+          "label": "近6个月信用卡审批征信查询次数"
+        },
+        {
+          "field": "cardQuery3m",
+          "label": "近3个月信用卡审批征信查询次数"
+        },
+        {
+          "field": "selfQuery1m",
+          "label": "近1个月本人查询征信查询次数"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "section": "二、客户基本情况",
+      "l2": "",
+      "table": "app_customer_info",
+      "tableLabel": "客户工商概况表",
+      "fields": [
+        {
+          "field": "customerId",
+          "label": "客户编号"
+        },
+        {
+          "field": "customerName",
+          "label": "客户名称"
+        },
+        {
+          "field": "legalPerson",
+          "label": "法定代表人"
+        },
+        {
+          "field": "registerCapital",
+          "label": "注册资本（万元）"
+        },
+        {
+          "field": "paidInCapital",
+          "label": "实收资本（万元）"
+        },
+        {
+          "field": "industryType",
+          "label": "行业分类"
+        },
+        {
+          "field": "holdType",
+          "label": "控股类型"
+        },
+        {
+          "field": "actualController",
+          "label": "实际控制人"
+        },
+        {
+          "field": "officeAddress",
+          "label": "办公地址"
+        },
+        {
+          "field": "businessScope",
+          "label": "经营范围"
+        },
+        {
+          "field": "dangerLevel",
+          "label": "十级分类"
+        },
+        {
+          "field": "warningLevel",
+          "label": "预警等级"
+        },
+        {
+          "field": "isListedCompany",
+          "label": "借款人是否上市公司"
+        },
+        {
+          "field": "isTechCompany",
+          "label": "是否科创企业"
+        }
+      ]
+    },
+    {
+      "section": "二、客户基本情况",
+      "l2": "",
+      "table": "app_ic_info",
+      "tableLabel": "工商登记信息表（客户级）",
+      "fields": [
+        {
+          "field": "customerName",
+          "label": "客户名称"
+        },
+        {
+          "field": "icLegalPerson",
+          "label": "工商法定代表人"
+        },
+        {
+          "field": "icRegisterCapital",
+          "label": "工商注册资本（万元）"
+        },
+        {
+          "field": "icPaidInCapital",
+          "label": "工商实缴资本（万元）"
+        },
+        {
+          "field": "icBeneficiaryName",
+          "label": "工商受益人名称"
+        },
+        {
+          "field": "isStateOwned",
+          "label": "是否国有企业"
+        },
+        {
+          "field": "isFakeStateOwned",
+          "label": "是否假冒国企"
+        },
+        {
+          "field": "cancellationDate",
+          "label": "注销日期"
+        }
+      ]
+    },
+    {
+      "section": "二、客户基本情况",
+      "l2": "",
+      "table": "app_xd_shareholder_info",
+      "tableLabel": "信贷股东信息表",
+      "fields": [
+        {
+          "field": "name",
+          "label": "股东名称"
+        },
+        {
+          "field": "investmentProp",
+          "label": "持股比例"
+        },
+        {
+          "field": "relationShip",
+          "label": "出资方式"
+        },
+        {
+          "field": "currencyType",
+          "label": "币种"
+        },
+        {
+          "field": "oughtSum",
+          "label": "投资金额"
+        },
+        {
+          "field": "investmentSum",
+          "label": "实缴金额"
+        },
+        {
+          "field": "investDate",
+          "label": "投资时间"
+        },
+        {
+          "field": "inputUserId",
+          "label": "登记人"
+        },
+        {
+          "field": "inputOrgId",
+          "label": "登记机构"
+        }
+      ]
+    },
+    {
+      "section": "二、客户基本情况",
+      "l2": "",
+      "table": "app_shareholder_info",
+      "tableLabel": "股东股权信息表",
+      "fields": [
+        {
+          "field": "name",
+          "label": "股东名称"
+        },
+        {
+          "field": "stock_num",
+          "label": "持股数"
+        },
+        {
+          "field": "amount",
+          "label": "投资金额"
+        },
+        {
+          "field": "stock_percent",
+          "label": "持股比例（%）"
+        },
+        {
+          "field": "is_quoted",
+          "label": "是否上市"
+        },
+        {
+          "field": "is_state_owned",
+          "label": "是否国有"
+        },
+        {
+          "field": "is_fake_state_owned",
+          "label": "股东假冒国企标签"
+        }
+      ]
+    },
+    {
+      "section": "二、客户基本情况",
+      "l2": "",
+      "table": "app_ic_shareholder_info",
+      "tableLabel": "工商股东变更表",
+      "fields": [
+        {
+          "field": "icShareholderName",
+          "label": "工商股东名称"
+        },
+        {
+          "field": "icStockNum",
+          "label": "工商股东持股数"
+        },
+        {
+          "field": "icAmount",
+          "label": "工商股东出资金额（万元）"
+        },
+        {
+          "field": "changeTime",
+          "label": "股权变更时间"
+        },
+        {
+          "field": "percentBefore",
+          "label": "变更前持股比例（%）"
+        },
+        {
+          "field": "percentAfter",
+          "label": "变更后持股比例（%）"
+        }
+      ]
+    },
+    {
+      "section": "二、客户基本情况",
+      "l2": "",
+      "table": "app_reputation_event_info",
+      "tableLabel": "舆情事件明细表",
+      "fields": [
+        {
+          "field": "subjectType",
+          "label": "主体类型（码值：借款人/股东）"
+        },
+        {
+          "field": "subjectName",
+          "label": "主体名称（借款人名称/股东名称）"
+        },
+        {
+          "field": "eventTime",
+          "label": "舆情发生时间"
+        },
+        {
+          "field": "eventType",
+          "label": "舆情类型（码值：证券市场违规/股票戴帽/退市风险/评级下调/高管无法履职/财务造假/其他，待确认）"
+        },
+        {
+          "field": "eventTypeCode",
+          "label": "舆情类型编码"
+        },
+        {
+          "field": "eventTypeOrder",
+          "label": "舆情事件排序"
+        },
+        {
+          "field": "eventDesc",
+          "label": "舆情事件描述"
+        }
+      ]
+    },
+    {
+      "section": "三、业务基本情况",
+      "l2": "",
+      "table": "app_credit_use_info",
+      "tableLabel": "授信用信概况表",
+      "fields": [
+        {
+          "field": "creditSum",
+          "label": "授信金额（万元）"
+        },
+        {
+          "field": "balance",
+          "label": "总余额（万元）"
+        },
+        {
+          "field": "exposureAmount",
+          "label": "敞口金额（万元）"
+        },
+        {
+          "field": "limitBalance",
+          "label": "敞口余额（万元）"
+        },
+        {
+          "field": "groupAmount",
+          "label": "集团授信金额（万元）"
+        },
+        {
+          "field": "groupBalance",
+          "label": "集团总余额（万元）"
+        },
+        {
+          "field": "isGroup",
+          "label": "是否集团客户（码值：是/否）"
+        },
+        {
+          "field": "groupName",
+          "label": "所属集团名称"
+        },
+        {
+          "field": "creditDate",
+          "label": "授信日期"
+        },
+        {
+          "field": "latestOverdueDate",
+          "label": "企业当前最近一次逾期日期"
+        },
+        {
+          "field": "gdOverdueCounts",
+          "label": "固贷产品近一年历史逾期次数"
+        },
+        {
+          "field": "ajOverdueCounts",
+          "label": "按揭贷款产品近一年历史逾期次数"
+        }
+      ]
+    },
+    {
+      "section": "三、业务基本情况",
+      "l2": "",
+      "table": "app_loan_receipt_info",
+      "tableLabel": "借据信息表",
+      "fields": [
+        {
+          "field": "loanSerialNo",
+          "label": "借据号"
+        },
+        {
+          "field": "loanStatus",
+          "label": "借据状态"
+        },
+        {
+          "field": "productName",
+          "label": "基础产品名称"
+        },
+        {
+          "field": "productBelongName",
+          "label": "产品归属"
+        },
+        {
+          "field": "purposeName",
+          "label": "用途"
+        },
+        {
+          "field": "balance",
+          "label": "借据余额（万元）"
+        },
+        {
+          "field": "businessSum",
+          "label": "借款金额"
+        },
+        {
+          "field": "overdueBalance",
+          "label": "期供欠本金额（万元）"
+        },
+        {
+          "field": "overdueInterestAmt",
+          "label": "期供欠息金额（万元）"
+        },
+        {
+          "field": "isRestructed",
+          "label": "是否重组优化贷款"
+        },
+        {
+          "field": "loanChangeRptCounts",
+          "label": "还款方式变更笔数"
+        },
+        {
+          "field": "loanChangeRptBalance",
+          "label": "还款方式变更贷款余额（万元）"
+        },
+        {
+          "field": "occurType",
+          "label": "发生类型"
+        },
+        {
+          "field": "isExtend",
+          "label": "是否展期"
+        },
+        {
+          "field": "fixedAssetLoan",
+          "label": "是否固贷产品"
+        },
+        {
+          "field": "realEstateDevLoan",
+          "label": "是否房地产开发产"
+        },
+        {
+          "field": "nextPayDate",
+          "label": "下次还款日"
+        },
+        {
+          "field": "payPrinciPalamt",
+          "label": "下次还款本金"
+        },
+        {
+          "field": "payInterestamt",
+          "label": "下次还款利息"
+        },
+        {
+          "field": "payFineAmt",
+          "label": "下次还款罚息"
+        },
+        {
+          "field": "compoundinterest",
+          "label": "下次还款复利"
+        },
+        {
+          "field": "businessRate",
+          "label": "执行年利率%"
+        }
+      ]
+    },
+    {
+      "section": "五、指标变化和潜在风险",
+      "l2": "",
+      "table": "app_finance_indicator_info",
+      "tableLabel": "财务指标表",
+      "fields": [
+        {
+          "field": "finReportno",
+          "label": "财报编号"
+        },
+        {
+          "field": "accountmonth",
+          "label": "会计月"
+        },
+        {
+          "field": "reportscope",
+          "label": "报表口径"
+        },
+        {
+          "field": "reportperiod",
+          "label": "报表周期"
+        },
+        {
+          "field": "auditflag",
+          "label": "是否审计"
+        },
+        {
+          "field": "currency",
+          "label": "报表币种"
+        },
+        {
+          "field": "monetaryunit",
+          "label": "货币单位"
+        },
+        {
+          "field": "reportstatusname",
+          "label": "报表状态中文"
+        },
+        {
+          "field": "reportstatus",
+          "label": "报表状态码值"
+        },
+        {
+          "field": "reporttypeno",
+          "label": "报表类型"
+        },
+        {
+          "field": "reporttypename",
+          "label": "报表类型名称"
+        },
+        {
+          "field": "revenue",
+          "label": "营业收入（万元）"
+        },
+        {
+          "field": "revenueyoy",
+          "label": "营业收入同比（%）"
+        },
+        {
+          "field": "netprofit",
+          "label": "净利润（万元）"
+        },
+        {
+          "field": "netprofityoy",
+          "label": "净利润同比（%）"
+        },
+        {
+          "field": "paidincapital",
+          "label": "实收资本（万元）"
+        },
+        {
+          "field": "totalequity",
+          "label": "所有者权益合计（万元）"
+        },
+        {
+          "field": "accountsreceivable",
+          "label": "应收账款（万元）"
+        },
+        {
+          "field": "archangefromyearstart",
+          "label": "应收账款较年初变动（万元）"
+        },
+        {
+          "field": "archangefromyearstartrate",
+          "label": "应收账款较年初增幅（%）"
+        },
+        {
+          "field": "otherreceivable",
+          "label": "其他应收款（万元）"
+        },
+        {
+          "field": "orchangefromyearstart",
+          "label": "其他应收款较年初变动（万元）"
+        },
+        {
+          "field": "orchangefromyearstartrate",
+          "label": "其他应收款较年初增幅（%）"
+        },
+        {
+          "field": "arortotalassetratio",
+          "label": "应收账款和其他应收款合计占总资产比例（%）"
+        },
+        {
+          "field": "shortloan",
+          "label": "短期借款（万元）"
+        },
+        {
+          "field": "shortloanchangefromyearstart",
+          "label": "短期借款较年初变动（万元）"
+        },
+        {
+          "field": "shortloanchangefromyearstartrate",
+          "label": "短期借款较年初增幅（%）"
+        },
+        {
+          "field": "longloan",
+          "label": "长期借款（万元）"
+        },
+        {
+          "field": "longloanchangefromyearstart",
+          "label": "长期借款较年初变动（万元）"
+        },
+        {
+          "field": "longloanchangefromyearstartrate",
+          "label": "长期借款较年初增幅（%）"
+        },
+        {
+          "field": "longloanduewithin1y",
+          "label": "一年内到期的长期借款（万元）"
+        },
+        {
+          "field": "salesloanratio",
+          "label": "销贷比"
+        },
+        {
+          "field": "NOTESPAYABLE",
+          "label": "应付票据（万元）"
+        },
+        {
+          "field": "notepayablechangefromyearstart",
+          "label": "应付票据较年初变动（万元）"
+        },
+        {
+          "field": "notepayablechangefromyearstartrate",
+          "label": "应付票据较年初增幅（%）"
+        },
+        {
+          "field": "otherpayable",
+          "label": "其他应付款（万元）"
+        },
+        {
+          "field": "otherpayablechangefromyearstart",
+          "label": "其他应付款较年初变动（万元）"
+        },
+        {
+          "field": "otherpayablechangefromyearstartrate",
+          "label": "其他应付款较年初增幅（%）"
+        },
+        {
+          "field": "sltotalloanyoy",
+          "label": "短期借款和长期借款合计同比（%）"
+        },
+        {
+          "field": "aryoy",
+          "label": "应收账款同比（%）"
+        },
+        {
+          "field": "arturnoverdays",
+          "label": "应收账款周转天数"
+        },
+        {
+          "field": "inventoryturnoverdays",
+          "label": "存货周转天数"
+        },
+        {
+          "field": "inventoryyoy",
+          "label": "存货同比（%）"
+        },
+        {
+          "field": "accountspayable",
+          "label": "应付账款（万元）"
+        },
+        {
+          "field": "inventory",
+          "label": "存货（万元）"
+        },
+        {
+          "field": "debtratio",
+          "label": "资产负债率（%）"
+        },
+        {
+          "field": "salesprofitratio",
+          "label": "销售利率（%）"
+        },
+        {
+          "field": "netprofitratio",
+          "label": "净利率（%）"
+        }
+      ]
+    },
+    {
+      "section": "五、指标变化和潜在风险",
+      "l2": "",
+      "table": "app_guofa_report_info",
+      "tableLabel": "国发征信信息表",
+      "fields": [
+        {
+          "field": "dataDate",
+          "label": "数据日期"
+        },
+        {
+          "field": "beforeYear",
+          "label": "前年日期"
+        },
+        {
+          "field": "lastYear",
+          "label": "去年日期"
+        },
+        {
+          "field": "thisYear",
+          "label": "最新一期日期"
+        },
+        {
+          "field": "gfRevenue",
+          "label": "最近一期营收（万元）"
+        },
+        {
+          "field": "lastYearRevenue",
+          "label": "去年营收（万元）"
+        },
+        {
+          "field": "beforeYearRevenue",
+          "label": "前年营收（万元）"
+        },
+        {
+          "field": "gfReceivable",
+          "label": "最近一期应收账款（万元）"
+        },
+        {
+          "field": "lastYearReceivable",
+          "label": "去年应收账款（万元）"
+        },
+        {
+          "field": "beforeYearReceivable",
+          "label": "前年应收账款（万元）"
+        },
+        {
+          "field": "gfPayable",
+          "label": "最近一期应付账款（万元）"
+        },
+        {
+          "field": "lastYearPayable",
+          "label": "去年应付账款（万元）"
+        },
+        {
+          "field": "beforeYearPayable",
+          "label": "前年应付账款（万元）"
+        },
+        {
+          "field": "gfInventory",
+          "label": "最近一期存货（万元）"
+        },
+        {
+          "field": "lastYearInventory",
+          "label": "去年存货（万元）"
+        },
+        {
+          "field": "beforeYearInventory",
+          "label": "前年存货（万元）"
+        }
+      ]
+    },
+    {
+      "section": "五、指标变化和潜在风险",
+      "l2": "",
+      "table": "app_gs_finance_data_info",
+      "tableLabel": "国税财务数据表",
+      "fields": [
+        {
+          "field": "beforeYear",
+          "label": "前年日期"
+        },
+        {
+          "field": "lastYear",
+          "label": "去年日期"
+        },
+        {
+          "field": "thisYear",
+          "label": "最新一期日期"
+        },
+        {
+          "field": "gfRevenue",
+          "label": "最近一期营收（万元）"
+        },
+        {
+          "field": "lastYearRevenue",
+          "label": "去年营收（万元）"
+        },
+        {
+          "field": "beforeYearRevenue",
+          "label": "前年营收（万元）"
+        },
+        {
+          "field": "gfReceivable",
+          "label": "最近一期应收账款（万元）"
+        },
+        {
+          "field": "lastYearReceivable",
+          "label": "去年应收账款（万元）"
+        },
+        {
+          "field": "beforeYearReceivable",
+          "label": "前年应收账款（万元）"
+        },
+        {
+          "field": "gfPayable",
+          "label": "最近一期应付账款（万元）"
+        },
+        {
+          "field": "lastYearPayable",
+          "label": "去年应付账款（万元）"
+        },
+        {
+          "field": "beforeYearPayable",
+          "label": "前年应付账款（万元）"
+        },
+        {
+          "field": "gfInventory",
+          "label": "最近一期存货（万元）"
+        },
+        {
+          "field": "lastYearInventory",
+          "label": "去年存货（万元）"
+        },
+        {
+          "field": "beforeYearInventory",
+          "label": "前年存货（万元）"
+        }
+      ]
+    },
+    {
+      "section": "六、征信情况和潜在风险",
+      "l2": "",
+      "table": "app_credit_report_info",
+      "tableLabel": "企业征信快照表",
+      "fields": [
+        {
+          "field": "queryTime",
+          "label": "征信查询时间"
+        },
+        {
+          "field": "zxReportNo",
+          "label": "征信报告记录号"
+        },
+        {
+          "field": "overdueTotal",
+          "label": "未结清信贷的逾期总额（万元）"
+        },
+        {
+          "field": "attentionCreditBal",
+          "label": "未结清关注类信贷余额（万元）"
+        },
+        {
+          "field": "badCreditBal",
+          "label": "未结清不良类借贷余额（万元）"
+        },
+        {
+          "field": "attentionGuaranteeBal",
+          "label": "未结清关注类担保交易余额（万元）"
+        },
+        {
+          "field": "badGuaranteeBal",
+          "label": "未结清不良类担保交易余额（万元）"
+        },
+        {
+          "field": "guaranteeOverdueTotal",
+          "label": "对外担保（相关还款责任）未结清逾期类负债总额（万元）"
+        },
+        {
+          "field": "guaranteeAttentionBal",
+          "label": "对外担保（相关还款责任）未结清关注类负债总额（万元）"
+        },
+        {
+          "field": "guaranteeBadBal",
+          "label": "对外担保（相关还款责任）未结清不良类负债总额（万元）"
+        },
+        {
+          "field": "extendDebtBal",
+          "label": "展期债务未结清余额（万元）"
+        },
+        {
+          "field": "restructureDebtBal",
+          "label": "重组债务未结清余额（万元）"
+        },
+        {
+          "field": "renewDebtBal",
+          "label": "无还本续贷未结清余额（万元）"
+        },
+        {
+          "field": "transferDebtBal",
+          "label": "其他机构转入未结清余额（万元）"
+        },
+        {
+          "field": "newOldDebtBal",
+          "label": "借新还旧债务未结清余额（万元）"
+        },
+        {
+          "field": "nonBankLiabTotal",
+          "label": "在非银机构负债合计（万元）"
+        },
+        {
+          "field": "nonBankHighRateLoan",
+          "label": "非银机构较高利率借款推算利率最大值（%）"
+        },
+        {
+          "field": "nonBankGuaranteeBal",
+          "label": "在非银机构对外担保余额（万元）"
+        },
+        {
+          "field": "workingCapitalLoanBal",
+          "label": "流动资金贷款余额（万元）"
+        },
+        {
+          "field": "workingCapitalLoan1yBal",
+          "label": "一年期以下的流动资金贷款余额（万元）"
+        },
+        {
+          "field": "loanBankOrgCount",
+          "label": "企业借贷交易合作银行及融资租赁机构数"
+        },
+        {
+          "field": "guaranteeBankOrgCount",
+          "label": "企业担保交易合作银行及融资租赁机构数"
+        },
+        {
+          "field": "shortTermLoanOrgCount",
+          "label": "短期借款未结清机构数合计"
+        },
+        {
+          "field": "midLongTermLoanOrgCount",
+          "label": "中长期借款未结清机构数合计"
+        },
+        {
+          "field": "revolvingOverdraftOrgCount",
+          "label": "循环透支未结清机构数合计"
+        },
+        {
+          "field": "discountOrgCount",
+          "label": "贴现未结清机构数合计"
+        },
+        {
+          "field": "bankAcceptanceBillOrgCount",
+          "label": "银行承兑汇票未结清机构数合计"
+        },
+        {
+          "field": "letterOfCreditOrgCount",
+          "label": "信用证未结清机构数合计"
+        },
+        {
+          "field": "bankGuaranteeOrgCount",
+          "label": "银行保函未结清机构数合计"
+        },
+        {
+          "field": "otherGuaranteeTradeOrgCount",
+          "label": "其他担保交易未结清机构数合计"
+        },
+        {
+          "field": "shortTermLoanBal",
+          "label": "短期借款未结清余额合计（万元）"
+        },
+        {
+          "field": "midLongTermLoanBal",
+          "label": "中长期借款未结清余额合计（万元）"
+        },
+        {
+          "field": "revolvingOverdraftBal",
+          "label": "循环透支未结清余额合计（万元）"
+        },
+        {
+          "field": "discountBal",
+          "label": "贴现未结清余额合计（万元）"
+        },
+        {
+          "field": "bankAcceptanceBillBal",
+          "label": "银行承兑汇票未结清余额合计（万元）"
+        },
+        {
+          "field": "letterOfCreditBal",
+          "label": "信用证未结清余额合计（万元）"
+        },
+        {
+          "field": "bankGuaranteeBal",
+          "label": "银行保函未结清余额合计（万元）"
+        },
+        {
+          "field": "otherGuaranteeTradeBal",
+          "label": "其他担保交易未结清余额合计（万元）"
+        },
+        {
+          "field": "guaranteeBalanceExBank",
+          "label": "对外担保（相关还款责任）余额（剔除我行）（万元）"
+        }
+      ]
+    },
+    {
+      "section": "九、结算情况和潜在风险",
+      "l2": "",
+      "table": "app_settle_account_info",
+      "tableLabel": "结算账户表",
+      "fields": [
+        {
+          "field": "accountNo",
+          "label": "账号"
+        },
+        {
+          "field": "accountStatus",
+          "label": "账户状态"
+        },
+        {
+          "field": "accountBalance",
+          "label": "账户余额（万元）"
+        },
+        {
+          "field": "superviseFlag",
+          "label": "监管标识"
+        }
+      ]
+    },
+    {
+      "section": "九、结算情况和潜在风险",
+      "l2": "",
+      "table": "app_settle_asset_info",
+      "tableLabel": "结算资产表",
+      "fields": [
+        {
+          "field": "frozenAmount",
+          "label": "冻结金额（万元）"
+        },
+        {
+          "field": "debitSameNameTransferRatio",
+          "label": "借方同名划转金额占比（%）"
+        },
+        {
+          "field": "creditSameNameTransferRatio",
+          "label": "贷方同名划转金额占比（%）"
+        },
+        {
+          "field": "yearAvgDeposit",
+          "label": "年日均存款（万元）"
+        },
+        {
+          "field": "lastYearAvgDeposit",
+          "label": "上年年日均存款（万元）"
+        },
+        {
+          "field": "propertyIncome",
+          "label": "当年物业收入（万元）"
+        },
+        {
+          "field": "propertyIncomeYoy",
+          "label": "当年物业收入累计较上年同期（万元）"
+        },
+        {
+          "field": "propertyIncomeSupervised",
+          "label": "当年监管账户物业收入（万元）"
+        },
+        {
+          "field": "electricFeeIncome",
+          "label": "当年电费收入（万元）"
+        },
+        {
+          "field": "electricFeeYoy",
+          "label": "当年电费收入累计较上年同期（万元）"
+        },
+        {
+          "field": "electricFeeSupervised",
+          "label": "当年监管账户当年电费收入（万元）"
+        },
+        {
+          "field": "keywordCounterpartyCreditAmount",
+          "label": "当年交易对手中出现小额贷款、担保等关键字的公司贷方发生额（万元）"
+        },
+        {
+          "field": "keywordRemarkCreditAmount",
+          "label": "当年备注中有担保、借款、投资关键字贷方发生额（万元）"
+        }
+      ]
+    },
+    {
+      "section": "九、结算情况和潜在风险",
+      "l2": "",
+      "table": "app_entrust_pay_info",
+      "tableLabel": "受托支付明细表",
+      "fields": [
+        {
+          "field": "paymentMode",
+          "label": "支付方式"
+        },
+        {
+          "field": "payDate",
+          "label": "支付日期"
+        },
+        {
+          "field": "accountName",
+          "label": "收款人名称"
+        },
+        {
+          "field": "payeeCancelDate",
+          "label": "受托支付对象注销日期"
+        }
+      ]
+    },
+    {
+      "section": "九、结算情况和潜在风险",
+      "l2": "",
+      "table": "app_top_five_updown_info",
+      "tableLabel": "前五大上下游表",
+      "fields": [
+        {
+          "field": "supplier",
+          "label": "供应商名称"
+        },
+        {
+          "field": "supplierType",
+          "label": "供应商类型"
+        },
+        {
+          "field": "supplierTypeName",
+          "label": "供应商类型名称"
+        }
+      ]
+    },
+    {
+      "section": "九、结算情况和潜在风险",
+      "l2": "",
+      "table": "app_settle_counterparty_info",
+      "tableLabel": "结算交易对手表",
+      "fields": [
+        {
+          "field": "counterpartyName",
+          "label": "交易对手名称"
+        },
+        {
+          "field": "direction",
+          "label": "方向（借方/贷方）"
+        },
+        {
+          "field": "amount",
+          "label": "发生额（万元）"
+        },
+        {
+          "field": "rankNo",
+          "label": "排名（TOP1-10）"
+        }
+      ]
+    },
+    {
+      "section": "九、结算情况和潜在风险",
+      "l2": "",
+      "table": "app_payroll_stat_info",
+      "tableLabel": "代发统计表（月粒度）",
+      "fields": [
+        {
+          "field": "statMonth",
+          "label": "统计月份"
+        },
+        {
+          "field": "payrollCount",
+          "label": "代发人数"
+        },
+        {
+          "field": "payrollAmount",
+          "label": "代发金额（万元）"
+        },
+        {
+          "field": "countMom",
+          "label": "代发人数环比"
+        },
+        {
+          "field": "amountMom",
+          "label": "代发金额环比"
+        },
+        {
+          "field": "countYoy",
+          "label": "代发人数同比"
+        },
+        {
+          "field": "amountYoy",
+          "label": "代发金额同比"
+        }
+      ]
+    },
+    {
+      "section": "十二、担保情况和潜在风险",
+      "l2": "（一）抵押物",
+      "table": "app_collateral_info",
+      "tableLabel": "押品主档表",
+      "fields": [
+        {
+          "field": "clrId",
+          "label": "押品编号"
+        },
+        {
+          "field": "owner",
+          "label": "权属人"
+        },
+        {
+          "field": "clrType",
+          "label": "押品类型"
+        },
+        {
+          "field": "clrName",
+          "label": "押品名称"
+        },
+        {
+          "field": "clrStatus",
+          "label": "押品状态"
+        },
+        {
+          "field": "valuationDate",
+          "label": "押品最新评估日期"
+        },
+        {
+          "field": "choiceTypeName",
+          "label": "评估方式"
+        },
+        {
+          "field": "evaluateValue",
+          "label": "评估价值（万元）"
+        },
+        {
+          "field": "rightOrder",
+          "label": "顺位"
+        },
+        {
+          "field": "rightSum",
+          "label": "权证金额（万元）"
+        },
+        {
+          "field": "confirmDate",
+          "label": "认定日期"
+        },
+        {
+          "field": "DYQDJ",
+          "label": "地役权登记"
+        },
+        {
+          "field": "YYDJ",
+          "label": "异议登记"
+        },
+        {
+          "field": "CFDJ",
+          "label": "查封登记"
+        },
+        {
+          "field": "YGDJ",
+          "label": "预告登记"
+        }
+      ]
+    },
+    {
+      "section": "十二、担保情况和潜在风险",
+      "l2": "（一）抵押物",
+      "table": "app_collateral_mortgage_info",
+      "tableLabel": "押品他项权利",
+      "fields": [
+        {
+          "field": "clrId",
+          "label": "押品编号"
+        },
+        {
+          "field": "pledgeSerialNo",
+          "label": "不动产登记编号"
+        },
+        {
+          "field": "pledgeeName",
+          "label": "他项权姓名"
+        },
+        {
+          "field": "guaranteeScope",
+          "label": "担保范围"
+        },
+        {
+          "field": "pledgeTypeName",
+          "label": "抵押方式"
+        },
+        {
+          "field": "maxCreditorAmt",
+          "label": "债权数额（万元）"
+        },
+        {
+          "field": "startEnd",
+          "label": "债务履行期限"
+        },
+        {
+          "field": "registerTimestamp",
+          "label": "设定日期"
+        }
+      ]
+    },
+    {
+      "section": "十二、担保情况和潜在风险",
+      "l2": "（一）抵押物",
+      "table": "app_collateral_restricted_right",
+      "tableLabel": "限制权利表",
+      "fields": [
+        {
+          "field": "clrId",
+          "label": "押品编号"
+        },
+        {
+          "field": "attachmentOrg",
+          "label": "限制权人"
+        },
+        {
+          "field": "attachmentTypeName",
+          "label": "查封类型"
+        }
+      ]
+    },
+    {
+      "section": "十二、担保情况和潜在风险",
+      "l2": "（二）担保人征信信息",
+      "table": "app_guarantor_info",
+      "tableLabel": "担保人信息表",
+      "fields": [
+        {
+          "field": "guarantorName",
+          "label": "担保人"
+        },
+        {
+          "field": "guarantorType",
+          "label": "担保人类型"
+        },
+        {
+          "field": "holdType",
+          "label": "控股类型"
+        },
+        {
+          "field": "zxReportNoZX",
+          "label": "征信报告记录号-最新"
+        },
+        {
+          "field": "zxReportNosq",
+          "label": "征信报告记录号-上期"
+        },
+        {
+          "field": "zxReportNoSX",
+          "label": "征信报告记录号-授信"
+        }
+      ]
+    },
+    {
+      "section": "十二、担保情况和潜在风险",
+      "l2": "（二）担保人征信信息",
+      "table": "app_credit_report_info",
+      "tableLabel": "企业征信快照表",
+      "fields": [
+        {
+          "field": "guarantorName",
+          "label": "担保人"
+        },
+        {
+          "field": "queryTime",
+          "label": "征信查询时间"
+        },
+        {
+          "field": "zxReportNo",
+          "label": "征信报告记录号"
+        },
+        {
+          "field": "overdueTotal",
+          "label": "未结清信贷的逾期总额（万元）"
+        },
+        {
+          "field": "attentionCreditBal",
+          "label": "未结清关注类信贷余额（万元）"
+        },
+        {
+          "field": "badCreditBal",
+          "label": "未结清不良类借贷余额（万元）"
+        },
+        {
+          "field": "attentionGuaranteeBal",
+          "label": "未结清关注类担保交易余额（万元）"
+        },
+        {
+          "field": "badGuaranteeBal",
+          "label": "未结清不良类担保交易余额（万元）"
+        },
+        {
+          "field": "guaranteeOverdueTotal",
+          "label": "对外担保（相关还款责任）未结清逾期类负债总额（万元）"
+        },
+        {
+          "field": "guaranteeAttentionBal",
+          "label": "对外担保（相关还款责任）未结清关注类负债总额（万元）"
+        },
+        {
+          "field": "guaranteeBadBal",
+          "label": "对外担保（相关还款责任）未结清不良类负债总额（万元）"
+        },
+        {
+          "field": "extendDebtBal",
+          "label": "展期债务未结清余额（万元）"
+        },
+        {
+          "field": "restructureDebtBal",
+          "label": "重组债务未结清余额（万元）"
+        },
+        {
+          "field": "renewDebtBal",
+          "label": "无还本续贷未结清余额（万元）"
+        },
+        {
+          "field": "transferDebtBal",
+          "label": "其他机构转入未结清余额（万元）"
+        },
+        {
+          "field": "newOldDebtBal",
+          "label": "借新还旧债务未结清余额（万元）"
+        },
+        {
+          "field": "nonBankLiabTotal",
+          "label": "在非银机构负债合计（万元）"
+        },
+        {
+          "field": "nonBankHighRateLoan",
+          "label": "非银机构较高利率借款推算利率最大值（%）"
+        },
+        {
+          "field": "nonBankGuaranteeBal",
+          "label": "在非银机构对外担保余额（万元）"
+        },
+        {
+          "field": "workingCapitalLoanBal",
+          "label": "流动资金贷款余额（万元）"
+        },
+        {
+          "field": "workingCapitalLoan1yBal",
+          "label": "一年期以下的流动资金贷款余额（万元）"
+        },
+        {
+          "field": "loanBankOrgCount",
+          "label": "企业借贷交易合作银行及融资租赁机构数"
+        },
+        {
+          "field": "guaranteeBankOrgCount",
+          "label": "企业担保交易合作银行及融资租赁机构数"
+        },
+        {
+          "field": "shortTermLoanOrgCount",
+          "label": "短期借款未结清机构数合计"
+        },
+        {
+          "field": "midLongTermLoanOrgCount",
+          "label": "中长期借款未结清机构数合计"
+        },
+        {
+          "field": "revolvingOverdraftOrgCount",
+          "label": "循环透支未结清机构数合计"
+        },
+        {
+          "field": "discountOrgCount",
+          "label": "贴现未结清机构数合计"
+        },
+        {
+          "field": "bankAcceptanceBillOrgCount",
+          "label": "银行承兑汇票未结清机构数合计"
+        },
+        {
+          "field": "letterOfCreditOrgCount",
+          "label": "信用证未结清机构数合计"
+        },
+        {
+          "field": "bankGuaranteeOrgCount",
+          "label": "银行保函未结清机构数合计"
+        },
+        {
+          "field": "otherGuaranteeTradeOrgCount",
+          "label": "其他担保交易未结清机构数合计"
+        },
+        {
+          "field": "shortTermLoanBal",
+          "label": "短期借款未结清余额合计（万元）"
+        },
+        {
+          "field": "midLongTermLoanBal",
+          "label": "中长期借款未结清余额合计（万元）"
+        },
+        {
+          "field": "revolvingOverdraftBal",
+          "label": "循环透支未结清余额合计（万元）"
+        },
+        {
+          "field": "discountBal",
+          "label": "贴现未结清余额合计（万元）"
+        },
+        {
+          "field": "bankAcceptanceBillBal",
+          "label": "银行承兑汇票未结清余额合计（万元）"
+        },
+        {
+          "field": "letterOfCreditBal",
+          "label": "信用证未结清余额合计（万元）"
+        },
+        {
+          "field": "bankGuaranteeBal",
+          "label": "银行保函未结清余额合计（万元）"
+        },
+        {
+          "field": "otherGuaranteeTradeBal",
+          "label": "其他担保交易未结清余额合计（万元）"
+        },
+        {
+          "field": "guaranteeBalanceExBank",
+          "label": "对外担保（相关还款责任）余额（剔除我行）（万元）"
+        }
+      ]
+    },
+    {
+      "section": "十二、担保情况和潜在风险",
+      "l2": "（二）担保人征信信息",
+      "table": "app_guarantor_credit_info",
+      "tableLabel": "担保人征信表",
+      "fields": [
+        {
+          "field": "guarantorName",
+          "label": "担保人"
+        },
+        {
+          "field": "zxReportNo",
+          "label": "征信报告记录号"
+        },
+        {
+          "field": "queryTime",
+          "label": "征信查询时间"
+        },
+        {
+          "field": "education",
+          "label": "学历"
+        },
+        {
+          "field": "totalLoanBal",
+          "label": "贷款余额合计（万元）"
+        },
+        {
+          "field": "operateLoanBal",
+          "label": "经营性贷款余额合计（万元）"
+        },
+        {
+          "field": "consumeLoanBal",
+          "label": "消费类贷款余额合计（万元）"
+        },
+        {
+          "field": "houseLoanBal",
+          "label": "住房类贷款余额合计（万元）"
+        },
+        {
+          "field": "otherLoanBal",
+          "label": "其他贷款余额合计（万元）"
+        },
+        {
+          "field": "totalLoanCount",
+          "label": "贷款机构数"
+        },
+        {
+          "field": "operateLoanCount",
+          "label": "经营性贷款机构数"
+        },
+        {
+          "field": "consumeLoanCount",
+          "label": "消费类贷款机构数"
+        },
+        {
+          "field": "houseLoanCount",
+          "label": "住房类贷款机构数"
+        },
+        {
+          "field": "otherLoanCount",
+          "label": "其他贷款机构数"
+        },
+        {
+          "field": "bzcBal",
+          "label": "被追偿余额（万元）"
+        },
+        {
+          "field": "badBal",
+          "label": "呆账余额（万元）"
+        },
+        {
+          "field": "loanCurrentOverdue",
+          "label": "贷款当前逾期总金额（万元）"
+        },
+        {
+          "field": "cardCurrentOverdue",
+          "label": "贷记卡当前逾期总金额（万元）"
+        },
+        {
+          "field": "guaranteeOverdueAmt",
+          "label": "对外担保（相关还款责任）当前逾期金额（万元）"
+        },
+        {
+          "field": "nonBankGuaranteeBal",
+          "label": "在非银机构对外担保余额（万元）"
+        },
+        {
+          "field": "nonBankHighRateLoan",
+          "label": "非银机构较高利率借款推算利率最大值（%）"
+        },
+        {
+          "field": "guaranteeAbnormalBal",
+          "label": "对外担保（相关还款责任）五级分类非正常余额（万元）"
+        },
+        {
+          "field": "extendBal",
+          "label": "展期债务余额（万元）"
+        },
+        {
+          "field": "delayBal",
+          "label": "落实金融困等政策银行主动延期债务余额（万元）"
+        },
+        {
+          "field": "creditAbnormalBal",
+          "label": "未结清信贷五级分类非正常余额（万元）"
+        },
+        {
+          "field": "acctAbnormalBal",
+          "label": "未结清账户状态非正常余额（万元）"
+        },
+        {
+          "field": "cardAbnormalBal",
+          "label": "未销户贷记卡账户状态非正常余额（万元）"
+        },
+        {
+          "field": "guaranteeHkAbnormalBal",
+          "label": "对外担保（相关还款责任）还款状态非正常余额（万元）"
+        },
+        {
+          "field": "creditUseRate",
+          "label": "信用卡使用率（%）"
+        },
+        {
+          "field": "nonBankLiabTotal",
+          "label": "在非银机构负债合计（万元）"
+        },
+        {
+          "field": "loanQuery12m",
+          "label": "近一年贷款审批征信查询次数"
+        },
+        {
+          "field": "loanQuery6m",
+          "label": "近6个月贷款审批征信查询次数"
+        },
+        {
+          "field": "loanQuery3m",
+          "label": "近3个月贷款审批征信查询次数"
+        },
+        {
+          "field": "cardQuery12m",
+          "label": "近一年信用卡审批征信查询次数"
+        },
+        {
+          "field": "cardQuery6m",
+          "label": "近6个月信用卡审批征信查询次数"
+        },
+        {
+          "field": "cardQuery3m",
+          "label": "近3个月信用卡审批征信查询次数"
+        },
+        {
+          "field": "selfQuery1m",
+          "label": "近1个月本人查询征信查询次数"
+        }
+      ]
+    }
+  ]
+}

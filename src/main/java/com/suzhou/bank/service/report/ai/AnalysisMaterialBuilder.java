@@ -17,11 +17,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 全文分析素材组装器
@@ -79,7 +82,7 @@ public class AnalysisMaterialBuilder {
         sb.append("报告编号：").append(nvl(reportNo)).append('\n');
 
         appendReportBody(sb, reportNo);
-        appendExternalData(sb, customerId, customerName);
+        appendExternalData(sb, reportNo, customerId, customerName);
 
         String material = sb.toString();
         int limit = properties.getMaxMaterialChars();
@@ -89,11 +92,35 @@ public class AnalysisMaterialBuilder {
         return material;
     }
 
+    /**
+     * 素材里**不纳入**的内容块（按模板 {@code agentCode} 判定）。
+     *
+     * <p>用户口径（2026-09-19）：全文分析**不参考这两块** ——</p>
+     * <ul>
+     *   <li>{@code dxjclsqk} 「单项检查任务落实情况」</li>
+     *   <li>{@code tddkjcqk} 「特定贷款的检查情况」</li>
+     * </ul>
+     * <p>两块讲的都是**非日常检查**（单项检查 / 特定检查贷款），与「日常贷后检查结论」不是一回事，
+     * 纳入素材只会让模型把别的检查口径当成日常检查的结论（{@code tddkjcqk} 历史上还出现过
+     * 把提示词原文写进正文的事故）。</p>
+     * <p>按 {@code agentCode} 判定：blockName 会随文案调整，agentCode 与模板/规则配置同源、稳定。</p>
+     */
+    private static final Set<String> EXCLUDED_AGENT_CODES =
+            new HashSet<>(Arrays.asList("dxjclsqk", "tddkjcqk"));
+
     /** 报告正文摘取：按目录树顺序输出 */
     private void appendReportBody(StringBuilder sb, String reportNo) {
-        List<AppReportContentInstance> instances = instanceMapper.selectList(
+        List<AppReportContentInstance> instances = new ArrayList<>();
+        for (AppReportContentInstance ins : instanceMapper.selectList(
                 Wrappers.<AppReportContentInstance>lambdaQuery()
-                        .eq(AppReportContentInstance::getReportNo, reportNo));
+                        .eq(AppReportContentInstance::getReportNo, reportNo))) {
+            // 排除「单项检查 / 特定贷款检查」两块（见 EXCLUDED_AGENT_CODES）；
+            // 这里先过滤再分组 ⇒ 某目录下块被全部排除时，目录标题也不会单独留下
+            if (ins.getAgentCode() != null && EXCLUDED_AGENT_CODES.contains(ins.getAgentCode())) {
+                continue;
+            }
+            instances.add(ins);
+        }
 
         if (instances.isEmpty()) {
             sb.append("\n【报告正文摘取】\n（该报告暂无内容实例）\n");
@@ -224,7 +251,8 @@ public class AnalysisMaterialBuilder {
     }
 
     /** 外部数据：由各 {@link ReportAnalysisDataSource} 实现提供，无实现时整节省略 */
-    private void appendExternalData(StringBuilder sb, String customerId, String customerName) {
+    private void appendExternalData(StringBuilder sb, String reportNo,
+                                   String customerId, String customerName) {
         List<ReportAnalysisDataSource> sources = new ArrayList<>();
         dataSources.forEach(sources::add);
         if (sources.isEmpty()) {
@@ -234,11 +262,11 @@ public class AnalysisMaterialBuilder {
         for (ReportAnalysisDataSource source : sources) {
             String text;
             try {
-                text = source.load(customerId, customerName);
+                text = source.load(reportNo, customerId, customerName);
             } catch (Exception e) {
                 // 单个数据域取数失败不影响整篇分析
-                log.warn("全文分析外部数据域取数失败：code={} customerId={} 原因={}",
-                        source.code(), customerId, e.getMessage());
+                log.warn("全文分析外部数据域取数失败：code={} reportNo={} customerId={} 原因={}",
+                        source.code(), reportNo, customerId, e.getMessage());
                 continue;
             }
             if (!StringUtils.hasText(text)) {

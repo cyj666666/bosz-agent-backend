@@ -1,16 +1,24 @@
 package com.suzhou.bank.service.report.spi.agent;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -20,12 +28,24 @@ import java.util.regex.Pattern;
  *
  * <p><b>为什么是 md 文本</b>：溯源块的内容最终进 {@code app_report_content_instance.content}，
  * 与正文一样都是文本；前端点「溯源」后弹大窗展示（不是直接铺在正文里），
- * 所以**列多也不怕**（弹窗可横向滚动），这里不做挑列。</p>
+ * 所以**列多也不怕**（弹窗可横向滚动）。</p>
  *
- * <p><b>表头取列注释</b>（用户 2026-09-17 口径）：从 {@code pg_description} 取中文注释，
- * 并在**第一个「（」处截断** —— 注释里常带码值说明（如
- * {@code 控股类型（码值：国有绝对控股/…，码值待确认）}），整串当表头太脏。
- * 没有注释的列退回列名。</p>
+ * <p><b>取哪些列</b>（2026-09-19 起）：以《报告详情设计.xlsx》**Sheet4「溯源表格内容」**
+ * 为唯一口径 —— 生成器 {@code _tools/gen_trace_table_fields.py} 把它导出成
+ * {@code resources/report/trace-table-fields.json}（**23 张表 / 308 个字段**），
+ * 本类只 SELECT 清单里的字段、表头用清单里的「取值字段名称」。</p>
+ * <ul>
+ *   <li>🔴 <b>白名单里的表头原样使用，不做「（」截断</b> —— 清单里的
+ *       {@code 注册资本（万元）} 带单位，截成「注册资本」就丢信息了
+ *       （截断逻辑只服务于老的「列注释」路径，注释里常带码值说明才需要砍）；</li>
+ *   <li>表不在清单里 ⇒ 回退**全列 + 列注释**老行为，并记 WARN（说明 Excel 漏设计）；</li>
+ *   <li>清单里的字段在物理表里找不到 ⇒ 跳过该列 + WARN，不让一条错配置整块失败。</li>
+ * </ul>
+ *
+ * <p><b>全空列不渲染</b>：取完数后丢掉「所有行都为空」的列。一是溯源明细里空列没有信息量，
+ * 二是同一张表可能挂在多个章节（实测 {@code app_credit_report_info} 同时用于
+ * 「六、征信」（借款人）与「十二（二）担保人征信」（担保人）），字段白名单按表取并集后，
+ * 换场景时会多出 1 个不适用于该场景的列 —— 靠"全空"自然过滤掉。</p>
  *
  * <p><b>条件口径</b>：
  * <ul>
@@ -61,16 +81,23 @@ public class TraceTableBuilder {
     /** 表名白名单：只允许 app_ 开头的小写字母/数字/下划线 */
     private static final Pattern TABLE_PATTERN = Pattern.compile("^app_[a-z0-9_]+$");
 
+    /** 表格溯源字段白名单（由《报告详情设计》Sheet4 生成，改 Excel 后重跑生成器） */
+    private static final String WHITELIST_RESOURCE = "report/trace-table-fields.json";
+
     /** 结果行数上限，防超大表把 content 撑爆 */
     private static final int MAX_ROWS = 500;
 
     /** 列元数据缓存（DDL 极少变；键 = 表名） */
     private final Map<String, List<ColumnMeta>> columnCache = new ConcurrentHashMap<>();
 
+    /** 字段白名单：表名（小写）→ Sheet4 指定的字段清单 */
+    private final Map<String, List<FieldMeta>> whitelist;
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public TraceTableBuilder(DataSource dataSource) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.whitelist = loadWhitelist();
     }
 
     /**
@@ -134,9 +161,15 @@ public class TraceTableBuilder {
             log.warn("【报告内容加工】表格溯源：表名非法，跳过 table={}", table);
             return null;
         }
-        List<ColumnMeta> columns = columns(table);
-        if (columns.isEmpty()) {
+        List<ColumnMeta> allColumns = columns(table);
+        if (allColumns.isEmpty()) {
             log.warn("【报告内容加工】表格溯源：表不存在或没有列 table={}", table);
+            return null;
+        }
+        // 取列：Sheet4 白名单优先（表头 = 清单里的「取值字段名称」）；不在清单里则回退全列 + 列注释
+        List<ColumnMeta> columns = pickColumns(table, allColumns);
+        if (columns.isEmpty()) {
+            log.warn("【报告内容加工】表格溯源：清单里的字段在表里一个都没匹配上，跳过 table={}", table);
             return null;
         }
 
@@ -159,7 +192,7 @@ public class TraceTableBuilder {
                 log.warn("【报告内容加工】表格溯源：未知参数名，跳过 table={} token={}", table, token);
                 continue;
             }
-            String actual = findColumn(columns, column);
+            String actual = findColumn(allColumns, column);
             if (actual == null) {
                 // 🔴 表里没这个列 → 跳过该条件（例如 app_guarantor_credit_info 没有 subjecttype），
                 //    明确记日志，避免被误认为"过滤生效了"
@@ -191,9 +224,95 @@ public class TraceTableBuilder {
             log.info("【报告内容加工】表格溯源：无数据 table={} 条件={}", table, queryParams);
             return null;
         }
-        log.info("【报告内容加工】表格溯源：成功 table={} 行数={} 列数={} 条件={}",
-                table, rows.size(), columns.size(), queryParams);
-        return renderMd(columns, rows);
+        List<ColumnMeta> visible = dropEmptyColumns(table, columns, rows);
+        if (visible.isEmpty()) {
+            log.info("【报告内容加工】表格溯源：所有列的值都为空，按无数据处理 table={} 条件={}",
+                    table, queryParams);
+            return null;
+        }
+        log.info("【报告内容加工】表格溯源：成功 table={} 行数={} 列数={}（取列 {} → 渲染 {}）条件={}",
+                table, rows.size(), columns.size(), columns.size(), visible.size(), queryParams);
+        return renderMd(visible, rows);
+    }
+
+    /* ==================== 字段白名单 ==================== */
+
+    /**
+     * 取列：Sheet4 白名单优先。
+     *
+     * <p>白名单里的表头（「取值字段名称」）**原样使用、不做截断**；物理列名做大小写不敏感匹配
+     * （Excel 写的是 {@code customerId}，物理列是 {@code customerid}）。</p>
+     */
+    private List<ColumnMeta> pickColumns(String table, List<ColumnMeta> allColumns) {
+        List<FieldMeta> fields = whitelist.get(table.toLowerCase(Locale.ROOT));
+        if (fields == null) {
+            log.warn("【报告内容加工】表格溯源：《报告详情设计》Sheet4 里没有这张表的字段清单，"
+                    + "回退为「全列 + 列注释」table={}", table);
+            return allColumns;
+        }
+        List<ColumnMeta> picked = new ArrayList<>(fields.size());
+        int missing = 0;
+        for (FieldMeta f : fields) {
+            String actual = findColumn(allColumns, f.field);
+            if (actual == null) {
+                log.warn("【报告内容加工】表格溯源：清单字段在物理表里不存在，跳过 table={} field={}",
+                        table, f.field);
+                missing++;
+                continue;
+            }
+            picked.add(new ColumnMeta(actual, null, f.label));
+        }
+        if (missing > 0) {
+            log.warn("【报告内容加工】表格溯源：table={} 清单 {} 个字段，有 {} 个在物理表里找不到",
+                    table, fields.size(), missing);
+        }
+        return picked;
+    }
+
+    /** 读取字段白名单 JSON；失败返回空表（⇒ 全部走「全列 + 列注释」老行为，不影响出报表） */
+    private static Map<String, List<FieldMeta>> loadWhitelist() {
+        Map<String, List<FieldMeta>> map = new HashMap<>();
+        try (InputStream in = new ClassPathResource(WHITELIST_RESOURCE).getInputStream()) {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = in.read(buffer)) > 0) {
+                bos.write(buffer, 0, n);
+            }
+            String json = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+            JSONObject root = JSON.parseObject(json);
+            JSONObject tables = root == null ? null : root.getJSONObject("tables");
+            if (tables != null) {
+                for (Map.Entry<String, Object> entry : tables.entrySet()) {
+                    JSONObject tableNode = (JSONObject) entry.getValue();
+                    List<FieldMeta> fields = new ArrayList<>();
+                    JSONArray array = tableNode.getJSONArray("fields");
+                    if (array != null) {
+                        for (int i = 0; i < array.size(); i++) {
+                            JSONObject fieldNode = array.getJSONObject(i);
+                            String name = fieldNode.getString("field");
+                            if (!StringUtils.hasText(name)) {
+                                continue;
+                            }
+                            fields.add(new FieldMeta(name.trim(), fieldNode.getString("label")));
+                        }
+                    }
+                    if (!fields.isEmpty()) {
+                        map.put(entry.getKey().toLowerCase(Locale.ROOT), fields);
+                    }
+                }
+            }
+            int fieldCount = 0;
+            for (List<FieldMeta> list : map.values()) {
+                fieldCount += list.size();
+            }
+            log.info("【报告内容加工】表格溯源字段白名单已加载：{} 张表 / {} 个字段（{}）",
+                    map.size(), fieldCount, WHITELIST_RESOURCE);
+        } catch (Exception e) {
+            log.error("【报告内容加工】表格溯源字段白名单加载失败：{} ⇒ 所有表回退为「全列 + 列注释」",
+                    WHITELIST_RESOURCE, e);
+        }
+        return map;
     }
 
     /* ==================== 列元数据 ==================== */
@@ -260,6 +379,31 @@ public class TraceTableBuilder {
 
     /* ==================== md 渲染 ==================== */
 
+    /** 丢掉「所有行都为空」的列（溯源明细里空列没有信息量；也化解同表多场景的字段并集） */
+    private List<ColumnMeta> dropEmptyColumns(String table, List<ColumnMeta> columns,
+                                             List<Map<String, Object>> rows) {
+        List<ColumnMeta> visible = new ArrayList<>(columns.size());
+        List<String> dropped = new ArrayList<>();
+        for (ColumnMeta c : columns) {
+            boolean hasValue = false;
+            for (Map<String, Object> row : rows) {
+                if (StringUtils.hasText(value(row, c.name))) {
+                    hasValue = true;
+                    break;
+                }
+            }
+            if (hasValue) {
+                visible.add(c);
+            } else {
+                dropped.add(c.name);
+            }
+        }
+        if (!dropped.isEmpty()) {
+            log.info("【报告内容加工】表格溯源：table={} 全空列 {} 个未渲染 {}", table, dropped.size(), dropped);
+        }
+        return visible;
+    }
+
     private String joinColumnNames(List<ColumnMeta> columns) {
         StringBuilder sb = new StringBuilder();
         for (ColumnMeta c : columns) {
@@ -291,9 +435,16 @@ public class TraceTableBuilder {
     }
 
     /**
-     * 表头：列注释在**第一个「（」处截断**（注释里常带码值说明）；无注释退回列名。
+     * 表头取值优先级：**白名单指定的表头** → 列注释（在**第一个「（」处截断**，注释里常带码值说明）
+     * → 列名。
+     *
+     * <p>⚠️ 白名单表头**不截断**：它是人写的展示名，{@code 注册资本（万元）} 里那个括号是单位，
+     * 砍掉就丢信息了。截断只服务于老的「列注释」路径。</p>
      */
     static String header(ColumnMeta column) {
+        if (StringUtils.hasText(column.header)) {
+            return column.header.trim();
+        }
         String cmt = column.comment == null ? "" : column.comment.trim();
         if (cmt.isEmpty()) {
             return column.name;
@@ -343,10 +494,28 @@ public class TraceTableBuilder {
     static class ColumnMeta {
         final String name;
         final String comment;
+        /** 白名单指定的表头（**原样使用，不截断**）；为空时按 comment → name 推 */
+        final String header;
 
         ColumnMeta(String name, String comment) {
+            this(name, comment, null);
+        }
+
+        ColumnMeta(String name, String comment, String header) {
             this.name = name;
             this.comment = comment;
+            this.header = header;
+        }
+    }
+
+    /** 白名单里的一个字段（Excel 的「取值字段」+「取值字段名称」） */
+    static class FieldMeta {
+        final String field;
+        final String label;
+
+        FieldMeta(String field, String label) {
+            this.field = field;
+            this.label = label;
         }
     }
 }

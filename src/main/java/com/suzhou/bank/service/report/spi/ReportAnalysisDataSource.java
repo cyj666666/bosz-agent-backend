@@ -13,7 +13,7 @@ package com.suzhou.bank.service.report.spi;
  * public class IndicatorAnalysisDataSource implements ReportAnalysisDataSource {
  *     public String code()  { return "indicator"; }
  *     public String label() { return "关键指标数据"; }
- *     public String load(String customerId, String customerName) {
+ *     public String load(String reportNo, String customerId, String customerName) {
  *         // 查 indicator_data 等表，返回拼好的文本片段；无数据返回 null
  *     }
  * }
@@ -34,11 +34,13 @@ public interface ReportAnalysisDataSource {
     String label();
 
     /**
-     * 取该客户在本数据域下的素材文本
+     * 取该报告在本数据域下的素材文本
      *
+     * @param reportNo     报告编号（⚠️ 2026-09-19 新增：业务表普遍按 {@code reportno} 关联，
+     *                     只给 customerId 时同一客户的多份报告会互相串数据）
      * @param customerId   客户编号
      * @param customerName 客户名称（便于按名称查外部表）
      * @return 素材文本；无数据返回 null
      */
-    String load(String customerId, String customerName);
+    String load(String reportNo, String customerId, String customerName);
 }

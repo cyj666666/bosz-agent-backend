@@ -595,29 +595,37 @@ public class AgentReportContentProvider implements ReportContentProvider {
     }
 
     /**
-     * 多担保人轮询时的**分块**渲染（用户 2026-09-18 口径）
+     * 多担保人轮询时的**分块**渲染
      *
      * <p>🔴 轮询的单位是<b>一整块</b>：有 N 个担保人，报告内容里就要出现 <b>N 块</b>，
-     * 每块以「企业担保人：XXX」/「自然人担保人：XXX」开头，前端再按
-     * {@code .rpt-guarantor} 渲染成独立卡片 —— 这样才看得出"有几个担保人、各自什么情况"。</p>
+     * 前端按 {@code .rpt-guarantor} 渲染成独立卡片 —— 这样才看得出"有几个担保人、各自什么情况"。</p>
      *
-     * <p>⚠️ 即使只有 1 个担保人也照样包一层（名称标题有用：一眼知道这段说的是谁）。</p>
+     * <p>🔴 <b>「企业担保人：XXX」这行名字只在「担保人信息」块输出</b>
+     * （2026-09-19 用户口径）。理由：担保人段落里的块是**按担保人逐个轮询**的，
+     * 若每个块都顶一行名字，十几块连着排下来满屏都是重复的「企业担保人：泰州公司」，
+     * 反而看不清哪段是哪段。分组标题由章节里的 L3（「企业担保人信息」/「个人担保人信息」）承担，
+     * 只有 {@code dbrxx} 那两块需要点名（它们本身就是"担保人清单"）。</p>
      *
-     * @param natural true = 自然人担保人；false = 企业担保人（决定标题文字）
+     * <p>⚠️ 分块结构（{@code rpt-guarantor} 的 div）**仍然保留** —— 去掉的只是名字行，
+     * 多个担保人的内容不会粘成一段。</p>
+     *
+     * @param natural true = 自然人担保人；false = 企业担保人（决定名字行文字）
      * @param total   担保人总数（仅用于日志语义，渲染不再依赖它）
-     * @param emph    是否加强调样式（{@code dbrxx} 担保人信息块 → {@code rpt-guarantor-emph}）
+     * @param emph    是否「担保人信息」块（模板令牌 {@code guarantorEmph=1}）——
+     *                它同时决定<b>强调样式</b>与<b>是否输出名字行</b>
      */
     private static void appendGuarantorPiece(StringBuilder sb, boolean natural, int total,
                                              String guarantor, String piece, boolean emph) {
         if (sb.length() > 0) {
             sb.append('\n');
         }
-        String label = natural ? "自然人担保人" : "企业担保人";
-        sb.append("<div class=\"rpt-guarantor").append(emph ? " rpt-guarantor-emph" : "").append("\">\n")
-                .append("<p class=\"rpt-guarantor-name\">").append(escapeHtml(label)).append("：")
-                .append(escapeHtml(guarantor)).append("</p>\n")
-                .append(piece)
-                .append("\n</div>");
+        sb.append("<div class=\"rpt-guarantor").append(emph ? " rpt-guarantor-emph" : "").append("\">\n");
+        if (emph) {
+            String label = natural ? "自然人担保人" : "企业担保人";
+            sb.append("<p class=\"rpt-guarantor-name\">").append(escapeHtml(label)).append("：")
+                    .append(escapeHtml(guarantor)).append("</p>\n");
+        }
+        sb.append(piece).append("\n</div>");
     }
 
     /**
