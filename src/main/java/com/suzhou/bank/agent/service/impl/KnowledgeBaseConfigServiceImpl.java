@@ -293,6 +293,8 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
             if (StringUtils.isNotBlank(corePrompt)) {
                 outputRequirements = (StringUtils.isNotBlank(outputRequirements) ? outputRequirements + "\n" + corePrompt : corePrompt);
             }
+            // 🔴 统一追加「不要输出标题」的格式约束（口径见 NO_TITLE_RULE）
+            outputRequirements = withNoTitleRule(outputRequirements);
 
             long startTime = System.currentTimeMillis();
             JSONObject requestForQuestion = new JSONObject(true);
@@ -333,6 +335,38 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
     }
 
     private static final int MAX_PROMPT_CONTENT_LENGTH = 100000;
+
+    /**
+     * 🔴 统一格式约束：正文里不要输出标题（2026-09-19 用户裁定「全量覆盖 + 代码层统一加」）
+     *
+     * <p><b>为什么加</b>：报告正文里每个内容块的结构标题由**系统渲染** ——
+     * 章节标题取目录名（{@code catalogName}）、块标题取块名（{@code blockName}）。
+     * 模型若再在正文里写一遍，就会出现「（二)批复后续管理要求落实情况」下面紧跟一行
+     * 「批复后续管理要求落实情况：」这种重复；AI 风险块那行标题还会随编辑保存被整块替换而丢失。</p>
+     *
+     * <p><b>为什么放代码层、不改 84 条知识库配置</b>：实测 84 条配置的「输出要求」文本格式并不统一
+     * （只有 55 条带统一锚点），逐条改 JSON 既容易改坏、又不可回滚；放这里**一处生效、零数据变更**，
+     * 要回滚删掉这两行调用即可。前端另有渲染层去重兜底
+     * （{@code useReportInstance.stripDuplicatedTitle}）。</p>
+     */
+    private static final String NO_TITLE_RULE =
+            "【输出格式】只输出正文内容本身，不要输出任何标题"
+                    + "（如「XX情况：」「# XX」「**XX**」这类独立成行的标题），标题由系统统一渲染。";
+
+    /**
+     * 给「输出要求」追加「不要输出标题」的统一约束
+     *
+     * <p>幂等：已包含该约束时原样返回，重复调用不会叠加。</p>
+     */
+    private static String withNoTitleRule(String outputRequirements) {
+        if (outputRequirements == null || outputRequirements.trim().isEmpty()) {
+            return NO_TITLE_RULE;
+        }
+        if (outputRequirements.contains(NO_TITLE_RULE)) {
+            return outputRequirements;
+        }
+        return outputRequirements + "\n" + NO_TITLE_RULE;
+    }
 
     private Object handleOverallContent(String splitterParam, String largeModelCode, JSONObject largeModelParamObj, Object promptContent, String outputRequirements, String isTop) {
         List<String> splitResult;
@@ -5557,6 +5591,11 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         if (StringUtils.isNotBlank(entityUserPrompt)) {
             outputRequirements = (StringUtils.isNotBlank(outputRequirements) ? outputRequirements + "\n" + entityUserPrompt : entityUserPrompt);
         }
+        // 🔴 统一追加「不要输出标题」的格式约束（口径见 NO_TITLE_RULE）——
+        //    报告链路 AgentReportContentProvider 走的就是这条路径（getPromptContent → 本方法）
+        //    ⚠️ 只加在 outputRequirements（给模型看的输出要求）上，
+        //       下面的 userSideRequirements 是「无权限时展示给用户看」的，不加
+        outputRequirements = withNoTitleRule(outputRequirements);
         // 无权限时可见内容：用户提示词（条件中的usePrompt） + entity上的用户提示词
         String userSideRequirements = "";
         if (StringUtils.isNotBlank(userPromptFromCond)) {
