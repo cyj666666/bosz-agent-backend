@@ -17,10 +17,14 @@
 --    两者配合才能既"没数据不出内容"、又"有数据时示例不干扰"。
 -- ============================================================================
 
--- ① 预览：确认每条的「例如：」出现次数
+-- ① 预览：确认**本补丁覆盖的这 10 条**的「例如：」出现次数
+--    🔴 口径必须带 `paramno IN (...)`！
+--    2026-09-19 踩过：写成全表 `WHERE contentdesc LIKE '%例如：%'` 时，
+--    全库有 61 条命中、本补丁只改 10 条 ⇒ 复核永远剩 51 条，被误判成"补丁没生效"。
 SELECT paramno, paramname, (char_length(contentdesc) - char_length(replace(contentdesc, '例如：', ''))) / char_length('例如：') AS eg_cnt
   FROM knowledge_base_params
- WHERE contentdesc LIKE '%例如：%'
+ WHERE paramno IN ('caiwu-jinglirun','caiwu-nashuishouru','caiwu-yingyeshouru','caiwu-yszk','caiwu-zcfzlfx','caiwu-zyfzkm','fdckflcphkjh','gdcphkjh','jyk-fyjljglvjkgr','jyk-fyjljglvjkqy')
+   AND contentdesc LIKE '%例如：%'
  ORDER BY paramno;
 
 -- ② 逐条更新
@@ -85,8 +89,11 @@ UPDATE knowledge_base_params
                                      '例如（下列数字仅为格式说明，严禁作为本次报告的实际数据）：')
  WHERE paramno = 'jyk-fyjljglvjkqy' AND contentdesc LIKE '%例如：%';
 
--- ③ 复核：应为 0 行（除回滚脚本外，任何地方都不该再有裸的「例如：…数字」）
+-- ③ 复核：**应为 0 行**（同样只查本补丁覆盖的这 10 条）
+--    ⛔ 不要用全表 `WHERE contentdesc LIKE '%例如：%'` —— 全库 61 条含「例如：」，
+--    本补丁只覆盖"示例数值与业务数值同形"的 10 条，改完仍剩 51 条，会被误判成"没生效"。
 SELECT paramno, paramname
   FROM knowledge_base_params
- WHERE contentdesc LIKE '%例如：%'
+ WHERE paramno IN ('caiwu-jinglirun','caiwu-nashuishouru','caiwu-yingyeshouru','caiwu-yszk','caiwu-zcfzlfx','caiwu-zyfzkm','fdckflcphkjh','gdcphkjh','jyk-fyjljglvjkgr','jyk-fyjljglvjkqy')
+   AND contentdesc LIKE '%例如：%'
  ORDER BY paramno;
