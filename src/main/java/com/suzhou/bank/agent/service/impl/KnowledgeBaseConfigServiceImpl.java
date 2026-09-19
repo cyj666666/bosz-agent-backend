@@ -2716,10 +2716,11 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
     }
 
     /**
-     * 严格模式（报告链路）下，知识库取数全空 ⇒ 短路，不调用大模型。
+     * 知识库取数全空 ⇒ 短路，不调用大模型（用户口径：没数据就不该调大模型，展示"暂无数据"即可）。
      *
-     * <p>只在 {@code __strictFetch=true} 时生效 —— 配置页预览、智策引擎试跑保持原行为，
-     * 仍允许用空数据调试提示词。</p>
+     * <p>只对 <b>真实业务执行</b> 生效（口径统一走
+     * {@link SqlDataSetBuilder#isStrictExecution(java.util.Map)}，<b>默认严格</b>）；
+     * 配置页预览 / 试跑显式带 {@code __allowSampleFallback=true} ⇒ 放行，仍允许用空数据调试提示词。</p>
      */
     private boolean shouldSkipLlmForNoIndexData(JSONObject params, JSONObject promptObject) {
         if (promptObject == null || !promptObject.getBooleanValue("isExist")) {
@@ -2728,8 +2729,8 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         if (!promptObject.getBooleanValue(RESULT_NO_INDEX_DATA)) {
             return false;
         }
-        // 非严格模式 ⇒ 不拦
-        return Boolean.parseBoolean(String.valueOf(params.get(SqlDataSetBuilder.STRICT_FETCH_KEY)));
+        // 预览/试跑 ⇒ 不拦
+        return SqlDataSetBuilder.isStrictExecution(params);
     }
 
     @Override

@@ -85,6 +85,52 @@ public class SqlDataSetBuilder implements DataSetBuilder {
      */
     public static final String STRICT_FETCH_KEY = "__strictFetch";
 
+    /**
+     * 「参数缺失时，允许用配置里的样例值兜底」标记（2026-09-19 加入，<b>默认安全</b>口径）。
+     *
+     * <p>⛔ <b>它不表示"这个入口就用样例值"</b> —— 命名刻意写全，避免被误读。
+     * 语义只有一句：</p>
+     *
+     * <pre>
+     * 调用方传了值      → 永远用传入的值（任何入口、任何标记都一样）
+     * 调用方没传这个值  → 带本标记 ⇒ 用 defaultValue 样例值兜底（留 WARN 日志）
+     *                     不带本标记 ⇒ 跳过本次取数（不用样例值顶包）
+     * </pre>
+     *
+     * <p>🔴 <b>为什么要把默认反过来</b>：{@link #STRICT_FETCH_KEY} 是<b>白名单式</b>的 ——
+     * 谁记得打标记谁才安全，<b>漏打就静默吃样例值</b>。方向是反的：新增一条链路、
+     * 或改漏一个入口，默认就是"宽松"，事故静默发生（2026-09-17 与 09-19 各踩过一次）。
+     * 现在翻转为 <b>fail-closed</b>：默认一律严格，只有<b>配置页预览 / 试跑</b>
+     * （本来就允许不填参数、拿样例值看效果）才显式带上本标记。</p>
+     *
+     * <p>判断统一走 {@link #isStrictExecution(Map)}，别各处自己写表达式 ——
+     * 口径一旦分裂就会出现"取数层严格、短路层不严格"这种自相矛盾。</p>
+     */
+    public static final String ALLOW_SAMPLE_FALLBACK_KEY = "__allowSampleFallback";
+
+    /**
+     * 本次取数是否属于「真实业务执行」（= 参数缺失时<b>不允许</b>用样例值兜底）。
+     *
+     * <p>口径：显式声明严格 ⇒ 严格；否则<b>只有</b>显式声明允许兜底才放行，其余默认严格。</p>
+     *
+     * <p>⚠️ 配置里的 {@code defaultValue} 是**真实样例值**
+     * （{@code 'RPT-202603-001'} / {@code '苏州XX精密机械制造有限公司'} / {@code '泰州公司'}），
+     * 一旦被当成真实数据参与取数，会产出"看起来完全正常、实则张冠李戴"的结论。</p>
+     *
+     * <p>✅ 反过来也要说清：<b>传入的参数永远优先</b> —— 真实的 {@code reportNo} 传进来，
+     * 就绝不会被 {@code defaultValue} 顶掉（2026-09-19 实测：V2 传入新编号、
+     * 配置默认值是旧编号，146 条取数 127 条为空 ⇒ 用的就是传入值）。</p>
+     */
+    public static boolean isStrictExecution(Map<String, ?> parameters) {
+        if (parameters == null) {
+            return true;
+        }
+        if (Boolean.TRUE.equals(parameters.get(STRICT_FETCH_KEY))) {
+            return true;
+        }
+        return !Boolean.TRUE.equals(parameters.get(ALLOW_SAMPLE_FALLBACK_KEY));
+    }
+
     @Autowired
     private AgentDataSourceProvider agentDataSourceProvider;
 
@@ -210,7 +256,8 @@ public class SqlDataSetBuilder implements DataSetBuilder {
             AgentParamNames.normalizeInPlace(parameters);
 
             // 关联参数和默认值处理
-            boolean strictFetch = Boolean.TRUE.equals(parameters.get(STRICT_FETCH_KEY));
+            // 🔴 默认安全（fail-closed）：没显式声明"预览"就一律严格，绝不吃配置里的样例值。
+            boolean strictFetch = isStrictExecution(parameters);
             if (!sqlScript.getParamData().isEmpty()) {
                 for (Object obj : sqlScript.getParamData()) {
                     JSONObject object = (JSONObject) obj;
@@ -235,8 +282,9 @@ public class SqlDataSetBuilder implements DataSetBuilder {
                         // 返回 null 后由上层按"未取到值"如实反映（missingValueCount / executeFailed），
                         // 而不是拿样例数据算出一个看起来正常的结论。
                         if (strictFetch) {
-                            log.warn("【严格取数】指标[{}] 参数[{}] 缺失，且不允许使用预置样例值兜底 —— 跳过本次取数（不执行 SQL）。"
-                                    + "若确需用样例值试跑，请走配置页预览入口。", paramNo, name);
+                            log.warn("【严格取数】指标[{}] 参数[{}] 调用方未传值 —— 跳过本次取数（不执行 SQL），"
+                                    + "不会用配置里预置的样例值顶包。若这次确实是配置页预览/试跑，"
+                                    + "请让入口带上 {} =true。", paramNo, name, ALLOW_SAMPLE_FALLBACK_KEY);
                             return null;
                         }
                         if (Objects.nonNull(defaultValue) && !StringUtils.isEmpty(String.valueOf(defaultValue))) {

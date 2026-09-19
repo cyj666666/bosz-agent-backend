@@ -70,11 +70,41 @@ public class AgentPromptController {
 
     private final IAgentRuleService agentRuleService;
 
+    /**
+     * 给「配置页预览 / 试跑」类入口注入「允许样例值兜底」标记（2026-09-19）。
+     *
+     * <p>⛔ <b>本标记不会让样例值覆盖真实入参</b> —— 取数层只在**该参数调用方没传值**时
+     * 才可能用到 {@code defaultValue}；传了值就永远用传入的值。
+     * 它表达的只有一件事：<b>"这个入口允许不填参数、拿配置里的样例值看效果"</b>。</p>
+     *
+     * <p>背景：取数层已改成 <b>fail-closed</b> —— 没显式声明就一律严格，参数缺失时
+     * 宁可不取数也不碰样例值（那些样例值是真实企业/合同编号，吃了会产出
+     * "看着正常实则张冠李戴"的结论）。而配置页预览本来就要能用样例值，所以由入口显式放行。</p>
+     *
+     * <p>⚠️ 若将来有**真实业务**链路复用这些入口（用真实入参跑生产数据），
+     * 应去掉这个标记 —— 那种场景缺少参数时**就该取不到数**，而不是拿样例值顶上。</p>
+     */
+    private static String asSampleFallbackRequest(String paramStr) {
+        try {
+            JSONObject jo = JSONObject.parseObject(paramStr);
+            if (jo == null) {
+                jo = new JSONObject();
+            }
+            jo.put(SqlDataSetBuilder.ALLOW_SAMPLE_FALLBACK_KEY, true);
+            return jo.toJSONString();
+        } catch (Throwable e) {
+            // 解析不了就原样透传（严格模式），绝不让"注入标记"这件事本身变成故障点
+            log.warn("样例兜底标记注入失败，按严格模式透传：{}", e.getMessage());
+            return paramStr;
+        }
+    }
+
     @Operation(summary = "获取prompt文案", description = "获取prompt文案")
     @PostMapping(value = "/get", name = "获取prompt文案", produces = MediaType.APPLICATION_JSON_VALUE)
     public Object getPrompt(@RequestBody String paramStr) {
         SseEmitter emitter = new SseEmitter(0L);
-        return knowledgeBaseConfigService.getPromptContent(paramStr, emitter);
+        // 配置页预览 ⇒ 允许"没填参数时"用样例值兜底（传了真实参数仍用真实参数）
+        return knowledgeBaseConfigService.getPromptContent(asSampleFallbackRequest(paramStr), emitter);
     }
 
     @Operation(summary = "获取规则文案", description = "获取规则文案")
@@ -164,14 +194,16 @@ public class AgentPromptController {
     @PostMapping(value = "/get/prompt", name = "获取prompt文案", produces = MediaType.APPLICATION_JSON_VALUE)
     public Object getPromptContent(@RequestBody String paramStr) {
         SseEmitter emitter = new SseEmitter(0L);
-        return knowledgeBaseConfigService.getPromptContent(paramStr, emitter);
+        // 配置页预览 ⇒ 允许"没填参数时"用样例值兜底（传了真实参数仍用真实参数）
+        return knowledgeBaseConfigService.getPromptContent(asSampleFallbackRequest(paramStr), emitter);
     }
 
     @Operation(summary = "流式获取prompt文案", description = "流式获取prompt文案")
     @PostMapping(value = "/get/knowledge", name = "流式获取prompt文案", produces = MediaType.APPLICATION_JSON_VALUE)
     public Object getKnowledge(@RequestBody String paramStr) {
         SseEmitter emitter = new SseEmitter(0L);
-        return knowledgeBaseConfigService.getPromptStream(paramStr, emitter);
+        // 配置页流式预览 ⇒ 允许"没填参数时"用样例值兜底（传了真实参数仍用真实参数）
+        return knowledgeBaseConfigService.getPromptStream(asSampleFallbackRequest(paramStr), emitter);
     }
 
     @Operation(summary = "大模型文案渲染", description = "大模型文案渲染")
