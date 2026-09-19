@@ -89,6 +89,29 @@ UPDATE knowledge_base_params
                                      '例如（下列数字仅为格式说明，严禁作为本次报告的实际数据）：')
  WHERE paramno = 'jyk-fyjljglvjkqy' AND contentdesc LIKE '%例如：%';
 
+-- ②' 补充：`jyk-zuyichangqy`（经验库文案-债务异常描述）—— 2026-09-19 追加
+--     全库**唯一**一条「纯格式说明」写法的同形示例：原文 `3. 例如输入“9.8000”，输出“9.80%”。`
+--     改法：换成 X 占位（X.XXXX 不是合法数字，模型无从照抄）。
+--
+--     🔴 **为什么只改这一条**：另 13 条含 `例如输入 / 示例输入` 的配置都**不能动** ——
+--        · 10 条是**完整 few-shot「示例输入→输出」段**（提示词工程手段，删了输出会不稳）
+--        · 2 条（`whywdfk` / `jkrsjfljyq`）**已自带防误用声明**（"以上数据仅用于说明…不得作为数据来源"）
+--        · 1 条 `xmdkytzs` 里的 `示例输入` 是**禁令文本的一部分**
+--          （"不得根据历史案例、**示例输入**、上下文中的其他企业数据进行补充"）⇒
+--          ⛔ 盲目 replace 会把这句话改坏、语义反转。
+--     ✅ 已执行（`[UPD] 1`；复核 `position('9.8000' in contentdesc) = 0`）
+UPDATE knowledge_base_params
+   SET contentdesc = replace(contentdesc,
+        '3. 例如输入“9.8000”，输出“9.80%”。',
+        '3. 格式说明（下列数字仅为占位，严禁作为本次报告的实际数据）：输入 X.XXXX → 输出 X.XX%。')
+ WHERE paramno = 'jyk-zuyichangqy'
+   AND position('例如输入“9.8000”' in contentdesc) > 0;
+
+SELECT count(*) AS should_be_zero_jyk_zuyichangqy
+  FROM knowledge_base_params
+ WHERE paramno = 'jyk-zuyichangqy'
+   AND position('9.8000' in contentdesc) > 0;
+
 -- ③ 复核：**应为 0 行**（同样只查本补丁覆盖的这 10 条）
 --    ⛔ 不要用全表 `WHERE contentdesc LIKE '%例如：%'` —— 全库 61 条含「例如：」，
 --    本补丁只覆盖"示例数值与业务数值同形"的 10 条，改完仍剩 51 条，会被误判成"没生效"。
