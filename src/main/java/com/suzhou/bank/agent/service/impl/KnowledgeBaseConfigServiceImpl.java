@@ -37,6 +37,7 @@ import com.suzhou.bank.agent.config.ApiContext;
 import com.suzhou.bank.agent.config.ApiContextModel;
 import com.suzhou.bank.agent.dict.AgentDictCache;
 import com.suzhou.bank.agent.core.DataSetBuilder;
+import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.*;
 import com.suzhou.bank.agent.enums.*;
 import com.suzhou.bank.agent.mapper.KnowledgeBaseGroupMapper;
@@ -2433,7 +2434,16 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
                         try {
                             JSONArray finalResult = new JSONArray();
                             List<IndexParamsEntity> paramsList = p.getParamsList();
-                            Map<String, String> map = CollectionUtils.isNotEmpty(paramsList) ? paramsList.stream().collect(Collectors.toMap(IndexParamsEntity::getParamID, IndexParamsEntity::getParamName)) : null;
+                            // 🔴 必须给合并函数：index_params 里同一 paramID 可对应多行（实测 91 组重复，
+                            //    如 dfjelxsqjs = "代发金额连续三期逐步减少" / "连续三期代发金额同比下降"）。
+                            //    无合并函数时 Collectors.toMap 直接抛 IllegalStateException(Duplicate key)
+                            //    —— 注意异常消息里打印的是 **value(paramName)** 不是 key，所以日志里看着像中文名。
+                            //    被外层 catch 吞掉后走 sqlResult.put(paramNo, build)，该指标的**列名映射整体失效**
+                            //    （下游按中文名取值取不到 ⇒ 静默降级成"未取到值"）。取首值即可。
+                            Map<String, String> map = CollectionUtils.isNotEmpty(paramsList)
+                                    ? paramsList.stream().collect(Collectors.toMap(
+                                            IndexParamsEntity::getParamID, IndexParamsEntity::getParamName, (a, b) -> a))
+                                    : null;
                             build.forEach(data -> {
                                 // 保证解析时有序（FastJSON）
                                 JSONObject jsonObject = JSON.parseObject(JSON.toJSONString(data), Feature.OrderedField);
@@ -2630,6 +2640,71 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         knowledgeCacheHandler.excelDataExecutor(inputStream, fileName);
     }
 
+    /** 「无数据」标记的 key（由 {@link #isIndexNoData} 判定、写在 promptObject 上） */
+    private static final String RESULT_NO_INDEX_DATA = "noIndexData";
+
+    /**
+     * 本次取数是否「完全没有拿到数据」（2026-09-19 用户口径）
+     *
+     * <p>判据：<b>配了关联指标集（{@code relateIndexSet}）却一条值都没取到</b>。
+     * 之所以要求"配了指标集"，是为了不误伤纯提示词类知识库（本来就不依赖业务数据）。</p>
+     *
+     * <p>为什么需要它：取数全空时大模型仍会被调用，模型在零数据输入下会
+     * <b>照抄提示词里的示例数值、甚至凭空编造具体企业名/金额</b>（2026-09-19 实测：
+     * 正文里的 17.60/13.60/10.50 正是提示词"数值处理规则"的示例值；
+     * 抵押物正文里的企业名在模型输入里 0 次命中）。产出的是"看起来很专业但没有依据"的正文，
+     * 比直接报错危险得多。</p>
+     *
+     * <p>没有数据支持就不该调用大模型，正文按 {@code emptyStrategy} 展示"暂无数据"即可。</p>
+     */
+    private static boolean isIndexNoData(String relateIndexSet, Map<String, Object> paramGroupResultMap) {
+        // 没配关联指标集 ⇒ 不拦（纯提示词类知识库，取数与它无关）
+        if (StringUtils.isEmpty(relateIndexSet)) {
+            return false;
+        }
+        if (paramGroupResultMap == null || paramGroupResultMap.isEmpty()) {
+            return true;
+        }
+        for (Object value : paramGroupResultMap.values()) {
+            if (hasIndexValue(value)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 取数结果是否"有值"（null / 空串 / 空数组 / 空对象 / 字面量 "null" 都算无值） */
+    private static boolean hasIndexValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Collection) {
+            return !((Collection<?>) value).isEmpty();
+        }
+        if (value instanceof Map) {
+            return !((Map<?, ?>) value).isEmpty();
+        }
+        String text = String.valueOf(value).trim();
+        return !text.isEmpty() && !"[]".equals(text) && !"{}".equals(text) && !"null".equals(text);
+    }
+
+    /**
+     * 严格模式（报告链路）下，知识库取数全空 ⇒ 短路，不调用大模型。
+     *
+     * <p>只在 {@code __strictFetch=true} 时生效 —— 配置页预览、智策引擎试跑保持原行为，
+     * 仍允许用空数据调试提示词。</p>
+     */
+    private boolean shouldSkipLlmForNoIndexData(JSONObject params, JSONObject promptObject) {
+        if (promptObject == null || !promptObject.getBooleanValue("isExist")) {
+            return false;
+        }
+        if (!promptObject.getBooleanValue(RESULT_NO_INDEX_DATA)) {
+            return false;
+        }
+        // 非严格模式 ⇒ 不拦
+        return Boolean.parseBoolean(String.valueOf(params.get(SqlDataSetBuilder.STRICT_FETCH_KEY)));
+    }
+
     @Override
     public Object getPromptContent(String paramStr, SseEmitter emitter) {
         JSONObject params = JSONObject.parseObject(paramStr);
@@ -2669,10 +2744,24 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
                 promptObject = handlePromptContent(params);
             }
 
-            Object llmResult = invokeLlmIfNeeded(params, promptObject, moduleCode, emitter);
+            // 🆕 2026-09-19 用户口径：业务数据不支持 ⇒ 不必调大模型，报告展示"暂无数据"即可。
+            boolean noIndexData = shouldSkipLlmForNoIndexData(params, promptObject);
+            Object llmResult;
+            if (noIndexData) {
+                log.warn("【无数据短路】知识库[{}] 关联指标全部未取到值，跳过调用大模型（traceId={}）"
+                                + "—— 该块按 emptyStrategy 展示暂无数据", moduleCode, traceId);
+                llmResult = null;
+            } else {
+                llmResult = invokeLlmIfNeeded(params, promptObject, moduleCode, emitter);
+            }
             promptQueryResultEntityService.savePromptQueryResult(
                     moduleCode, params, paramStr, promptObject,
                     System.currentTimeMillis() - startTime, queryTime, DateUtil.now(), traceId, "");
+            // ⚠️ 短路时必须**直接返回空对象**：不能回落到 promptObject —— 它含提示词原文，
+            //    会被上层 pickLlmText 当成"模型输出"写进报告正文（重演 tddkjcqk 那个坑）。
+            if (noIndexData) {
+                return new JSONObject();
+            }
             return shouldReturnLlmResult(promptObject, llmResult) ? llmResult : promptObject;
         } catch (Exception e) {
             String failReason = ExceptionUtils.getStackTrace(e);
@@ -5644,6 +5733,11 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         result.put("traceId", traceId);
         result.put("isExist", true);
         result.put("inputIndexContent", inputIndexContent);
+        // 🆕 2026-09-19 用户口径：「业务数据不支持 ⇒ 就不要调大模型，报告展示暂无数据即可」。
+        //    判据 = **配了关联指标集、但一条值都没取到**（没配指标集的纯提示词类知识库不受影响）。
+        //    真正拦不拦由 getPromptContent 决定 —— 只在严格模式（报告链路，__strictFetch=true）下拦，
+        //    配置页预览 / 智策引擎试跑保持原行为（允许空数据试提示词）。
+        result.put(RESULT_NO_INDEX_DATA, isIndexNoData(relateIndexSet, paramGroupResultMap));
         result.put("promptDesc", "");
         result.put("whole_source", wholeSource);
         result.put("useLargeModel", useLargeModel);
