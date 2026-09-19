@@ -68,6 +68,23 @@ public class OpenAiChatUtil {
     /** 大模型调用读超时（毫秒）。长文本生成可能持续数分钟，源实现为 30 分钟，此处保持一致 */
     private static final int READ_TIMEOUT_MILLIS = 30 * 60 * 1000;
 
+    /**
+     * 流式读取的「帧间隔」超时（2026-09-19 新增）
+     *
+     * <p>流式下 readTimeout 的语义是「<b>两次数据到达之间的最大间隔</b>」，正常帧间隔只有
+     * 几毫秒~几秒（实测首帧 596ms、平均帧间隔 3ms）。沿用 30 分钟意味着：
+     * 模型服务端一旦「<b>不响应也不断开</b>」，这个块就要挂满 30 分钟才超时。</p>
+     *
+     * <p>🔴 实测（2026-09-19 21:17）：3 个连接被服务端 reset（快速失败、有日志），
+     * 另 2 个块卡在 {@code socketRead0} 一动不动 —— 报告 21:17:06 发起，
+     * 到 21:22 仍停在 {@code status=000}。jstack 确认就是这两个线程在 socketRead。</p>
+     *
+     * <p>所以流式单独用 2 分钟：既远大于正常的帧间隔，又能让"挂死"的连接快速失败。
+     * 非流式（{@link #READ_TIMEOUT_MILLIS}）保持 30 分钟不变 —— 那是一次性长文本返回，
+     * 长间隔是正常的。</p>
+     */
+    private static final int STREAM_READ_TIMEOUT_MILLIS = 2 * 60 * 1000;
+
     /** 建连超时（毫秒）。源实现连接超时也是 30 分钟，这里收紧到 30 秒：连不上就该快点失败 */
     private static final int CONNECT_TIMEOUT_MILLIS = 30 * 1000;
 
@@ -524,7 +541,8 @@ public class OpenAiChatUtil {
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
         conn.setConnectTimeout(CONNECT_TIMEOUT_MILLIS);
-        conn.setReadTimeout(READ_TIMEOUT_MILLIS);
+        // 流式用「帧间隔」超时（2 分钟），不是 30 分钟 —— 见 STREAM_READ_TIMEOUT_MILLIS 的注释
+        conn.setReadTimeout(STREAM_READ_TIMEOUT_MILLIS);
         conn.setRequestProperty("Content-Type", "application/json;charset=utf-8");
         conn.setRequestProperty("Accept", "text/event-stream");
         conn.setRequestProperty("Accept-Encoding", "identity");

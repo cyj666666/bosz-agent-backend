@@ -111,6 +111,29 @@ public class ReportServiceImpl implements ReportService {
      */
     private static final String AGENT_RULE_ENTRY_PREFIX = "RULE_ENTRY#";
 
+    /**
+     * 「块加工阶段」的**总时间预算**（2026-09-19 新增）
+     *
+     * <p>为什么必须有：块内部会调大模型（取数 + 知识库/智策引擎）。若模型服务端
+     * 「<b>不响应也不断开</b>」，线程会阻塞在 {@code socketRead} 上；而这里等 future 用的是
+     * 无参 {@code future.get()}（无超时）⇒ <b>整份报告会被这一个块拖死、永远停在 000</b>。</p>
+     *
+     * <p>🔴 实测（2026-09-19 21:17）：报告 21:17:06 发起，21:17:16 起 3 个连接被服务端
+     * reset（快速失败），另 2 个块卡在 socketRead 不动；jstack 确认后，
+     * 报告到 21:22 仍是 {@code status=000}。当时流式读超时还是 30 分钟 ⇒ 最长要挂半小时。</p>
+     *
+     * <p>口径：<b>超时就放弃未完成的块（内容留空 + 软备注），报告照常收尾置 888</b> ——
+     * 与「失败只进 fail_reason、绝不中断整份报告」一致。正常一份报告几十秒就跑完
+     * （实测 21:17:06→21:17:35 已过大半），10 分钟预算非常宽裕。</p>
+     */
+    private static final long BLOCK_PHASE_TIMEOUT_MILLIS = 10 * 60 * 1000L;
+
+    /** 块加工超时的软备注文案（两处共用，避免手写两份不一致） */
+    private static String blockTimeoutNote() {
+        return "[块超时] 块加工阶段总预算 " + (BLOCK_PHASE_TIMEOUT_MILLIS / 60000)
+                + " 分钟已用完，已放弃未完成的块（对应内容为空）";
+    }
+
     private final ReportMapper reportMapper;
     private final AppReportCatalogMapper catalogMapper;
     private final AppReportContentBlockMapper blockMapper;
@@ -356,9 +379,31 @@ public class ReportServiceImpl implements ReportService {
             }));
         }
         // 等全部块跑完（任何单块失败都已在任务内消化，不会抛到这里）
+        // 🔴 必须带超时！块内部会调大模型，模型服务端「不响应也不断开」时线程会阻塞在
+        //    socketRead，若用无参 future.get() 就会被这一个块拖住、报告永远停在 000
+        //    （2026-09-19 实测）。口径：**块加工阶段有总预算**，超时就放弃未完成的块
+        //    （内容留空 + 软备注），报告照常收尾置 888。
+        long blockDeadline = System.currentTimeMillis() + BLOCK_PHASE_TIMEOUT_MILLIS;
+        boolean blockTimeoutRecorded = false;
         for (java.util.concurrent.Future<?> future : futures) {
+            long remain = blockDeadline - System.currentTimeMillis();
+            if (remain <= 0) {
+                future.cancel(true);
+                if (!blockTimeoutRecorded) {
+                    blockTimeoutRecorded = true;
+                    failureSink.add(blockTimeoutNote());
+                }
+                continue;
+            }
             try {
-                future.get();
+                future.get(remain, java.util.concurrent.TimeUnit.MILLISECONDS);
+            } catch (java.util.concurrent.TimeoutException te) {
+                // 预算已耗尽 —— 记一次软备注，后续循环会自动走上面的 cancel 分支
+                future.cancel(true);
+                blockTimeoutRecorded = true;
+                log.error("内容块加工超时(放弃该块) reportNo={} 块加工阶段总预算={}ms",
+                        reportNo, BLOCK_PHASE_TIMEOUT_MILLIS);
+                failureSink.add(blockTimeoutNote());
             } catch (Throwable e) {
                 // 仅当任务被拒绝/池异常等情况才会走到；同样只记软备注
                 log.error("内容块加工任务异常 reportNo={}", reportNo, e);
