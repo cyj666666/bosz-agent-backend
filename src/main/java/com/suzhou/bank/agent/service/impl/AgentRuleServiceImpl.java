@@ -543,14 +543,35 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
          */
         Object result;
         boolean executeFailed = false;
-        try {
-            result = QLExpressUtil.executeStrict(parsedExpression, indexValueMap);
-        } catch (QLExpressUtil.ExprExecuteException e) {
+        if (!paramsList.isEmpty() && missingValueCount == paramsList.size()) {
+            /*
+             * 🔴 全部指标都没取到值（2026-09-19 加）：指标值会被 indexValueMap 替换成空串，
+             * 表达式形如 `(''-''>=50)` —— 字符串做减法**必然**抛异常。既然注定算不成，
+             * 就没必要真去执行它，更不该为它刷一整坨 ERROR 堆栈：48 个 RULE 块全空时
+             * （例如报告编号换新、业务数据没跟过去），日志会被这些堆栈淹没，
+             * 真正的问题反而被埋。
+             *
+             * 语义与"执行失败"完全一致（executeFailed=true + result=null）：上层 provider 判
+             * `resultStatus == null` ⇒ 记 WARN「规则校验失败」+ 该块返回 null（模板
+             * emptyStrategy=HIDE）。既不会把它误判成"未命中"，也不会让报告中断。
+             *
+             * ⚠️ 部分指标缺失时**仍然照常执行** —— 那种情况下的 ERROR 日志是有信息量的（能看出
+             * 到底缺了哪几个指标），保留。
+             */
             executeFailed = true;
             result = null;
-            // 日志带上完整上下文：规则、指标覆盖率、替换后的表达式、原始堆栈
-            log.error("规则[{}]表达式执行失败（涉及指标 {} 个，其中 {} 个未取到值），转换后表达式：{}",
-                    req.getRuleCode(), paramsList.size(), missingValueCount, e.getRenderedExpression(), e);
+            log.warn("规则[{}]全部 {} 个指标均未取到值，跳过表达式执行（判为校验失败）",
+                    req.getRuleCode(), paramsList.size());
+        } else {
+            try {
+                result = QLExpressUtil.executeStrict(parsedExpression, indexValueMap);
+            } catch (QLExpressUtil.ExprExecuteException e) {
+                executeFailed = true;
+                result = null;
+                // 日志带上完整上下文：规则、指标覆盖率、替换后的表达式、原始堆栈
+                log.error("规则[{}]表达式执行失败（涉及指标 {} 个，其中 {} 个未取到值），转换后表达式：{}",
+                        req.getRuleCode(), paramsList.size(), missingValueCount, e.getRenderedExpression(), e);
+            }
         }
         long end3 = System.currentTimeMillis();
         log.info("执行表达式，规则名称为:{} 计算QL表达式耗时{}", req.getName(), end3 - end1);

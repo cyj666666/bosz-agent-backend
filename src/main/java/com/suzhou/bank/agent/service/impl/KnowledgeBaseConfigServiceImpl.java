@@ -3460,37 +3460,52 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
                 }
             }
             if (ScriptTypeEnum.SQL.id.equalsIgnoreCase(scriptType)) {
+                String script = parent.getScript();
+                /*
+                 * 🔴 取数配置缺失 ⇒ 该指标**不进入取数入参集**（2026-09-19 加）。
+                 *
+                 * 原实现：script 为空时照常 put 一个 `params = []` 的指标 —— 取数层拿到空参数、
+                 * 却仍会对该表做查询（`intfNo = columnFromTable`）⇒ **不带 reportNo 的全表查**，
+                 * 同一批数据服务所有报告版本（实测 748 个指标处于此状态）。
+                 *
+                 * 现在直接跳过：指标不出现在 relateIndexSet 里 ⇒ 取数时不会被请求 ⇒ 值缺失，
+                 * 由上层按"未取到值"处理（规则侧会走 missingValueCount / executeFailed 那条路），
+                 * 而不是拿全表第一行算出个看起来正常的结论。
+                 */
+                if (StringUtils.isEmpty(script)) {
+                    log.warn("【取数配置缺失】指标[{}] scriptType=Sql 但未配置取数SQL，"
+                                    + "不加入取数入参集（避免生成不带 reportNo 的全表查询）。指标名={} 表={}",
+                            parent.getParamNo(), parent.getParamName(), parent.getColumnFromTable());
+                    return;
+                }
                 indexInfo.put("intfNo", parent.getColumnFromTable());
                 indexInfo.put("intfName", parent.getParentParamName());
                 indexInfo.put("supplierId", parent.getColumnFromDataSource());
-                String script = parent.getScript();
-                if (StringUtils.isNotEmpty(script)) {
-                    JSONObject object = JSON.parseObject(script);
-                    JSONArray paramData = object.getJSONArray("paramData");
-                    if (null != paramData && !paramData.isEmpty()) {
-                        for (Object param : paramData) {
-                            JSONObject paramObj = (JSONObject) param;
-                            JSONObject paramInfo = new JSONObject();
-                            String isSync = paramObj.getString("isSync");
-                            if ("N".equalsIgnoreCase(isSync)) {
-                                continue;
-                            }
-                            paramInfo.put("field", paramObj.getString("name"));
-                            String type = paramObj.getString("type");
-                            if (StringUtils.isNotEmpty(type)) {
-                                paramInfo.put("fieldType", IntfParamTypeEnum.getById(type).name);
-                            }
-                            paramInfo.put("fieldName", paramObj.getString("desc"));
-                            paramInfo.put("defaultValue", paramObj.getString("defaultValue"));
-                            JSONObject relateIndex = paramObj.getJSONObject("relateIndex");
-                            if (Objects.nonNull(relateIndex)) {
-                                paramInfo.put("relateIndex", relateIndex.getString("name"));
-                                relateParamNo.add(relateIndex.getString("no"));
-                            }
-                            paramInfo.put("sourceFlag", YesOrNoEnum.N.code);
-                            paramInfo.put("sourceField", "");
-                            paramArr.add(paramInfo);
+                JSONObject object = JSON.parseObject(script);
+                JSONArray paramData = object.getJSONArray("paramData");
+                if (null != paramData && !paramData.isEmpty()) {
+                    for (Object param : paramData) {
+                        JSONObject paramObj = (JSONObject) param;
+                        JSONObject paramInfo = new JSONObject();
+                        String isSync = paramObj.getString("isSync");
+                        if ("N".equalsIgnoreCase(isSync)) {
+                            continue;
                         }
+                        paramInfo.put("field", paramObj.getString("name"));
+                        String type = paramObj.getString("type");
+                        if (StringUtils.isNotEmpty(type)) {
+                            paramInfo.put("fieldType", IntfParamTypeEnum.getById(type).name);
+                        }
+                        paramInfo.put("fieldName", paramObj.getString("desc"));
+                        paramInfo.put("defaultValue", paramObj.getString("defaultValue"));
+                        JSONObject relateIndex = paramObj.getJSONObject("relateIndex");
+                        if (Objects.nonNull(relateIndex)) {
+                            paramInfo.put("relateIndex", relateIndex.getString("name"));
+                            relateParamNo.add(relateIndex.getString("no"));
+                        }
+                        paramInfo.put("sourceFlag", YesOrNoEnum.N.code);
+                        paramInfo.put("sourceField", "");
+                        paramArr.add(paramInfo);
                     }
                 }
             }

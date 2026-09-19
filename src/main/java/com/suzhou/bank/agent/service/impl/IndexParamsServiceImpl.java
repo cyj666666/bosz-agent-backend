@@ -22,10 +22,12 @@ import com.suzhou.bank.agent.model.vo.IndexParamsVO;
 import com.suzhou.bank.agent.model.vo.ReportVersionVO;
 import com.suzhou.bank.agent.service.IIndexParamsService;
 import com.suzhou.bank.agent.model.dto.TableFieldDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+@Slf4j
 @Service
 public class IndexParamsServiceImpl extends ServiceImpl<IndexParamsMapper, IndexParamsEntity> implements IIndexParamsService {
 
@@ -111,6 +113,12 @@ public class IndexParamsServiceImpl extends ServiceImpl<IndexParamsMapper, Index
             return;
         }
         String sql = JoinSql(paramIdList, one.getColumnFromDataSource(), one.getColumnFromTable(), one.getScript());
+        if (StringUtils.isBlank(sql)) {
+            // JoinSql 判定为「配置缺失、拒绝生成」⇒ 保持原状，不写回任何 SQL。
+            // 这样该指标的 script 继续为空，由取数侧（concatIndexParam / getIndexValueMap）
+            // 按"未取到值"处理，而不是拿一个无过滤条件的全表查询去算结论。
+            return;
+        }
         one.setScriptType(ScriptTypeEnum.SQL.id);
         one.setScript(sql);
         IndexParamsEntity newParams = new IndexParamsEntity();
@@ -119,31 +127,41 @@ public class IndexParamsServiceImpl extends ServiceImpl<IndexParamsMapper, Index
     }
 
     private String JoinSql(List<String> paramID, String columnFromDataSource, String columnFromTable, String script) {
-        JSONObject scriptJson = new JSONObject();
         StringBuffer columnBuilder = new StringBuffer();
         for (String s : paramID) {
             columnBuilder.append(",").append(s);
         }
         StringBuffer selectBuilder = new StringBuffer("SELECT ");
         selectBuilder.append(columnBuilder.deleteCharAt(0)).append(" FROM ").append(columnFromTable);
-        // sql配置为空，则直接拼接sql
+        /*
+         * 🔴 拒绝生成"无过滤条件的全表查询"（2026-09-19 改）。
+         *
+         * 原实现：script 为空时直接拼 `SELECT 列 FROM 表` —— **没有 WHERE**、paramData 也是空数组。
+         * 后果（实测）：这类指标取数时不带 reportNo、连 entName 都没有，等于把整张表当作
+         * 该报告的数据来用 —— 同一批数据会服务所有报告版本（V1/V2 内容逐字相同就是这么来的）。
+         * 本轮排查出 748 个指标处于这种状态（其中被规则引用的 153 个）。
+         *
+         * 现在的口径：**宁可保持"未配置"，也不生成一个看起来能用、实则会给出假结论的 SQL**。
+         * 返回 null ⇒ 调用方（setParamSqlScript）跳过写回；该指标继续按"取数配置缺失"处理。
+         */
         if (StringUtils.isBlank(script)) {
-            scriptJson.put("sql", selectBuilder);
-            scriptJson.put("dataSource", columnFromDataSource);
-            scriptJson.put("paramData", new JSONArray());
-        } else {
-            // 有配置时更新字段，保留条件，但是无法保留 表别名.字段 方式查询的sql
-            scriptJson = JSONArray.parseObject(script);
-            String sql = scriptJson.getString("sql");
-            // 分割结构 where
-            String[] split = sql.split(" (?i)WHERE ");
-            if (split.length > 1) {
-                selectBuilder.append(" WHERE ").append(split[split.length - 1]);
-            }
-            scriptJson.put("sql", selectBuilder);
-            scriptJson.put("paramData", scriptJson.getJSONArray("paramData"));
+            log.warn("【取数配置缺失】指标[{}] 未配置取数SQL，且拒绝自动生成「无过滤条件的全表查询」"
+                            + "（自动生成只会得到 `SELECT 列 FROM {}` —— 没有 reportNo 等任何条件）。"
+                            + "请人工补配带 `WHERE REPORTNO = :reportNo` 的 SQL。",
+                    paramID, columnFromTable);
+            return null;
         }
-        return scriptJson.toString();
+        // 有配置时更新字段，保留条件，但是无法保留 表别名.字段 方式查询的sql
+        JSONObject parsed = JSONArray.parseObject(script);
+        String sql = parsed.getString("sql");
+        // 分割结构 where
+        String[] split = sql.split(" (?i)WHERE ");
+        if (split.length > 1) {
+            selectBuilder.append(" WHERE ").append(split[split.length - 1]);
+        }
+        parsed.put("sql", selectBuilder);
+        parsed.put("paramData", parsed.getJSONArray("paramData"));
+        return parsed.toString();
     }
 
     @Override

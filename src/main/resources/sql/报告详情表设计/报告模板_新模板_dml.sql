@@ -72,7 +72,7 @@ INSERT INTO app_report_catalog (catalogCode, catalogName, catalogLevel, parentCo
 ('V2_CAT_04_POSTLOAN', '四、本次日常定期检查开展情况', 1, NULL, 40, 1),
 ('V2_CAT_04_POSTLOAN_01', '（一)现场打卡情况', 2, 'V2_CAT_04_POSTLOAN', 10, 1),
 ('V2_CAT_04_POSTLOAN_02', '（二)批复后续管理要求落实情况', 2, 'V2_CAT_04_POSTLOAN', 20, 1),
-('V2_CAT_04_POSTLOAN_03', '（三)单此检查任务落实情况', 2, 'V2_CAT_04_POSTLOAN', 30, 1),
+('V2_CAT_04_POSTLOAN_03', '（三)单项检查任务落实情况', 2, 'V2_CAT_04_POSTLOAN', 30, 1),
 ('V2_CAT_04_POSTLOAN_04', '（四）日常贷后检查报告揭示风险', 2, 'V2_CAT_04_POSTLOAN', 40, 1),
 ('V2_CAT_04_POSTLOAN_05', '（五）特定贷款的检查情况', 2, 'V2_CAT_04_POSTLOAN', 50, 1),
 ('V2_CAT_05_FINANCE', '五、财务指标变化和潜在风险', 1, NULL, 50, 1),
