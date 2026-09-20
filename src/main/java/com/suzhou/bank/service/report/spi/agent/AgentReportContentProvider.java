@@ -743,15 +743,36 @@ public class AgentReportContentProvider implements ReportContentProvider {
         // 拆「选中清单」「开篇总述」「收尾结论」
         String pickedLine = null;
         String html = raw;
-        int nl = raw.indexOf('\n');
-        if (raw.startsWith(PICK_MARK)) {
-            if (nl > 0) {
-                pickedLine = raw.substring(PICK_MARK.length(), nl);
-                html = raw.substring(nl + 1);
+        // 🔴 起点先去空白：模型有时会在 #PICK# 前面多一个空行 ⇒ startsWith 失配 ⇒
+        //    整行标记原样落进正文（2026-09-20 实测踩到）
+        String work = raw.replaceFirst("^\\s+", "");
+        if (work.startsWith(PICK_MARK)) {
+            int pickFrom = PICK_MARK.length();
+            // 🔴 清单的右边界**不能只看换行**：实测模型会把正文直接接在同一行
+            //    （`#PICK#A|B|C<p>开篇…</p>`）。只看换行 ⇒ ① 整段开篇被当成"清单"、
+            //    规则名一个都匹配不上（白兜底）② 开篇正文被吃掉 ⇒ 正文兜底成整段原文（含标记）。
+            //    所以取「第一个换行」与「第一个 <（正文 HTML 起点）」中更早的那个。
+            int nl0 = work.indexOf('\n', pickFrom);
+            int lt0 = work.indexOf('<', pickFrom);
+            int pickEnd;
+            if (nl0 < 0) {
+                pickEnd = lt0;
+            } else if (lt0 < 0) {
+                pickEnd = nl0;
             } else {
-                pickedLine = raw.substring(PICK_MARK.length());
-                html = "";
+                pickEnd = Math.min(nl0, lt0);
             }
+            if (pickEnd < 0) {
+                pickedLine = work.substring(pickFrom);
+                html = "";
+            } else {
+                pickedLine = work.substring(pickFrom, pickEnd);
+                html = work.substring(pickEnd);
+            }
+            pickedLine = pickedLine.trim();
+        } else if (work.indexOf(PICK_MARK) >= 0) {
+            log.warn("【报告内容加工】风险要点总结：#PICK# 未出现在首行，按原样解析并用 removeMarks 兜底清理"
+                    + " reportNo={}", context.getReportNo());
         }
         // 按 #TAIL# 切「开篇总述」/「收尾结论」——   标记可能被模型写成单独一行（前后带空白）
         String tailRaw = null;
@@ -763,9 +784,13 @@ public class AgentReportContentProvider implements ReportContentProvider {
         html = stripFence(trimToNull(html));
         String tailHtml = stripFence(trimToNull(tailRaw));
         if (!StringUtils.hasText(html)) {
-            // 只有 PICK 行没正文（模型跑偏）→ 把整段原文当正文，至少不丢内容
-            html = stripFence(raw);
+            // 只有 PICK 行没正文（模型跑偏）→ 至少不丢内容；
+            // ⚠️ 必须先剔掉标记再兜底，否则 #PICK# / #TAIL# 会原样渲染给用户
+            html = stripFence(removeMarks(raw));
         }
+        // 🔴 最后一道防线：不管上面走哪条分支，正文与收尾里都不允许残留控制标记
+        html = removeMarks(html);
+        tailHtml = removeMarks(tailHtml);
 
         List<String> keep = null;
         if (StringUtils.hasText(pickedLine)) {
@@ -793,6 +818,38 @@ public class AgentReportContentProvider implements ReportContentProvider {
         return new ReportContentProvider.RuleSummaryResult(
                 new ContentPayload(html), keep,
                 tailHtml == null ? null : new ContentPayload(tailHtml));
+    }
+
+    /**
+     * 兜底清理：把控制标记从文本里剔掉
+     *
+     * <p>模型不按契约排布时（`#PICK#` 前多一个空行、清单与正文挤在同一行、`#TAIL#` 混在段落里…），
+     * 标记就会残留在正文中直接渲染给用户 —— <b>2026-09-20 实测踩到</b>。</p>
+     *
+     * <p>这里做**统一收尾**：`#PICK#` 清单整段剔除、`#TAIL#` 标记直接去掉。
+     * 右边界口径与 {@link #summarizeRuleRisks} 一致：换行与 {@code <}（正文 HTML 起点）取更早者。</p>
+     */
+    private static String removeMarks(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String s = text;
+        int i = s.indexOf(PICK_MARK);
+        if (i >= 0) {
+            int start = i + PICK_MARK.length();
+            int nl0 = s.indexOf('\n', start);
+            int lt0 = s.indexOf('<', start);
+            int end;
+            if (nl0 < 0) {
+                end = lt0;
+            } else if (lt0 < 0) {
+                end = nl0;
+            } else {
+                end = Math.min(nl0, lt0);
+            }
+            s = end < 0 ? s.substring(0, i) : s.substring(0, i) + s.substring(end);
+        }
+        return s.replace(TAIL_MARK, "");
     }
 
     /**

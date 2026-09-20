@@ -350,8 +350,12 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
      * （{@code useReportInstance.stripDuplicatedTitle}）。</p>
      */
     private static final String NO_TITLE_RULE =
-            "【输出格式】只输出正文内容本身，不要输出任何标题"
-                    + "（如「XX情况：」「# XX」「**XX**」这类独立成行的标题），标题由系统统一渲染。";
+            "【输出格式】只输出正文内容本身，不要额外输出标题"
+                    + "（如「XX情况：」「**XX**」这类独立成行的标题），标题由系统统一渲染。"
+                    // ⚠️ 2026-09-20 补：原来举的例子写了「# XX」，结果模型把 #PICK# / #TAIL# 这类
+                    //    「# 开头的契约标记」也当成"不该独立成行"的东西，把清单和正文挤到了一行
+                    //    ⇒ 后端解析失配 ⇒ 标记原样渲染。故去掉该举例并显式豁免控制标记。
+                    + "⚠️ 提示词中明确要求输出的控制标记/占位符必须**原样保留**，不受本条影响。";
 
     /**
      * 给「输出要求」追加「不要输出标题」的统一约束
