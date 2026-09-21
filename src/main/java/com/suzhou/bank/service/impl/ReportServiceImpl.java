@@ -713,10 +713,15 @@ public class ReportServiceImpl implements ReportService {
         }
 
         // 空数据策略属于渲染策略，取自模板；未配置时默认 PLACEHOLDER（保留结构、显示占位）
+        // agentParams 同理取自模板（实例表无此列）：知识库块是入参清单，链接溯源块是主体令牌
         Map<String, String> emptyStrategyMap = new HashMap<>();
+        Map<String, String> agentParamsMap = new HashMap<>();
         for (AppReportContentBlock block : loadEnabledBlocks()) {
             emptyStrategyMap.put(block.getBlockCode(),
                     StringUtils.hasText(block.getEmptyStrategy()) ? block.getEmptyStrategy() : EMPTY_PLACEHOLDER);
+            if (StringUtils.hasText(block.getAgentParams())) {
+                agentParamsMap.put(block.getBlockCode(), block.getAgentParams());
+            }
         }
 
         List<AppReportContentInstance> instances = instanceMapper.selectList(
@@ -729,7 +734,8 @@ public class ReportServiceImpl implements ReportService {
         Map<String, String> catalogOfBlock = new HashMap<>();
         for (AppReportContentInstance instance : instances) {
             catalogOfBlock.put(instance.getBlockCode(), instance.getCatalogCode());
-            ReportBlockVO vo = toBlockVO(instance, emptyStrategyMap.get(instance.getBlockCode()));
+            ReportBlockVO vo = toBlockVO(instance, emptyStrategyMap.get(instance.getBlockCode()),
+                    agentParamsMap.get(instance.getBlockCode()));
             ReportCatalogNode node = StringUtils.hasText(instance.getCatalogCode())
                     ? nodeMap.get(instance.getCatalogCode()) : null;
             if (node == null) {
@@ -792,6 +798,8 @@ public class ReportServiceImpl implements ReportService {
         detail.setCustomerId(reportInfo.getCustomerId());
         detail.setCustomerName(reportInfo.getCustomerName());
         detail.setReportTitle(reportInfo.getReportTitle());
+        // 链接溯源换链接时的 userId = 报告发起人（report.user_no），不是当前登录态
+        detail.setUserNo(reportInfo.getUserNo());
         detail.setCheckTaskNo(reportInfo.getCheckTaskNo());
         detail.setVersion(reportInfo.getVersion());
         detail.setStatus(reportInfo.getStatus());
@@ -2013,7 +2021,14 @@ public class ReportServiceImpl implements ReportService {
         return node;
     }
 
-    private ReportBlockVO toBlockVO(AppReportContentInstance instance, String emptyStrategy) {
+    /**
+     * 实例 → 渲染 VO
+     *
+     * @param emptyStrategy 空数据策略（取自模板，属渲染策略不随实例固化）
+     * @param agentParams   模板层的 agentParams（实例表无此列）：知识库块的入参清单 /
+     *                      链接溯源块的主体令牌（{@code subjectType=担保人,guarantorType=法人}）
+     */
+    private ReportBlockVO toBlockVO(AppReportContentInstance instance, String emptyStrategy, String agentParams) {
         ReportBlockVO vo = new ReportBlockVO();
         vo.setBlockCode(instance.getBlockCode());
         vo.setCatalogCode(instance.getCatalogCode());
@@ -2028,6 +2043,7 @@ public class ReportServiceImpl implements ReportService {
         vo.setJumpAnchorCode(instance.getJumpAnchorCode());
         vo.setContent(instance.getContent());
         vo.setEmpty(!StringUtils.hasText(instance.getContent()));
+        vo.setAgentParams(agentParams);
         return vo;
     }
 

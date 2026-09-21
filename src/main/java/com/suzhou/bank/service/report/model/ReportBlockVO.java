@@ -47,4 +47,16 @@ public class ReportBlockVO {
 
     /** 内容是否为空 */
     private Boolean empty;
+
+    /**
+     * 调智能体时的入参清单 / 链接溯源的主体令牌（取自<b>模板层</b> app_report_content_block.agentParams）
+     * <p>🔴 为什么不放实例表：实例表没有这一列，而它本质是「结构配置」不是「生成产物」——
+     * 生成时快照无意义，回读模板总是最新的。故本字段在 detail() 里按 blockCode <b>内存合并</b>补上。</p>
+     * <ul>
+     *   <li>知识库/规则块：{@code reportNo,entName[,guarantorName]}（provider 生成时已消费）</li>
+     *   <li>链接溯源块：主体令牌，如 {@code subjectType=担保人,guarantorType=法人}
+     *       —— 前端据此决定「要不要按担保人拆多按钮」（2026-09-21）</li>
+     * </ul>
+     */
+    private String agentParams;
 }

@@ -24,6 +24,13 @@ public class ReportDetailVO {
 
     private String reportTitle;
 
+    /**
+     * 用户编号（用户账号，上游预生成报告时写入 report.user_no）
+     * <p>🔴 2026-09-21 口径：链接溯源换一次性链接时，{@code userId} 取<b>本字段</b>
+     * （= 报告发起人），<b>不是</b>当前登录态账号。</p>
+     */
+    private String userNo;
+
     /** 日检流水号（同一流水号下多个版本） */
     private String checkTaskNo;
 

@@ -56,7 +56,9 @@ CREATE INDEX idx_report_catalog_level ON app_report_catalog (catalogLevel, isEna
 --        ANALYSIS    - 文本分析类（知识库：content 存文本，有表格以 md 形式存）
 --        TRACE_TABLE - 表格溯源类（agentCode = 表英文名 app_*；agentParams 存查询条件，可带 `列=值` 过滤令牌；
 --                      加工时查表拼 md 表格；严格按条件查，**不做担保人轮询**）
---        TRACE_LINK  - 链接溯源类（content 存"链接开头"，前端调接口补全 + SM4 加密后跳转）
+--        TRACE_LINK  - 链接溯源类（content **恒空**；agentCode 存 **shareCode**；块本身只是入口 ——
+--                      点击时由后端调信贷 `getPageShareUrlN` **实时**换取一次性链接，
+--                      不落库、不缓存；未配 shareCode 的块按 emptyStrategy 处理：HIDE 即不渲染入口）
 --        EXTERNAL    - 外部灌入类（内容不由本服务产出，后续由别的接口直接落 content）
 --        ⚠️ 只对 TEXT / TABLE 放开 —— 判据与 AgentReportContentProvider 的 analysable 同口径；
 --           TITLE / SOURCE_LINK 配了会在模板校验阶段 fail-fast。
@@ -92,7 +94,7 @@ COMMENT ON COLUMN app_report_content_block.catalogCode IS '所属目录编号（
 COMMENT ON COLUMN app_report_content_block.fillType IS '填充类型：TITLE-标题 TEXT-文本 TABLE-表格 SOURCE_LINK-溯源链接';
 COMMENT ON COLUMN app_report_content_block.analysisType IS '分析文本类型：RULE-经验规则类 ANALYSIS-文本分析类 TRACE_TABLE-表格溯源（agentCode=表名）TRACE_LINK-链接溯源 EXTERNAL-外部灌入（仅 fillType=TEXT/TABLE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.agentCode IS '智能体编码（仅 fillType=TEXT/TABLE 时有值，否则为NULL；已含经验规则编号；为与内容实例、AI 风险实例的关联键）';
-COMMENT ON COLUMN app_report_content_block.agentParams IS '调智能体入参清单（逗号分隔的参数名，仅 TEXT/TABLE 有值）：reportNo,entName 或 reportNo,entName,guarantorName（后者按担保人口径、多担保人时轮循）。2026-09-17 新增：同一 agentCode 在不同章节可能是借款人/担保人两种口径，入参不同结果不同，必须有此列区分';
+COMMENT ON COLUMN app_report_content_block.agentParams IS '调智能体入参清单 / 链接溯源主体令牌（逗号分隔，TEXT/TABLE/TRACE_LINK 有值）：① 知识库/规则块 = reportNo,entName 或 reportNo,entName,guarantorName（后者按担保人口径、多担保人时轮循），2026-09-17 新增：同一 agentCode 在不同章节可能是借款人/担保人两种口径，入参不同结果不同，必须有此列区分；② 链接溯源块 = 主体令牌，如 subjectType=担保人,guarantorType=法人（2026-09-21 新增：1050 征信在借款人/企业担保人/个人担保人三处复用、shareCode 相同，只能靠令牌区分取谁的征信记录号）。⚠️ 实例表 app_report_content_instance 无此列，详情接口从模板表按 blockCode 内存合并返回';
 COMMENT ON COLUMN app_report_content_block.blockName IS '内容块名称（analysisType=RULE 时即规则名称；模板层与实例层同名同值）';
 COMMENT ON COLUMN app_report_content_block.titleLevel IS '标题级别：1-报告主标题 2-章节标题 3-小节标题（仅 fillType=TITLE 时有值，否则为NULL）';
 COMMENT ON COLUMN app_report_content_block.emptyStrategy IS '空数据策略（实例内容为空时生效）：PLACEHOLDER-显示暂无数据占位（默认） HIDE-整块隐藏';
