@@ -162,7 +162,7 @@ SELECT
     c.reportNo, c.customerId, c.customerName, c.loanSerialNo, c.loanStatus, c.productName,
     c.purpose AS purposeName,
     c.balance, c.businessSum, c.productBelongName, c.overdueBalance, c.overdueInterestAmt, c.isRestructed,
-    c.loanChangeRptCounts AS loanChangeRptCounts,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(c.loanChangeRptCounts), '^-?[0-9]+$') THEN BTRIM(c.loanChangeRptCounts) END AS INTEGER) AS loanChangeRptCounts,
     c.loanChangeRptBalance, c.occurType, c.isExtend,
     c.fixedAssetLoan, c.realEstateDevLoan,
     CASE WHEN REGEXP_LIKE(SUBSTR(c.nextPayDate, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')
@@ -172,7 +172,7 @@ SELECT
     c.payInterestAmt AS payInterestamt,
     c.payFineAmt AS payFineAmt,
     c.compoundInterest AS compoundinterest,
-    c.businessRate AS businessRate,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(c.businessRate), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(c.businessRate) END AS DECIMAL(12,4)) AS businessRate,
     -- 还款周期：码值->中文（01按月/02按季/03一次/04按半年/05按年/06指定周期/07按季（固定）），NULL/未收录原样保留
     CASE c.repaymentPeriod
         WHEN '01' THEN '按月'

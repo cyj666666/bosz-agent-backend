@@ -182,19 +182,19 @@ SELECT
     t.reportNo,
     t.customerId,
     t.customerName,
-    CAST(CASE WHEN t.v_fzn      IS NULL OR t.v_fzn      IN ('', '\\N') THEN NULL ELSE t.v_fzn      END AS DECIMAL(18,2)) AS frozenAmount,
-    CAST(CASE WHEN t.v_dbt      IS NULL OR t.v_dbt      IN ('', '\\N') THEN NULL ELSE t.v_dbt      END AS DECIMAL(5,2))  AS debitSameNameTransferRatio,
-    CAST(CASE WHEN t.v_cr       IS NULL OR t.v_cr       IN ('', '\\N') THEN NULL ELSE t.v_cr       END AS DECIMAL(5,2))  AS creditSameNameTransferRatio,
-    CAST(CASE WHEN t.v_dep_cur  IS NULL OR t.v_dep_cur  IN ('', '\\N') THEN NULL ELSE t.v_dep_cur  END AS DECIMAL(18,2)) AS yearAvgDeposit,
-    CAST(CASE WHEN t.v_dep_last IS NULL OR t.v_dep_last IN ('', '\\N') THEN NULL ELSE t.v_dep_last END AS DECIMAL(18,2)) AS lastYearAvgDeposit,
-    CAST(CASE WHEN t.v_pinc     IS NULL OR t.v_pinc     IN ('', '\\N') THEN NULL ELSE t.v_pinc     END AS DECIMAL(18,2)) AS propertyIncome,
-    CAST(CASE WHEN t.v_pinc_yoy IS NULL OR t.v_pinc_yoy IN ('', '\\N') THEN NULL ELSE CAST(t.v_pinc_yoy AS DECIMAL(18,2)) END AS DECIMAL(18,2)) AS propertyIncomeYoy,
-    CAST(CASE WHEN t.v_pinc_sup IS NULL OR t.v_pinc_sup IN ('', '\\N') THEN NULL ELSE t.v_pinc_sup END AS DECIMAL(18,2)) AS propertyIncomeSupervised,
-    CAST(CASE WHEN t.v_einc     IS NULL OR t.v_einc     IN ('', '\\N') THEN NULL ELSE t.v_einc     END AS DECIMAL(18,2)) AS electricFeeIncome,
-    CAST(CASE WHEN t.v_einc_yoy IS NULL OR t.v_einc_yoy IN ('', '\\N') THEN NULL ELSE CAST(t.v_einc_yoy AS DECIMAL(18,2)) END AS DECIMAL(18,2)) AS electricFeeYoy,
-    CAST(CASE WHEN t.v_einc_sup IS NULL OR t.v_einc_sup IN ('', '\\N') THEN NULL ELSE t.v_einc_sup END AS DECIMAL(18,2)) AS electricFeeSupervised,
-    CAST(CASE WHEN t.v_kw_cp    IS NULL OR t.v_kw_cp    IN ('', '\\N') THEN NULL ELSE t.v_kw_cp    END AS DECIMAL(18,2)) AS keywordCounterpartyCreditAmount,
-    CAST(CASE WHEN t.v_kw_rk    IS NULL OR t.v_kw_rk    IN ('', '\\N') THEN NULL ELSE t.v_kw_rk    END AS DECIMAL(18,2)) AS keywordRemarkCreditAmount
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_fzn),      '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_fzn)      END AS DECIMAL(18,2)) AS frozenAmount,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_dbt),      '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_dbt)      END AS DECIMAL(5,2))  AS debitSameNameTransferRatio,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_cr),       '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_cr)       END AS DECIMAL(5,2))  AS creditSameNameTransferRatio,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_dep_cur),  '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_dep_cur)  END AS DECIMAL(18,2)) AS yearAvgDeposit,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_dep_last), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_dep_last) END AS DECIMAL(18,2)) AS lastYearAvgDeposit,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_pinc),     '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_pinc)     END AS DECIMAL(18,2)) AS propertyIncome,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_pinc_yoy), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_pinc_yoy) END AS DECIMAL(18,2)) AS propertyIncomeYoy,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_pinc_sup), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_pinc_sup) END AS DECIMAL(18,2)) AS propertyIncomeSupervised,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_einc),     '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_einc)     END AS DECIMAL(18,2)) AS electricFeeIncome,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_einc_yoy), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_einc_yoy) END AS DECIMAL(18,2)) AS electricFeeYoy,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_einc_sup), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_einc_sup) END AS DECIMAL(18,2)) AS electricFeeSupervised,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_kw_cp),    '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_kw_cp)    END AS DECIMAL(18,2)) AS keywordCounterpartyCreditAmount,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.v_kw_rk),    '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.v_kw_rk)    END AS DECIMAL(18,2)) AS keywordRemarkCreditAmount
 FROM (
     SELECT m.*, ROW_NUMBER() OVER (
         PARTITION BY m.reportNo, COALESCE(m.customerId, '')

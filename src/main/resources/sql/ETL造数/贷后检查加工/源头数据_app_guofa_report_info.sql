@@ -1,4 +1,4 @@
-﻿-- =====================================================================
+-- =====================================================================
 -- app_guofa_report_info（国发征信财务数据）源头表反推造数
 -- 加工脚本：贷后检查加工/xd_guofa.sql
 -- 源表（主档 + 三子表，mainId -> gfzx_national_dev.id）：
@@ -145,18 +145,18 @@ INSERT INTO app_guofa_report_info (
 )
 SELECT
     b.reportNo, b.customerId, b.customerName, b.dataDate, b.beforeYear, b.lastYear, b.thisYear,
-    r.n_current_qmye AS gfRevenue,
-    r.n_last_qmye AS lastYearRevenue,
-    r.n_before_last_qmye AS beforeYearRevenue,
-    ar.c_current_qmye AS gfReceivable,
-    ar.c_last_qmye AS lastYearReceivable,
-    ar.c_before_last_qmye AS beforeYearReceivable,
-    ap.c_current_qmye AS gfPayable,
-    ap.c_last_qmye AS lastYearPayable,
-    ap.c_before_last_qmye AS beforeYearPayable,
-    inv.c_current_qmye AS gfInventory,
-    inv.c_last_qmye AS lastYearInventory,
-    inv.c_before_last_qmye AS beforeYearInventory
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(r.n_current_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(r.n_current_qmye) END AS DECIMAL(18,2)) AS gfRevenue,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(r.n_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(r.n_last_qmye) END AS DECIMAL(18,2)) AS lastYearRevenue,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(r.n_before_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(r.n_before_last_qmye) END AS DECIMAL(18,2)) AS beforeYearRevenue,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(ar.c_current_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(ar.c_current_qmye) END AS DECIMAL(18,2)) AS gfReceivable,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(ar.c_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(ar.c_last_qmye) END AS DECIMAL(18,2)) AS lastYearReceivable,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(ar.c_before_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(ar.c_before_last_qmye) END AS DECIMAL(18,2)) AS beforeYearReceivable,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(ap.c_current_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(ap.c_current_qmye) END AS DECIMAL(18,2)) AS gfPayable,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(ap.c_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(ap.c_last_qmye) END AS DECIMAL(18,2)) AS lastYearPayable,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(ap.c_before_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(ap.c_before_last_qmye) END AS DECIMAL(18,2)) AS beforeYearPayable,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(inv.c_current_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(inv.c_current_qmye) END AS DECIMAL(18,2)) AS gfInventory,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(inv.c_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(inv.c_last_qmye) END AS DECIMAL(18,2)) AS lastYearInventory,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(inv.c_before_last_qmye), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(inv.c_before_last_qmye) END AS DECIMAL(18,2)) AS beforeYearInventory
 FROM (
     -- 当前主档（报表期次表头，取最新一期）
     SELECT id, reportNo, customerId, customerName,

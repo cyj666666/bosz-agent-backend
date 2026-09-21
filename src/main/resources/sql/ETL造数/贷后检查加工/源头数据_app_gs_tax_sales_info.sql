@@ -145,7 +145,7 @@ FROM (
     FROM (
     -- r：当月 + 当年 YTD + 当前年标记（窗口）
     SELECT
-        e.reportNo, e.customerId, e.customerName, e.mkey, e.yr, e.mon, e.amt,
+        e.reportNo, e.customerId, e.customerName, e.mkey, e.yr, e.mon, e.amt, e.hasVal,
         SUM(e.amt) OVER (PARTITION BY e.reportNo, e.customerId, e.yr ORDER BY e.mon) AS ytd,
         MAX(e.yr)  OVER (PARTITION BY e.reportNo, e.customerId)                     AS curYr
     FROM (
@@ -155,7 +155,8 @@ FROM (
             elkey                                          AS mkey,
             CAST(SUBSTRING(elkey, 1, 4) AS INTEGER)         AS yr,
             CAST(SUBSTRING(elkey, 5, 2) AS INTEGER)         AS mon,
-            CAST(CASE WHEN elval IS NULL OR elval = '' THEN '0' ELSE elval END AS DECIMAL(18,2)) AS amt
+            CAST(CASE WHEN elval IS NULL OR elval = '' THEN '0' ELSE elval END AS DECIMAL(18,2)) AS amt,
+            CASE WHEN elval IS NULL OR elval = '' THEN 0 ELSE 1 END AS hasVal
         FROM (
             SELECT reportNo, customerId, customerName,
                    SPLIT_PART(SPLIT_PART(mon_sale_amt, '|', n.n), ':', 1) AS elkey,
@@ -185,6 +186,10 @@ FROM (
                 UNION ALL SELECT 46 UNION ALL SELECT 47 UNION ALL SELECT 48 UNION ALL SELECT 49 UNION ALL SELECT 50
                 UNION ALL SELECT 51 UNION ALL SELECT 52 UNION ALL SELECT 53 UNION ALL SELECT 54 UNION ALL SELECT 55
                 UNION ALL SELECT 56 UNION ALL SELECT 57 UNION ALL SELECT 58 UNION ALL SELECT 59 UNION ALL SELECT 60
+                UNION ALL SELECT 61 UNION ALL SELECT 62 UNION ALL SELECT 63 UNION ALL SELECT 64 UNION ALL SELECT 65
+                UNION ALL SELECT 66 UNION ALL SELECT 67 UNION ALL SELECT 68 UNION ALL SELECT 69 UNION ALL SELECT 70
+                UNION ALL SELECT 71 UNION ALL SELECT 72 UNION ALL SELECT 73 UNION ALL SELECT 74 UNION ALL SELECT 75
+                UNION ALL SELECT 76 UNION ALL SELECT 77 UNION ALL SELECT 78 UNION ALL SELECT 79 UNION ALL SELECT 80
             ) n
             WHERE b.rn = 1
               AND SPLIT_PART(mon_sale_amt, '|', n.n) IS NOT NULL
@@ -236,6 +241,10 @@ LEFT JOIN (
                 UNION ALL SELECT 46 UNION ALL SELECT 47 UNION ALL SELECT 48 UNION ALL SELECT 49 UNION ALL SELECT 50
                 UNION ALL SELECT 51 UNION ALL SELECT 52 UNION ALL SELECT 53 UNION ALL SELECT 54 UNION ALL SELECT 55
                 UNION ALL SELECT 56 UNION ALL SELECT 57 UNION ALL SELECT 58 UNION ALL SELECT 59 UNION ALL SELECT 60
+                UNION ALL SELECT 61 UNION ALL SELECT 62 UNION ALL SELECT 63 UNION ALL SELECT 64 UNION ALL SELECT 65
+                UNION ALL SELECT 66 UNION ALL SELECT 67 UNION ALL SELECT 68 UNION ALL SELECT 69 UNION ALL SELECT 70
+                UNION ALL SELECT 71 UNION ALL SELECT 72 UNION ALL SELECT 73 UNION ALL SELECT 74 UNION ALL SELECT 75
+                UNION ALL SELECT 76 UNION ALL SELECT 77 UNION ALL SELECT 78 UNION ALL SELECT 79 UNION ALL SELECT 80
             ) n
             WHERE b2.rn = 1
               AND SPLIT_PART(mon_sale_amt, '|', n.n) IS NOT NULL
@@ -247,7 +256,7 @@ LEFT JOIN (
       AND p.customerId = r.customerId
       AND p.yr = r.yr - 1
       AND p.mon <= r.mon
-    WHERE r.amt > 0
+    WHERE r.hasVal = 1
   ) x
 WHERE x.prn = 1
 ORDER BY x.taxPeriod;

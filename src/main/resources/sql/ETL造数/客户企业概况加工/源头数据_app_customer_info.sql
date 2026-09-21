@@ -260,8 +260,9 @@ SELECT
          WHEN i.warningLevel = '5' THEN '橙色预警'
          WHEN i.warningLevel = '6' THEN '红色预警'
          ELSE i.warningLevel END AS warningLevel,
-     c.isStiEnt AS isTechCompany,
-     c.listingCorpOrNot AS isListedCompany
+     -- 是否科创企业 / 是否上市公司（码值：是/否）：源头码表 0/1，兼容历史 '是' 形态；其余（含 0/空/NULL/未收录）一律「否」
+     CASE WHEN BTRIM(COALESCE(c.isStiEnt, '')) IN ('1', '是') THEN '是' ELSE '否' END AS isTechCompany,
+     CASE WHEN BTRIM(COALESCE(c.listingCorpOrNot, '')) IN ('1', '是') THEN '是' ELSE '否' END AS isListedCompany
 FROM (
     -- 主档去重：每个 reportNo 仅保留最新一条
     SELECT reportNo, customerId, customerName, fictitiousPerson, registerCapital, paiclupCapital,

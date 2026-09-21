@@ -97,7 +97,7 @@ INSERT INTO dfs_crdt_loan_cust_rel (
 --   counterpartyName <- 交易对手名称（dbt 串 name 段 / cr 串 name 段）
 --   direction        <- 方向（dbt 串=借方 / cr 串=贷方）
 --   amount           <- 发生额（万元）（dbt 串 amt 段 / cr 串 amt 段，VARCHAR->DECIMAL(18,2)）
---   rankNo           <- 排名 TOP1-10（按发生额降序、借方/贷方分开排；同额并列同号 DENSE_RANK，次位按名称保证确定性）
+--   rankNo           <- 排名 TOP1-10（业务口径为「前十大」；按发生额降序、借方/贷方分开排；同额并列同号 DENSE_RANK，次位按名称保证确定性）
 --   upstreamFlag / remark  字典标「删除/未执行」，不加工
 --
 -- 处理规则（对齐 xd_payroll.sql）：
@@ -108,7 +108,7 @@ INSERT INTO dfs_crdt_loan_cust_rel (
 --      SPLIT_PART 取第 n 个 name:amt 元素再按 ':' 拆 name / amt；超过实际个数的序号返回空串，过滤掉
 --   4. 按发生额降序、借方/贷方分开算 rankNo：DENSE_RANK() OVER (PARTITION BY customerId, direction ORDER BY amount DESC, counterpartyName)
 --      （customerId 入分组保证多客户同批加工时各客户排名互不串扰；正常按单客户调用时为空操作）
---      取 1..N；TOP10 上限（DENSE_RANK <= 10，前十大数组本身 <=10 个元素，正常不触发，作兜底）
+--      取 1..N；兜底上限 DENSE_RANK <= 20（源为「前十大」数组、每方向 <=10 个元素，20 为序号表上限，正常不触发）
 --   5. CAST：发生额 VARCHAR->DECIMAL(18,2)。空/缺失元素由 SPLIT_PART 空串过滤（无数字 CAST 风险）
 -- =====================================================================
 

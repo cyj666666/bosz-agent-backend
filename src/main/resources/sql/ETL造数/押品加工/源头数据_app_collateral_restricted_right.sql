@@ -146,9 +146,9 @@ SELECT
          THEN REPLACE(REPLACE(SUBSTR(c.valuationDate, 1, 10), '-', ''), '/', '')
          ELSE c.valuationDate END AS valuationDate,
     c.choiceTypeName AS choiceTypeName,
-    c.evaluateValue AS evaluateValue,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(c.evaluateValue), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(c.evaluateValue) END AS DECIMAL(18,2)) AS evaluateValue,
     c.rightOrder AS rightOrder,
-    c.rightSum AS rightSum,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(c.rightSum), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(c.rightSum) END AS DECIMAL(18,2)) AS rightSum,
     CASE WHEN REGEXP_LIKE(SUBSTR(c.confirmDate, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')
          THEN REPLACE(REPLACE(SUBSTR(c.confirmDate, 1, 10), '-', ''), '/', '')
          ELSE c.confirmDate END AS confirmDate,
@@ -191,7 +191,7 @@ SELECT
     t.pledgeeName AS pledgeeName,
     LEFT(t.guaranteeScope, 256) AS guaranteeScope,
     t.pledgeTypeName AS pledgeTypeName,
-    t.maxCreditorAmt AS maxCreditorAmt,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(t.maxCreditorAmt), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(t.maxCreditorAmt) END AS DECIMAL(18,2)) AS maxCreditorAmt,
     t.startEnd AS startEnd,
     CASE WHEN REGEXP_LIKE(SUBSTR(t.registerTimestamp, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')
          THEN REPLACE(REPLACE(SUBSTR(t.registerTimestamp, 1, 10), '-', ''), '/', '')

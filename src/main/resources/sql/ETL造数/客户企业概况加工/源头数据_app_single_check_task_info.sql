@@ -177,7 +177,7 @@ SELECT
     CASE WHEN REGEXP_LIKE(SUBSTR(c.checkDate, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')
          THEN REPLACE(REPLACE(SUBSTR(c.checkDate, 1, 10), '-', ''), '/', '')
          ELSE c.checkDate END AS checkDate,
-    c.balance AS balance,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(c.balance), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(c.balance) END AS DECIMAL(18,2)) AS balance,
     c.condition AS "condition",
     -- 落实情况：码值->中文（01已完成/02部分完成/03无法完成/06持续关注/07结清不续贷/08已有新批复/09延期），NULL/未收录原样保留
     CASE c.implementStatus

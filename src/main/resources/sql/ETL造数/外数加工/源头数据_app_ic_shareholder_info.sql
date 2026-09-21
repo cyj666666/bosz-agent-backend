@@ -159,8 +159,8 @@ INSERT INTO app_ic_shareholder_info (
 SELECT
     c.reportNo, c.customerId, c.customerName,
     c.name AS icShareholderName,
-    zygb.stock_num AS icStockNum,
-    zygb.amount AS icAmount,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(zygb.stock_num), '^-?[0-9]+$') THEN BTRIM(zygb.stock_num) END AS INTEGER) AS icStockNum,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(zygb.amount), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(zygb.amount) END AS DECIMAL(18,2)) AS icAmount,
     CASE WHEN REGEXP_LIKE(SUBSTR(c.change_date, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')
          THEN REPLACE(REPLACE(SUBSTR(c.change_date, 1, 10), '-', ''), '/', '')
          ELSE c.change_date END AS changeTime,

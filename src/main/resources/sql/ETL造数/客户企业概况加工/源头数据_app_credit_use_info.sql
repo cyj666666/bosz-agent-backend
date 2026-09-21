@@ -1,4 +1,4 @@
-﻿-- =====================================================================
+-- =====================================================================
 -- app_credit_use_info（我行授信用用概况）源头表反推造数
 -- 加工脚本：客户企业概况加工/xd_credit_use.sql
 -- 源表：
@@ -131,8 +131,8 @@ SELECT
     i.reportNo, i.customerId, i.customerName,
     i.creditSum, i.balance, i.exposureAmount, i.limitBalance,
     i.groupAmount, i.groupBalance,
-    CASE WHEN cc.groupClientNo IS NULL OR cc.groupClientNo = '' THEN NULL
-         WHEN cc.groupClientNo <> '' THEN '是' ELSE '否' END AS isGroup,
+    -- 是否集团客户（码值：是/否）：有集团客户号即为「是」，空/未采集为「否」
+    CASE WHEN BTRIM(COALESCE(cc.groupClientNo, '')) <> '' THEN '是' ELSE '否' END AS isGroup,
     CASE WHEN cc.groupClientName IS NULL OR TRIM(cc.groupClientName) = ''
          THEN cc.groupClientNo ELSE cc.groupClientName END AS groupName,
     CASE WHEN REGEXP_LIKE(SUBSTR(i.creditDate, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')

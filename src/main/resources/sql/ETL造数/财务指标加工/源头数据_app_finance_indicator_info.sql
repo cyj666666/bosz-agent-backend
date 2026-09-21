@@ -799,8 +799,8 @@ LEFT JOIN (
         FROM (
             -- x：从表去重，每个 (finReportNo, sheetNo, subjectNo) 仅保留最新一条，并做数字校验
             SELECT s.finReportNo, s.sheetNo, s.subjectNo, r2.rtype,
-                    CAST(NULLIF(TRIM(s.value1), '') AS DECIMAL) AS v1n,
-                    CAST(NULLIF(TRIM(s.value2), '') AS DECIMAL) AS v2n,
+                    CAST(CASE WHEN REGEXP_LIKE(BTRIM(s.value1), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(s.value1) END AS DECIMAL) AS v1n,
+                    CAST(CASE WHEN REGEXP_LIKE(BTRIM(s.value2), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(s.value2) END AS DECIMAL) AS v2n,
                    ROW_NUMBER() OVER (PARTITION BY s.finReportNo, s.sheetNo, s.subjectNo
                                       ORDER BY s.inputtime DESC, s.id DESC) AS rn
             FROM xd_financial_subject s
@@ -873,7 +873,7 @@ LEFT JOIN (
                 FROM (
                     -- x：从表去重，每个 (finReportNo, sheetNo, subjectNo) 仅保留最新一条（value2 口径与 p 侧一致）
                     SELECT s.finReportNo, s.sheetNo, s.subjectNo, r2.rtype,
-                           CAST(NULLIF(TRIM(s.value2), '') AS DECIMAL) AS v2n,
+                           CAST(CASE WHEN REGEXP_LIKE(BTRIM(s.value2), '^-?[0-9]+([.][0-9]+)?$') THEN BTRIM(s.value2) END AS DECIMAL) AS v2n,
                            ROW_NUMBER() OVER (PARTITION BY s.finReportNo, s.sheetNo, s.subjectNo
                                               ORDER BY s.inputtime DESC, s.id DESC) AS rn
                     FROM xd_financial_subject s

@@ -143,7 +143,7 @@ SELECT
     CASE WHEN REGEXP_LIKE(c.confirmTime, '^[0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}')
          THEN TO_CHAR(TO_DATE(REPLACE(REGEXP_SUBSTR(c.confirmTime, '^[0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}'), '/', '-'), 'YYYY-MM-DD'), 'YYYYMMDD')
          ELSE c.confirmTime END AS confirmTime,
-    c.seqNo AS seqNo,
+    CAST(CASE WHEN REGEXP_LIKE(BTRIM(c.seqNo), '^-?[0-9]+$') THEN BTRIM(c.seqNo) END AS INTEGER) AS seqNo,
     c.activeName, c.approveUserName, c.approveOrgName,
     c.warningLevelName, c.phaseOpinion,
     CASE WHEN REGEXP_LIKE(SUBSTR(c.endTime, 1, 10), '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}$')
