@@ -2,12 +2,14 @@ package com.suzhou.bank.controller;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.suzhou.bank.api.dto.CreditShareUrlRequest;
 import com.suzhou.bank.common.Result;
 import com.suzhou.bank.entity.Report;
 import com.suzhou.bank.entity.SysUser;
 import com.suzhou.bank.mapper.SysUserMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
+import com.suzhou.bank.service.report.mock.ReportShareUrlMockService;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockContentRequest;
 import com.suzhou.bank.service.report.model.ReportCreateRequest;
@@ -20,10 +22,13 @@ import com.suzhou.bank.service.report.model.ReportVersionVO;
 import com.suzhou.bank.service.report.model.ReportWarningAdviceStatusRequest;
 import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -50,6 +55,17 @@ public class ReportController {
 
     /** 用户表 Mapper：仅用于把操作账号解析成姓名，写进修改记录 */
     private final SysUserMapper sysUserMapper;
+
+    /** 🔴 外网专用 MOCK：链接溯源「换一次性链接」的模拟实现（行内没有、也不该有 → 见类尾注释） */
+    private final ReportShareUrlMockService reportShareUrlMockService;
+
+    /** 🔴 外网专用：mock 开关（默认 false ⇒ 接口返回明确错误，而不是 404） */
+    @Value("${credit.share.mock-enabled:false}")
+    private boolean shareUrlMockEnabled;
+
+    /** 🔴 外网专用：mock 链接的服务器基址（留空 ⇒ 按当前请求的 host:port 推导） */
+    @Value("${credit.share.mock-base-url:}")
+    private String shareUrlMockBaseUrl;
 
     /**
      * 生成报告实例（含状态流转，手工重跑 / 运维调用本接口）
@@ -442,5 +458,56 @@ public class ReportController {
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    /* ==========================================================================================
+     * 🔴🔴 外网专用 MOCK —— 链接溯源「换一次性链接」（2026-09-21）
+     * ------------------------------------------------------------------------------------------
+     * ⛔ **行内不要这段**：行内已有同路径的**真实**接口（行内 `ReportController#shareUrl` +
+     *    `CreditShareUrlService`，走信贷 SSF `AuthApi.getPageShareUrlN`）。
+     *    往行内同步时**跳过本段** + 跳过 `service/report/mock/**`。
+     *
+     * 外网没有 SSF ⇒ 这个路径本来只会 **404**，前端点「🔗 溯源」只能看到失败 toast、没法联调。
+     * 打开 `credit.share.mock-enabled=true` 之后：
+     *   · `pageParams` 走**真实的** `LinkTraceParamBuilder`（真查库，11 个 shareCode 策略）；
+     *   · 返回的 `url` 指向本工程 `/api/report/share-url/mock-page` —— 点开即「模拟信贷页面」，
+     *     把收到的 shareCode / userId / reportNo / blockCode / guarantorName / pageParams 全部回显。
+     * ========================================================================================== */
+
+    /**
+     * 链接溯源换链接（**外网 MOCK**）
+     *
+     * <p>返回值结构与行内一致：`{ url, relativeUrl }`（外网额外带 `mock: "true"`）。
+     * 入参契约也与行内一致：`{ userId, shareCode, reportNo, blockCode?, guarantorName?, pageParams? }`。</p>
+     *
+     * @param body 同行内 `CreditShareUrlRequest`（此处**不加** `@Valid`，便于手工放空字段联调）
+     */
+    @PostMapping("/share-url")
+    public Result<Map<String, String>> shareUrl(@RequestBody(required = false) CreditShareUrlRequest body) {
+        if (!shareUrlMockEnabled) {
+            return Result.fail("外网未接入信贷 SSF（getPageShareUrlN）：本接口在外网仅为 MOCK。"
+                    + "如需前端联调，请把配置 credit.share.mock-enabled 置为 true");
+        }
+        try {
+            CreditShareUrlRequest req = body == null ? new CreditShareUrlRequest() : body;
+            String base = StringUtils.hasText(shareUrlMockBaseUrl)
+                    ? shareUrlMockBaseUrl.trim().replaceAll("/+$", "")
+                    : ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+            return Result.ok(reportShareUrlMockService.getPageShareUrl(base, req.getUserId(),
+                    req.getShareCode(), req.getReportNo(), req.getBlockCode(),
+                    req.getGuarantorName(), req.getPageParams()));
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 「模拟信贷页面」（**外网 MOCK**）：把上一步送过来的参数原样回显，便于肉眼核对。
+     *
+     * <p>⛔ 行内没有这个页面 —— 行内换出来的是**真的信贷系统地址**。</p>
+     */
+    @GetMapping(value = "/share-url/mock-page", produces = "text/html;charset=UTF-8")
+    public String shareUrlMockPage(@RequestParam(required = false) Map<String, String> params) {
+        return reportShareUrlMockService.mockPageHtml(params == null ? Collections.emptyMap() : params);
     }
 }
