@@ -140,7 +140,15 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
                 IndexParamsEntity::getDataMethod, IndexParamsEntity::getParentParamNo, IndexParamsEntity::getInputMethod, IndexParamsEntity::getInputUserID,
                 IndexParamsEntity::getUpdateUserID, IndexParamsEntity::getInputTime, IndexParamsEntity::getUpdateTime, IndexParamsEntity::getScript,
                 IndexParamsEntity::getScriptType, IndexParamsEntity::getSupplierId, IndexParamsEntity::getIntfNo);
-        queryWrapper.like(StringUtils.isNotEmpty(reqMsg.getParamId()), IndexParamsEntity::getParamID, reqMsg.getParamId());
+        // 指标编号检索：必须**大小写不敏感**（2026-09-21 修复）
+        //   库里 `paramid` 存的是**大写字段名**（ACCOUNTMONTH / ACCOUNTSPAYABLE …，实测 920 行），
+        //   而 PG/openGauss 的 `LIKE` 是**大小写敏感**的 ⇒ 用户输小写（accountmonth）永远 0 命中，
+        //   看起来就像"检索框坏了"。源工程是 MySQL，`like` 默认不区分大小写，所以那边没暴露这个问题。
+        //   → 两边都 LOWER() 后再比，等价于把 MySQL 的默认行为搬过来
+        //     （与 `SysDataSourceServiceImpl` 的表名检索同一口径）。
+        if (StringUtils.isNotEmpty(reqMsg.getParamId())) {
+            queryWrapper.apply("LOWER(paramid) LIKE LOWER({0})", "%" + reqMsg.getParamId() + "%");
+        }
         queryWrapper.like(StringUtils.isNotEmpty(reqMsg.getParamName()), IndexParamsEntity::getParamName, reqMsg.getParamName());
         // 数据来源（2026-09-16 新增，前端一直有这个检索框但源工程没有对应字段 → 点了没反应）：
         // 列表「数据来源」列是 `getIndexSource(param)` 运行时拼出来的字符串，库里没有同名列，
