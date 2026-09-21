@@ -519,7 +519,7 @@ INSERT INTO xd_financial_subject (mainId, reportNo, customerId, customerName, fi
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_finance_indicator_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 财务指标加工\xd_financial.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -611,7 +611,7 @@ INSERT INTO app_finance_indicator_info (
     shortLoan, shortLoanChangeFromYearStart, shortLoanChangeFromYearStartRate,
     longLoan, longLoanChangeFromYearStart, longLoanChangeFromYearStartRate,
     longLoanDueWithin1Y, salesLoanRatio,
-    notesPayable, notepayablechangefromyearstart, notepayablechangefromyearstartRate,
+    notesPayable, notespayablechangefromyearstart, notespayablechangefromyearstartRate,
     otherPayable, otherPayableChangeFromYearStart, otherPayableChangeFromYearStartRate,
     slTotalLoanYoy, arYoy, arTurnoverDays, inventoryTurnoverDays, inventoryYoy,
     accountsPayable, inventory, debtRatio, salesProfitRatio, netProfitRatio,
@@ -660,8 +660,8 @@ SELECT
     CASE WHEN r.reportPeriod = '04' AND p.rev_v2 IS NOT NULL AND p.rev_v2 <> 0
           THEN (p.slRate_v2 + p.ll1y_v2) / p.rev_v2 * 100 END AS salesLoanRatio,
     p.npay_v2 * r.unitFactor AS notesPayable,
-    (p.npay_v2 - p.npay_v1) * r.unitFactor AS notepayablechangefromyearstart,
-    CASE WHEN p.npay_v1 IS NOT NULL AND p.npay_v1 <> 0 THEN (p.npay_v2 - p.npay_v1) / p.npay_v1 * 100 END AS notepayablechangefromyearstartRate,
+    (p.npay_v2 - p.npay_v1) * r.unitFactor AS notespayablechangefromyearstart,
+    CASE WHEN p.npay_v1 IS NOT NULL AND p.npay_v1 <> 0 THEN (p.npay_v2 - p.npay_v1) / p.npay_v1 * 100 END AS notespayablechangefromyearstartRate,
     p.opay_v2 * r.unitFactor AS otherPayable,
     (p.opay_v2 - p.opay_v1) * r.unitFactor AS otherPayableChangeFromYearStart,
     CASE WHEN p.opay_v1 IS NOT NULL AND p.opay_v1 <> 0 THEN (p.opay_v2 - p.opay_v1) / p.opay_v1 * 100 END AS otherPayableChangeFromYearStartRate,

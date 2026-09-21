@@ -294,7 +294,7 @@ SELECT (SELECT id FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY inputtime DESC, i
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_collateral_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 押品加工\xd_collateral.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -492,7 +492,7 @@ WHERE t.sRN = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_collateral_mortgage_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 押品加工\xd_collateral.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -684,7 +684,7 @@ WHERE t.sRN = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_collateral_restricted_right.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 押品加工\xd_collateral.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced

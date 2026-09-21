@@ -401,7 +401,7 @@ VALUES ('RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_ic_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 外数加工\xd_ic_info.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -542,7 +542,7 @@ LEFT JOIN (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_ic_shareholder_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 外数加工\xd_ic_shareholder.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -622,7 +622,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_shareholder_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 外数加工\xd_shareholder_info.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced

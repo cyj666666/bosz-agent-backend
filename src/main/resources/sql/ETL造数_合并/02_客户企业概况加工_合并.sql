@@ -85,7 +85,7 @@ DELETE FROM xd_corp_customer_info         WHERE customerId = 'CUST-001' AND repo
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_check_index_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_check_index_info（对公日检-日常检查综合指标）源头表反推造数
 -- 加工脚本：客户企业概况加工/xd_check_index.sql
 -- 源表（父子表）：
@@ -458,7 +458,7 @@ INSERT INTO xd_corp_check_reply_requirement (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_check_record_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_check_record_info（对公日检-现场检查打卡）源头表反推造数
 -- 加工脚本：客户企业概况加工/xd_check_record.sql
 -- 源表（父子表，mainId -> xd_corp_check_info.id=1，父表共享自 app_check_index_info）：
@@ -955,7 +955,10 @@ INSERT INTO xd_corp_check_warning_task (
     id, mainId, reportNo, customerId, customerName, confirmTime, serialNo, taskType,
     approveStatusName, riskTaskType, inputDate, identifyCustomWaringLevel, inputtime
 ) VALUES (
-    1, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', '2026/3/5', 'YJ-202603-001', '审批通过预警任务',
+    3, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', '2026/3/5', 'YJ-202603-001', '审批通过预警任务',
+    -- ↑ id 由 1 改为 3：本行与上一段 app_early_warning_info 造的 id=1 是同一 serialNo（YJ-202603-001），
+    --   但 confirmTime 特意用了非零填充格式 '2026/3/5'，用于验证加工层「不匹配日期正则 -> 原样透传」分支，
+    --   故不删除、只错开主键；inputtime 更早，不会影响加工段「取最新任务」的口径。
     '审批通过', '预警认定', '2026/3/5 9:00', '红色', '2026-03-05 10:00:00'
 );
 
@@ -1298,6 +1301,8 @@ VALUES (2, 'RPT-202609-001', NULL, NULL, '苏州XX精密机械制造有限公司
 --    purpose '股东还款' -> purposeName 直映
 -- =====================================================================
 
+-- ⚠️ mainId 不硬编码 1，而是动态引用「当前主档」：xd_credit_info 的 id 由自增产生，
+--    重跑后序列会推进（本次实测已到 3），硬编码 1 会导致 JOIN 失败、加工产出 0 行。
 INSERT INTO xd_credit_loan (
     id, mainId, reportNo, customerId, customerName, loanSerialNo, loanStatus,
     productName, productBelongName, businessSum, balance, overdueBalance,
@@ -1306,40 +1311,40 @@ INSERT INTO xd_credit_loan (
     nextPayDate, payPrinciPalAmt, payInterestAmt, payFineAmt, compoundInterest,
     businessRate, repaymentPeriod, inputtime
 ) VALUES
-(1, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-001', '正常结清',
+(1, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-001', '正常结清',
  '短期流动资金贷款', '征信贷', 1000.00, 2000.00, 0.00, 0.00, '股东还款', '1', 10.00,
  '否', '否', '借新还旧', '否', '否', '2026-03-31', '0.00', '0.00', '0.00', '0.00', '4.3500', '01', '2026-03-05 10:30:00'),
-(2, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-002', '提前结清',
+(2, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-002', '提前结清',
  '银行承兑汇票', '信保贷', 1001.00, 3000.00, 0.00, 0.00, '采购支付', '2', 11.00,
  '是', '否', '借新还旧', '否', '否', '2026-03-30', '0.00', '0.00', '0.00', '0.00', '4.7500', '02', '2026-03-06 14:20:00'),
-(3, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-003', '逾期结清',
+(3, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-003', '逾期结清',
  '短期流动资金贷款', '一般产品额度', 1002.00, 1000.00, 200.00, 15.50, '日常运营', '3', 12.00,
  '是', '否', '其他', '否', '否', '2026-03-29', '0.00', '0.00', '0.00', '0.00', '5.2000', '04', '2026-03-07 09:15:00'),
-(4, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-004', '理赔结清',
+(4, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-004', '理赔结清',
  '基本建设项目贷款', '一般产品额度', 1003.00, 1000.00, 0.00, 0.00, '项目建设', '4', 13.00,
  '是', '否', '其他', '是', '否', '2026-03-28', '0.00', '0.00', '0.00', '0.00', '4.1500', '03', '2026-03-08 16:45:00'),
-(5, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-005', '未结清',
+(5, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-005', '未结清',
  '技术改造项目贷款', '一般产品额度', 1004.00, 500.00, 100.00, 8.20, '归还股东借款', '5', 14.00,
  '是', '是', '其他', '是', '否', '2026-04-15', '20.00', '1.80', '0.50', '0.20', '4.5000', '05', '2026-03-09 11:00:00'),
-(6, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-006', '未结清',
+(6, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-006', '未结清',
  '其他类项目贷款', '一般产品额度', 1005.00, 0.00, 0.00, 0.00, '资金周转', '6', 15.00,
  '是', '是', '其他', '否', '否', '2026-05-20', '0.00', '0.00', '0.00', '0.00', '0.0000', '06', '2026-03-10 08:30:00'),
-(7, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-007', '未结清',
+(7, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-007', '未结清',
  '经营性物业贷款', '一般产品额度', 1006.00, 300.00, 30.00, 2.60, '物业经营', '7', 16.00,
  '否', '否', '其他', '否', '否', '2026-04-10', '10.00', '1.20', '0.30', '0.10', '4.6500', '01', '2026-03-11 13:20:00'),
-(8, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-008', '未结清',
+(8, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-008', '未结清',
  '房地产开发贷款', '一般产品额度', 1007.00, 700.00, 80.00, 6.90, '项目开发', '8', 17.00,
  '否', '否', '其他', '否', '是', '2026-06-01', '25.00', '3.50', '1.20', '0.50', '5.8000', '02', '2026-03-12 10:00:00'),
-(9, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-009', '未结清',
+(9, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-009', '未结清',
  '短期流动资金贷款', '信保贷', 1008.00, 450.00, 50.00, 4.10, '应急周转', '0', 0.00,
  '否', '否', '新增', '否', '否', '2026-04-25', '15.00', '2.00', '0.60', '0.20', '4.3500', '01', '2026-03-13 15:30:00'),
-(10, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-010', '正常结清',
+(10, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-010', '正常结清',
  '银行承兑汇票', '征信贷', 1008.00, 600.00, 0.00, 0.00, '贸易结算', '1', 5.00,
  '否', '否', '借新还旧', '否', '否', '2026-03-27', '0.00', '0.00', '0.00', '0.00', '4.5000', '04', '2026-03-14 09:45:00'),
-(11, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-011', '逾期结清',
+(11, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-011', '逾期结清',
  '经营性物业贷款', '一般产品额度', 1009.00, 350.00, 120.00, 10.30, '物业改造', '2', 8.00,
  '是', '是', '其他', '否', '否', '2026-03-26', '0.00', '0.00', '0.00', '0.00', '5.0000', '05', '2026-03-15 11:20:00'),
-(12, 1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-012', '未结清',
+(12, (SELECT id FROM xd_credit_info WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001' ORDER BY inputtime DESC, id DESC LIMIT 1), 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司', 'LOAN-202603-012', '未结清',
  '房地产开发贷款', '一般产品额度', 1010.00, 1200.00, 200.00, 18.50, '住宅开发', '0', 0.00,
  '否', '否', '新增', '否', '是', '2026-07-01', '30.00', '5.00', '2.00', '1.00', '6.2000', '02', '2026-03-16 14:00:00');
 
@@ -1566,7 +1571,7 @@ INSERT INTO xd_single_task_check (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_specific_loan_project_check_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_specific_loan_project_check_info（特定贷款项目检查）源头表反推造数
 -- 加工脚本：客户企业概况加工/xd_specific_loan_project.sql
 -- 源表：
@@ -1686,7 +1691,7 @@ INSERT INTO xd_corp_check_fixed_loan (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_top_five_updown_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_top_five_updown_info（前五大上下游）源头表反推造数
 -- 加工脚本：客户企业概况加工/xd_top_five_updown.sql
 -- 源表：
@@ -1893,7 +1898,7 @@ INSERT INTO xd_corp_customer_shareholder (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_check_index_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_check_index.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1974,7 +1979,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_check_object_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_check_object.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2179,7 +2184,7 @@ FROM (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_check_opinion_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_check_opinion.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2258,7 +2263,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_check_record_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_check_record.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2318,7 +2323,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_credit_approval_manage_req_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_credit_approval_req.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2387,7 +2392,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_credit_use_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_credit_use.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2461,7 +2466,7 @@ WHERE i.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_customer_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_customer.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2576,8 +2581,8 @@ SELECT
          WHEN i.warningLevel = '6' THEN '红色预警'
          ELSE i.warningLevel END AS warningLevel,
      -- 是否科创企业 / 是否上市公司（码值：是/否）：源头码表 0/1，兼容历史 '是' 形态；其余（含 0/空/NULL/未收录）一律「否」
-     CASE WHEN BTRIM(COALESCE(c.isStiEnt, '')) IN ('1', '是') THEN '是' ELSE '否' END AS isTechCompany,
-     CASE WHEN BTRIM(COALESCE(c.listingCorpOrNot, '')) IN ('1', '是') THEN '是' ELSE '否' END AS isListedCompany
+     CASE WHEN BTRIM(COALESCE(i.isStiEnt, '')) IN ('1', '是') THEN '是' ELSE '否' END AS isTechCompany,
+     CASE WHEN BTRIM(COALESCE(i.listingCorpOrNot, '')) IN ('1', '是') THEN '是' ELSE '否' END AS isListedCompany
 FROM (
     -- 主档去重：每个 reportNo 仅保留最新一条
     SELECT reportNo, customerId, customerName, fictitiousPerson, registerCapital, paiclupCapital,
@@ -2664,7 +2669,7 @@ WHERE s.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_early_warning_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_early_warning.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2732,7 +2737,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_early_warning_opinion_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_early_warning_opinion.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2812,7 +2817,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_early_warning_signal_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_warning_signal.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2885,7 +2890,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_entrust_pay_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_entrust_pay.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2972,7 +2977,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_loan_receipt_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_loan_receipt.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -3059,7 +3064,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_opinion_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_opinion.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -3148,7 +3153,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_single_check_task_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_single_task.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -3263,7 +3268,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_specific_loan_project_check_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_specific_loan_project.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -3341,7 +3346,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_top_five_updown_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_top_five_updown.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -3402,7 +3407,7 @@ WHERE c.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_xd_shareholder_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 客户企业概况加工\xd_customer.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced

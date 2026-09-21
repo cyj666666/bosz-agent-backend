@@ -218,7 +218,7 @@ INSERT INTO xd_fund_use_abnormal (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_graph_hit_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_graph_hit_info（企业图谱命中情况）源头表反推造数
 -- 加工脚本：贷后检查加工/xd_graph_hit.sql
 -- 源表：
@@ -305,7 +305,7 @@ INSERT INTO xd_graph_hit (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_gs_finance_data_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_gs_finance_data_info（国税财务数据）源头表反推造数
 -- 加工脚本：贷后检查加工/xd_gs_finance_data.sql
 -- 源表：
@@ -562,7 +562,7 @@ VALUES (1, 'RPT-202609-001', 'CUST-001', '苏州XX精密机械制造有限公司
 -- ---------------------------------------------------------------------
 -- 【原脚本 §1】源头数据_app_payroll_stat_info.sql
 -- ---------------------------------------------------------------------
-﻿-- =====================================================================
+-- =====================================================================
 -- app_payroll_stat_info（代发统计·月粒度）源头表反推造数
 -- 加工脚本：贷后检查加工/xd_payroll.sql
 -- 源表：
@@ -1038,7 +1038,7 @@ WHERE reportNo = 'RPT-202609-001' AND customerId = 'CUST-001';
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_capital_flow_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_capital_flow.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1133,7 +1133,7 @@ WHERE f.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_graph_hit_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_graph_hit.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1222,7 +1222,7 @@ WHERE g.rn = 1 AND gh.grn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_gs_finance_data_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_gs_finance_data.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1341,7 +1341,7 @@ WHERE t.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_gs_tax_sales_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_gs_tax_sales.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1535,7 +1535,7 @@ ORDER BY x.taxPeriod;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_guofa_report_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_guofa.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1650,7 +1650,7 @@ LEFT JOIN (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_payroll_stat_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_payroll.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1805,7 +1805,7 @@ ORDER BY y.month;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_reputation_event_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_reputation.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- =====================================================================
@@ -1860,7 +1860,7 @@ ORDER BY subjectType, subjectName, eventTime;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_settle_account_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_settle_account.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -1975,7 +1975,7 @@ FROM (
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_settle_asset_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_settle_asset.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
@@ -2143,7 +2143,7 @@ WHERE t.rn = 1;
 -- ---------------------------------------------------------------------
 -- 【原脚本 §2】源头数据_app_settle_counterparty_info.sql
 -- ---------------------------------------------------------------------
-Processing logic (params filled, ready to run)
+-- Processing logic (params filled, ready to run)   <- 加工段起点（幂等 DELETE + INSERT）
 -- Source: 贷后检查加工\xd_settle_counterparty.sql
 -- Params: customerId='CUST-001', reportNo='RPT-202609-001'
 -- Note: full xd_*.sql logic (idempotent DELETE + INSERT); params replaced
