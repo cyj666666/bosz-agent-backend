@@ -16,6 +16,14 @@
 --   - 材料 String -> VARCHAR；Number -> DECIMAL(18,2)；inputtime -> TIMESTAMP（openGauss 无 DATETIME 类型）
 --   - reportNo / serialNo / customerId / customerName 四列均建索引
 --   - 接口返回直接追加插入，不做去重约束
+--
+-- 🔴 2026-09-21 更新：主表 `xd_corp_check_info` 补齐到 **17 列**，与行内一致。
+--    本次新增（对齐行内提交 fc66641 / f4fdea3）：
+--      bapTextNo / lastReportNo / baSerialNo / approveApplyType / electroApproveSerialNo
+--    其中 **baSerialNo / approveApplyType / electroApproveSerialNo** 是报告「链接溯源」
+--    1010 批复链接（电子批复）直接 SELECT 的列 ⇒ 缺了会让该链路报「列不存在」。
+--    ⚠️ 本文件用 `CREATE TABLE IF NOT EXISTS` ⇒ **已建过表的环境不会自动补列**，
+--       请另跑同目录 `补列_对公检查信息_5列_20260921.sql`。
 -- =====================================================================
 
 -- #####################################################################
@@ -30,9 +38,14 @@ CREATE TABLE IF NOT EXISTS xd_corp_check_info (
     bapSerialNo   VARCHAR(64),
     bapStartDate  VARCHAR(64),
     bapMaturity   VARCHAR(64),
+    bapTextNo     VARCHAR(64),
     bapReportNo   VARCHAR(64),
     baReportNo    VARCHAR(64),
+    lastReportNo  VARCHAR(64),
     checkDate     VARCHAR(64),
+    baSerialNo    VARCHAR(64),
+    approveApplyType        VARCHAR(64),
+    electroApproveSerialNo  VARCHAR(64),
     inputtime     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     primary key (id)
 );
@@ -46,9 +59,14 @@ COMMENT ON COLUMN xd_corp_check_info.customerName IS '客户名称';
 COMMENT ON COLUMN xd_corp_check_info.bapSerialNo IS '批复编号';
 COMMENT ON COLUMN xd_corp_check_info.bapStartDate IS '批复生效日';
 COMMENT ON COLUMN xd_corp_check_info.bapMaturity IS '批复到期日';
+COMMENT ON COLUMN xd_corp_check_info.bapTextNo IS '贷后检查文本编号';
 COMMENT ON COLUMN xd_corp_check_info.bapReportNo IS '贷后检查关联征信报告编号';
 COMMENT ON COLUMN xd_corp_check_info.baReportNo IS '授信时点的征信报告编号';
+COMMENT ON COLUMN xd_corp_check_info.lastReportNo IS '上一期征信报告编号';
 COMMENT ON COLUMN xd_corp_check_info.checkDate IS '检查日期';
+COMMENT ON COLUMN xd_corp_check_info.baSerialNo IS '授信流水号';
+COMMENT ON COLUMN xd_corp_check_info.approveApplyType IS '批复类型';
+COMMENT ON COLUMN xd_corp_check_info.electroApproveSerialNo IS '电子批复流水号';
 COMMENT ON COLUMN xd_corp_check_info.inputtime IS '入库时间';
 
 CREATE INDEX IF NOT EXISTS idx_reportNo ON xd_corp_check_info (reportNo);
