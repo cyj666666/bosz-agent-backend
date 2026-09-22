@@ -68,6 +68,17 @@ SET search_path = as_agent, public;
 -- 1. 角色
 -- =====================================================================
 
+-- 1.2 新建「普通用户」（已存在则跳过）
+--     菜单为空数组 [] ⇒ 登录后侧边栏无菜单，前端走「暂无可用菜单」占位页
+INSERT INTO sys_role (id, role_code, role_name, description, menu_permissions, created_at)
+SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_role),
+       'normal',
+       '普通用户',
+       '无菜单权限，仅可通过信贷发起的报告链接查看详情页',
+       '[]',
+       CURRENT_TIMESTAMP
+ WHERE NOT EXISTS (SELECT 1 FROM sys_role WHERE role_code = 'normal');
+
 -- 1.1 新建「科技管理员」（已存在则跳过）
 --     id 用 MAX(id)+1 显式取号，不依赖 AUTO_INCREMENT 的具体行为（两库兼容更稳）
 INSERT INTO sys_role (id, role_code, role_name, description, menu_permissions, created_at)
@@ -79,16 +90,7 @@ SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_role),
        CURRENT_TIMESTAMP
  WHERE NOT EXISTS (SELECT 1 FROM sys_role WHERE role_code = 'tec_admin');
 
--- 1.2 新建「普通用户」（已存在则跳过）
---     菜单为空数组 [] ⇒ 登录后侧边栏无菜单，前端走「暂无可用菜单」占位页
-INSERT INTO sys_role (id, role_code, role_name, description, menu_permissions, created_at)
-SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_role),
-       'normal',
-       '普通用户',
-       '无菜单权限，仅可通过信贷发起的报告链接查看详情页',
-       '[]',
-       CURRENT_TIMESTAMP
- WHERE NOT EXISTS (SELECT 1 FROM sys_role WHERE role_code = 'normal');
+
 
 -- 1.3 admin：菜单改为具体清单（不再是 ["*"]）
 --     报告管理 /reports + 智策引擎 /agent/rule + 系统管理（/users + /roles + /role-auth）
