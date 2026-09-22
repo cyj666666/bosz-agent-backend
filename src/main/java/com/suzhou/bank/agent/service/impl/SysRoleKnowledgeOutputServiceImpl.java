@@ -1,5 +1,6 @@
 package com.suzhou.bank.agent.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @Description: 角色知识库输出要求权限表
@@ -45,6 +47,17 @@ public class SysRoleKnowledgeOutputServiceImpl extends ServiceImpl<SysRoleKnowle
             }
             saveBatch(list);
         }
+    }
+
+    @Override
+    public List<String> getKnowledgeIdListByRoleIdAndGroup(String roleId, String groupId) {
+        LambdaQueryWrapper<SysRoleKnowledgeOutputEntity> wrapper = Wrappers.lambdaQuery();
+        wrapper.select(SysRoleKnowledgeOutputEntity::getKnowledgeId);
+        wrapper.eq(SysRoleKnowledgeOutputEntity::getRoleId, roleId);
+        wrapper.eq(SysRoleKnowledgeOutputEntity::getGroupId, groupId);
+        return list(wrapper).stream()
+                .map(SysRoleKnowledgeOutputEntity::getKnowledgeId)
+                .collect(Collectors.toList());
     }
 
     @Override

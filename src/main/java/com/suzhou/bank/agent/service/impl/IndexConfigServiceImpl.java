@@ -23,6 +23,7 @@ import com.suzhou.bank.agent.util.UUIDGenerator;
 import com.suzhou.bank.agent.config.AgentProperties;
 import com.suzhou.bank.agent.config.ApiContext;
 import com.suzhou.bank.agent.config.ApiContextModel;
+import com.suzhou.bank.agent.mapper.AgentRoleMapper;
 import com.suzhou.bank.agent.entity.IndexBaseGroupEntity;
 import com.suzhou.bank.agent.entity.IndexParamsEntity;
 import com.suzhou.bank.agent.enums.DataTypeEnum;
@@ -83,6 +84,10 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
 
     @Autowired
     private ISysRoleIndexService sysRoleIndexService;
+
+    /** 菜单全通角色判定（sys_role.menu_permissions 含裸 "*"）——替代原 yml 的 role-filter-bypass-roles */
+    @Autowired
+    private AgentRoleMapper agentRoleMapper;
 
     @Autowired
     private IIndexRelateKnowledgeInfoService indexRelateKnowledgeInfoService;
@@ -1100,16 +1105,14 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
         }
         ApiContextModel apiContextModel = ApiContext.getApiContextModel();
 
-        // ② 超管放行：按「角色编码」判断而不是角色主键 —— 编码可读、可配置、跨环境稳定。
-        // 注意这与 sys_role_index.role_id 存主键是两回事：前者用于绕过，后者用于授权数据关联。
-        List<String> bypassRoles = agentProperties.getIndexRoleFilterBypassRoles();
+        // ② 菜单全通角色放行（2026-09-22 统一口径）：
+        //    判定依据由「yml 里的角色编码白名单」改为「sys_role.menu_permissions 含裸 "*"」，
+        //    与宿主 AuthService#getUserMenuPermissions 返回 ["*"]、前端 menus.includes('*') 三处一个口径。
+        //    放行语义 =「被授权了全部分组」（返回全部启用分组编号），**不是** return null / 不过滤。
         List<String> roleCodes = apiContextModel.getRoleCode();
-        if (CollectionUtils.isNotEmpty(bypassRoles) && CollectionUtils.isNotEmpty(roleCodes)) {
-            for (String roleCode : roleCodes) {
-                if (bypassRoles.contains(roleCode)) {
-                    return listAllEnabledGroupIds();
-                }
-            }
+        if (CollectionUtils.isNotEmpty(roleCodes)
+                && agentRoleMapper.countFullMenuRoles(roleCodes) > 0) {
+            return listAllEnabledGroupIds();
         }
 
         // ③ sys_role_index.role_id 的口径是「角色主键」（sys_role.id），由 ApiContext 按 userId 查出。

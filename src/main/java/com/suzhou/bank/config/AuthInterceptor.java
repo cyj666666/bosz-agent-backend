@@ -54,9 +54,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         request.setAttribute("roles", roles);
 
         // 系统管理接口需要管理员角色（修改自己密码的接口除外）
+        // 2026-09-22：新增 /api/agent/roleAuth（角色「数据授权」配置，指标/知识/知识输出三套）。
+        //   它与 /api/user、/api/role 同级 —— 决定"谁能看什么"，**刻意不纳入**
+        //   「能看菜单就能操作」那条统一规则：若能分配给普通角色，等于允许自行提权。
+        //   判定沿用本拦截器既有口径（roleCode == admin），与 /api/user、/api/role 保持一致。
         String path = request.getRequestURI();
         if (!path.endsWith("/change-password")
-                && (path.startsWith("/api/user") || path.startsWith("/api/role"))) {
+                && (path.startsWith("/api/user") || path.startsWith("/api/role")
+                    || path.startsWith("/api/agent/roleAuth"))) {
             if (roles == null || !roles.contains("admin")) {
                 sendError(response, 403, "无权限，仅系统管理员可操作");
                 return false;

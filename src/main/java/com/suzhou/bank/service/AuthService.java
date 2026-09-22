@@ -92,18 +92,22 @@ public class AuthService {
         List<Long> roleIds = userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
         List<SysRole> roles = sysRoleMapper.selectBatchIds(roleIds);
 
-        // admin 角色：返回 "*" 标记，前端解析为全权限，后端不维护菜单列表
-        boolean isAdmin = roles.stream().anyMatch(r -> "admin".equals(r.getRoleCode()));
-        if (isAdmin) {
-            return new LinkedHashSet<>(Collections.singletonList("*"));
-        }
-
+        // 合并各角色的 menu_permissions；其中含 "*" 者视为「菜单全通」
         Set<String> menus = new LinkedHashSet<>();
         for (SysRole role : roles) {
             if (role.getMenuPermissions() != null && !role.getMenuPermissions().isEmpty()) {
                 List<String> perms = JSON.parseArray(role.getMenuPermissions(), String.class);
                 menus.addAll(perms);
             }
+        }
+
+        // 2026-09-22 变更：原实现写死 `"admin".equals(role.getRoleCode())` 直接返回 ["*"]，
+        // 导致库里 sys_role.menu_permissions 对 admin 形同虚设（改数据不生效）。
+        // 现改为「谁的数据里有 "*" 谁全通」——与以下两处同口径：
+        //   ① agent 侧「菜单全通角色」判定 AgentRoleMapper#countFullMenuRoles
+        //   ② 前端 menus.includes('*')（路由守卫放行 + 侧边菜单全渲染）
+        if (menus.contains("*")) {
+            return new LinkedHashSet<>(Collections.singletonList("*"));
         }
         return menus;
     }

@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 角色关联查询（只读）
@@ -53,4 +54,41 @@ public interface AgentRoleMapper {
             + "<foreach collection='roleCodes' item='code' open='(' separator=',' close=')'>#{code}</foreach>"
             + "</script>")
     List<Long> selectRoleIdsByRoleCodes(@Param("roleCodes") List<String> roleCodes);
+
+    /**
+     * 统计给定角色编码中「菜单全通」角色的数量
+     *
+     * <p><b>全通口径</b>：{@code sys_role.menu_permissions} 里含<b>裸 {@code "*"}</b> 元素
+     * （如 {@code ["*"]}）。与宿主 {@code AuthService#getUserMenuPermissions()} 返回
+     * {@code ["*"]} 的判定同源，也与前端 {@code menus.includes('*')} 一致——<b>三处一个口径</b>。</p>
+     *
+     * <p><b>为什么用 {@code LIKE '%"*"%'}</b>：匹配的是「被双引号包裹的裸星号」，
+     * 不会误命中 {@code "/agent/*"} 这类前缀通配；同时避开两库正则差异
+     * （openGauss 不认 {@code REGEXP} 运算符，须写 {@code REGEXP_LIKE}）。</p>
+     *
+     * <p><b>用途</b>：替代原 yml 配置 {@code agent.index.role-filter-bypass-roles}
+     * （一个「角色编码白名单」）——2026-09-22 起不再维护该清单，「谁全通」完全由数据决定。</p>
+     *
+     * @param roleCodes 角色编码列表（{@code sys_role.role_code}）
+     * @return 命中数；&gt;0 表示当前用户拥有菜单全通角色
+     */
+    @Select("<script>SELECT count(1) FROM sys_role WHERE menu_permissions LIKE '%\"*\"%' "
+            + "AND role_code IN "
+            + "<foreach collection='roleCodes' item='code' open='(' separator=',' close=')'>#{code}</foreach>"
+            + "</script>")
+    int countFullMenuRoles(@Param("roleCodes") List<String> roleCodes);
+
+    /**
+     * 全部角色（含菜单权限），供「角色数据授权」配置页选择角色
+     *
+     * <p>用 {@code Map} 而不是建实体：agent 模块没有 {@code sys_role} 的实体类
+     * （宿主的 {@code SysRole} 在 {@code com.suzhou.bank.entity} 下，不宜反向依赖）。</p>
+     *
+     * <p><b>返回的 key 是库里的列名（小写）</b>：{@code id} / {@code role_code} /
+     * {@code role_name} / {@code menu_permissions} —— 前端按这些 key 取值。</p>
+     *
+     * @return 角色列表（含菜单权限 JSON 串）
+     */
+    @Select("SELECT id, role_code, role_name, menu_permissions FROM sys_role ORDER BY id")
+    List<Map<String, Object>> selectAllRoles();
 }

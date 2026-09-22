@@ -115,11 +115,10 @@ agent:
     # true  = 按 sys_role_index 过滤当前用户可访问的指标/分组；
     # false = 所有登录用户可见全部指标分组与指标（调试用，等价于关掉这套授权）。
     role-filter-enabled: true
-    # 不受上面过滤约束的角色编码（超管放行，能看到全部指标）。
-    # 用「角色编码」而不是角色主键：编码可读、跨环境稳定；主键是各环境自增数字，写进配置会绑死环境。
-    # 注意这与 sys_role_index.role_id 存「角色主键」是两回事——前者用于绕过，后者用于授权数据关联。
-    role-filter-bypass-roles:
-      - admin
+    # 【已移除 2026-09-22】原 role-filter-bypass-roles（角色编码白名单，默认 admin）。
+    # 放行口径已统一为「sys_role.menu_permissions 含裸 "*" 的角色 = 菜单全通 = 数据也全通」，
+    # 判定见 AgentRoleMapper#countFullMenuRoles。若要调整谁全通，改数据而不是改配置：
+    #   UPDATE sys_role SET menu_permissions = '["*"]' WHERE role_code = 'xxx';
 
   # 进程内缓存（源工程为 cache.memory.*，此处收敛到 agent 命名空间）
   # 注意：这三个键是 @Value 直读，必须与 AgentDataCacheConfig 里的键名逐字一致
