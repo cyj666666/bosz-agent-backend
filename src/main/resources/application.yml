@@ -144,4 +144,11 @@ agent:
         socket-timeout: 15000
         connection-error-retry-attempts: 1
         time-between-connect-error-millis: 5000
+        # 空闲连接验活：本段一旦配置，DynamicDBUtil 即走「有配置」分支，
+        # 而这两个开关在 BasicDataSourceConfig 里是原生 boolean、未配置即 false
+        # ⇒ 会把验活关掉（比完全不配本段更差：else 分支是硬编码 true）。
+        # 后果：外部库空闲连接被服务端/网络掐断后不被发现，借出即失败，
+        # 归还时报 "recycle error ... This connection has been closed."（会顶掉真实异常）。
+        test-while-idle: true
+        test-on-borrow: true
 
