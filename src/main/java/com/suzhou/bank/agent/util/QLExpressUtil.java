@@ -216,6 +216,124 @@ public class QLExpressUtil {
     }
 
     /**
+     * 严格执行 + 「顶层 {@code ||} 链容错」（2026-09-22 新增）
+     *
+     * <h3>解决什么问题</h3>
+     * <p>规则表达式常写成「多个口径任一偏离即命中」的形式，例如
+     * {@code ({口径A}-{批复值})>0 || ({口径B}-{批复值})>0}。
+     * 只要**其中一个指标取不到值**，它的占位符就会被
+     * {@link #replaceExpressionIds} 换成空串字面量 {@code ''}，
+     * 于是该分支变成 {@code (''-50)>0} —— <b>字符串做减法</b>，QLExpress 在
+     * {@code OperatorOfNumber.subtract} 里直接抛
+     * {@code ClassCastException: String cannot be cast to Number}。</p>
+     *
+     * <p>🔴 <b>要命的是它会把整个规则一起带走</b>：{@code A || B} 里 A 抛异常时，
+     * B 根本轮不到求值 —— 哪怕 B 明明成立（实测 {@code (58.2000-50)>0} 就是 true），
+     * 整个表达式也判"执行失败"，上层把该块置空（{@code emptyStrategy=HIDE}），
+     * 用户看到的就是「智策引擎里明明命中，报告里却一个字都没有」。</p>
+     *
+     * <p>实测（2026-09-22 17:27，{@code RPT-202609-001} / 规则 {@code zcfzlpg}）：
+     * 表达式 {@code (''-50)>0 || (58.2000-50)>0} —— 左分支因指标
+     * {@code 2099322942107168769}（与 {@code 2099321043840675843} <b>同名同层级重复配置</b>）
+     * 取不到值而炸，右分支其实是 true。</p>
+     *
+     * <h3>语义边界（为什么可以这样容错）</h3>
+     * <p>只在「<b>整体执行失败</b>」且「<b>顶层能被切成 ≥2 段 {@code ||}</b>」时启用：</p>
+     * <ul>
+     *   <li><b>任一段为 true</b> ⇒ 返回 {@code true}。OR 链里有一个成立，整体就成立 ——
+     *       这是**确定正确**的推断，不是猜测；</li>
+     *   <li><b>没有任何一段为 true</b>（全失败 / 有成功但都是 false）⇒ <b>照旧抛原异常</b>，
+     *       上层仍判"校验失败"。⛔ 绝不返回 false —— 把"算不出"伪装成"未命中"正是这个方法
+     *       要防的事（{@link ExprExecuteException} 的存在理由）；</li>
+     *   <li><b>没有顶层 {@code ||}</b>（如 {@code A && B}）⇒ 只有 1 段，不启用容错，行为不变。
+     *       这条边界很重要：{@code &&} 链上把失败段当 false 会造成**假阴性**，绝不那么干。</li>
+     * </ul>
+     *
+     * <p>⚠️ 注意"容错"只放宽了「失败」的判定，**不改变任何"能算成"的结果**：表达式本身能跑通时，
+     * 走的就是 {@link #executeStrict} 原路径，结果一模一样。</p>
+     */
+    public static Object executeStrictTolerantOr(String expression, Map<String, Object> contextMap) {
+        try {
+            return executeStrict(expression, contextMap);
+        } catch (ExprExecuteException first) {
+            // 用**替换后**的表达式来切分：这时占位符已全成字面量，段内可直接执行
+            String rendered = first.getRenderedExpression();
+            List<String> branches = splitTopLevelOr(rendered);
+            if (branches.size() < 2) {
+                throw first;
+            }
+            for (String branch : branches) {
+                try {
+                    Object r = executeStrict(branch, contextMap);
+                    if (getResultAsBool(r)) {
+                        // 留痕：原表达式确实失败了（数据缺值），结论是靠另一个 OR 分支拿到的
+                        log.warn("表达式整体执行失败，但 OR 分支成立 → 判为命中。生效分支：{}（完整表达式：{}）",
+                                branch.trim(), rendered);
+                        return Boolean.TRUE;
+                    }
+                } catch (ExprExecuteException ignored) {
+                    // 该分支同样失败（多半也是空值参与运算）→ 继续看下一段
+                }
+            }
+            // 没有任何分支成立 ⇒ 不能断言"未命中"，把原始失败如实抛给上层
+            throw first;
+        }
+    }
+
+    /**
+     * 把表达式按**顶层** {@code ||} 切成若干段（{@link #executeStrictTolerantOr} 的子步骤）
+     *
+     * <p>只认**括号深度为 0**、且**不在字符串字面量内**的 {@code ||}：
+     * {@code A || (B || C)} 切成 2 段（{@code A} 与 {@code (B || C)}）；
+     * 单个 {@code |}（按位或）不算分隔符。</p>
+     */
+    private static List<String> splitTopLevelOr(String expression) {
+        List<String> parts = new ArrayList<>();
+        if (StringUtils.isBlank(expression)) {
+            return parts;
+        }
+        int depth = 0;
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        int start = 0;
+        for (int i = 0; i < expression.length(); i++) {
+            char c = expression.charAt(i);
+            if (c == '\\') {
+                // 跳过被转义的字符（如字符串里的 \' ），避免它被误当成引号边界
+                i++;
+                continue;
+            }
+            if (inSingleQuote) {
+                if (c == '\'') {
+                    inSingleQuote = false;
+                }
+                continue;
+            }
+            if (inDoubleQuote) {
+                if (c == '"') {
+                    inDoubleQuote = false;
+                }
+                continue;
+            }
+            if (c == '\'') {
+                inSingleQuote = true;
+            } else if (c == '"') {
+                inDoubleQuote = true;
+            } else if (c == '(' || c == '[') {
+                depth++;
+            } else if (c == ')' || c == ']') {
+                depth--;
+            } else if (depth == 0 && c == '|' && i + 1 < expression.length() && expression.charAt(i + 1) == '|') {
+                parts.add(expression.substring(start, i));
+                i++;
+                start = i + 1;
+            }
+        }
+        parts.add(expression.substring(start));
+        return parts;
+    }
+
+    /**
      * 全角标点 → 半角标点 规范化（**字符级**，1 个字符换 1 个）
      *
      * <p><b>为什么需要</b>：规则表达式由大模型生成（见

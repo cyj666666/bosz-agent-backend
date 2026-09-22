@@ -40,7 +40,6 @@ import com.suzhou.bank.agent.core.DataSetBuilder;
 import com.suzhou.bank.agent.core.SqlDataSetBuilder;
 import com.suzhou.bank.agent.entity.*;
 import com.suzhou.bank.agent.enums.*;
-import com.suzhou.bank.agent.mapper.AgentRoleMapper;
 import com.suzhou.bank.agent.mapper.KnowledgeBaseGroupMapper;
 import com.suzhou.bank.agent.mapper.OpenApiConfMapper;
 import com.suzhou.bank.agent.mapper.ToolManagementMapper;
@@ -120,9 +119,6 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
     private final KnowledgeBaseGroupMapper knowledgeBaseGroupMapper;
 
     private final IKnowledgeBaseGroupService knowledgeBaseGroupService;
-
-    /** 菜单全通角色判定（与指标侧同一口径，见 AgentRoleMapper#countFullMenuRoles） */
-    private final AgentRoleMapper agentRoleMapper;
 
     private final IIndexParamsService indexParamsService;
 
@@ -5998,15 +5994,14 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
     private List<String> getKnowledgeIdListByRoleId() {
         ApiContextModel apiContextModel = ApiContext.getApiContextModel();
 
-        // ① 菜单全通角色放行（2026-09-22 统一口径）：sys_role.menu_permissions 含裸 "*" 的角色
-        //    ⇒ 返回「全部启用中分组编号」（语义 = 被授权了全部分组，不是不过滤）。
-        //    注意：原知识侧**没有** admin 豁免（只有指标侧靠 yml 白名单），本次一并统一。
-        List<String> roleCodes = apiContextModel.getRoleCode();
-        if (CollectionUtils.isNotEmpty(roleCodes) && agentRoleMapper.countFullMenuRoles(roleCodes) > 0) {
-            return listAllEnabledKnowledgeGroupIds();
-        }
+        // 🔴 2026-09-22 第二次口径调整：**已删除原「菜单全通角色放行」分支**
+        //    （按 `sys_role.menu_permissions` 含裸 "*" 判定，走 agentRoleMapper#countFullMenuRoles）。
+        //    客户最终确定的角色模型里**管理员并不持有 "*"**（管理员默认只看报告管理/智策引擎/系统管理）
+        //    ⇒ 该旁路既失效、又会让"数据授权页里配的东西不生效"，故整体移除。
+        //    现回归**纯数据表驱动**：知识可见性完全由 sys_role_knowledge 决定。
+        //    ⚠️ 因此 admin 的 sys_role_knowledge 必须有数据，否则知识配置页会空白 —— 见增量 DML。
 
-        // ② 其余按 sys_role_knowledge 的授权过滤（fail-closed：查不到 ⇒ 空列表 ⇒ 调用方 return new ListResult<>(0, 0)）
+        // 按 sys_role_knowledge 的授权过滤（fail-closed：查不到 ⇒ 空列表 ⇒ 调用方 return new ListResult<>(0, 0)）
         List<String> knowledgeIdList = null;
         String role = apiContextModel.getRole();
         if (StringUtils.isNotEmpty(role)) {
@@ -6014,19 +6009,6 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
             knowledgeIdList = sysRoleKnowledgeService.getKnowledgeIdListByRoleId(roleIdList);
         }
         return knowledgeIdList;
-    }
-
-    /**
-     * 全部「启用中」的知识分组编号（{@code groupStatus = '1'}）
-     *
-     * <p>与 {@code IndexConfigServiceImpl#listAllEnabledGroupIds()} 同构，供「菜单全通角色放行」使用。</p>
-     */
-    private List<String> listAllEnabledKnowledgeGroupIds() {
-        LambdaQueryWrapper<KnowledgeBaseGroupEntity> wrapper = Wrappers.lambdaQuery();
-        wrapper.select(KnowledgeBaseGroupEntity::getGroupId);
-        wrapper.eq(KnowledgeBaseGroupEntity::getGroupStatus, "1");
-        List<KnowledgeBaseGroupEntity> groupList = knowledgeBaseGroupService.list(wrapper);
-        return groupList.stream().map(KnowledgeBaseGroupEntity::getGroupId).collect(Collectors.toList());
     }
 
     private void finishEmitter(SseEmitter emitter) {

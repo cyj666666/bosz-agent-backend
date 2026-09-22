@@ -606,7 +606,22 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
             }
         } else {
             try {
-                result = QLExpressUtil.executeStrict(parsedExpression, indexValueMap);
+                /*
+                 * 🔴 用「顶层 OR 链容错」版（2026-09-22 改，原来是 executeStrict）。
+                 *
+                 * 起因（实测 RPT-202609-001 / 规则 zcfzlpg）：表达式形如
+                 * `(口径A-批复值)>0 || (口径B-批复值)>0`，A 因指标重复配置取不到值 ⇒ 占位符变成
+                 * 空串 ⇒ `(''-50)>0` 字符串做减法 ⇒ ClassCastException。
+                 * `||` 的**左分支一抛异常，右分支连求值机会都没有** —— 哪怕右分支
+                 * `(58.2000-50)>0` 明明是 true。结果规则被判"校验失败"、该块置空，
+                 * 用户在报告里一个字都看不到（智策引擎里却是命中的）。
+                 *
+                 * 容错版只在「整体失败 + 顶层能切成 ≥2 段 ||」时启用，且**仅当某段确实为 true**
+                 * 才返回命中；没有任何段成立时照旧抛异常（不把"算不出"伪装成"未命中"）；
+                 * 没有顶层 `||` 的表达式（如 `A && B`）行为完全不变。详见
+                 * {@link QLExpressUtil#executeStrictTolerantOr}。
+                 */
+                result = QLExpressUtil.executeStrictTolerantOr(parsedExpression, indexValueMap);
             } catch (QLExpressUtil.ExprExecuteException e) {
                 executeFailed = true;
                 result = null;

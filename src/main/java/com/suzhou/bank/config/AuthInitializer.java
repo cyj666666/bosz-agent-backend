@@ -110,15 +110,17 @@ public class AuthInitializer implements CommandLineRunner {
 
     /** 创建默认管理员角色和用户 */
     private void initDefaultAdmin() {
-        // 🔴 admin 的 menu_permissions 必须是 ["*"]（裸星号 = 菜单全通），不能是 "[]"。
-        //    2026-09-22 口径统一后，「谁是管理员」完全由这份数据决定，四处同源：
-        //      ① AuthService#getUserMenuPermissions  → 含 "*" 则返回 ["*"]（登录返回的 menus）
-        //      ② 前端 menus.includes('*')            → 路由全放行 + 侧边栏全渲染
-        //      ③ AuthInterceptor#isMenuAllPower      → /api/user、/api/role、/api/agent/roleAuth 准入
-        //      ④ agent AgentRoleMapper#countFullMenuRoles → 指标/知识的数据旁路
-        //    若建成 "[]"，admin 登录后**侧边栏全空**（menus 为空 ⇒ 非 '*' 分支遍历不到任何菜单）。
-        //    （原注释"admin 菜单权限由 AuthService.ALL_MENUS 统一管理"是旧实现的说法，
-        //      ALL_MENUS 硬编码已于同日移除；AuthInterceptor 另保留 role_code=='admin' 兜底防自锁。）
+        // 🔴 admin 的 menu_permissions = 具体清单（2026-09-22 客户最终确定的角色模型）。
+        //    管理员**默认只看**：报告管理 / 智策引擎 / 系统管理（用户管理、角色管理、数据授权）；
+        //    「指标配置」「知识配置管理」需由管理员在角色管理页另行授予（包括给 admin 自己）。
+        //
+        //    ⚠️ 不要改回 ["*"]：数据旁路已按新口径**整体移除**，"*" 现在只影响前端菜单渲染，
+        //       而它同时会让 admin 多出「指标配置 / 知识配置管理」两个菜单 —— 与上面"默认只看三个"不符。
+        //
+        //    这份值有三处消费点：AuthService#getUserMenuPermissions（登录返回 menus）、
+        //    前端路由守卫 / MainLayout 菜单渲染、AuthInterceptor#isSystemAdmin（系统管理接口准入）。
+        //    若建成 "[]"，admin 登录后**侧边栏全空**。
+        //    AuthInterceptor 另保留 role_code=='admin' 兜底，防"把 /users、/roles 取消勾选后无法进角色管理页"的自锁。
         SysRole adminRole = sysRoleMapper.selectOne(
                 new LambdaQueryWrapper<SysRole>().eq(SysRole::getRoleCode, "admin"));
         if (adminRole == null) {
@@ -127,7 +129,8 @@ public class AuthInitializer implements CommandLineRunner {
                 adminRole.setRoleCode("admin");
                 adminRole.setRoleName("系统管理员");
                 adminRole.setDescription("拥有所有权限");
-                adminRole.setMenuPermissions("[\"*\"]");
+                adminRole.setMenuPermissions(
+                        "[\"/reports\",\"/agent/rule\",\"/users\",\"/roles\",\"/role-auth\"]");
                 adminRole.setCreatedAt(new Date());
                 sysRoleMapper.insert(adminRole);
                 log.info("默认角色已创建: admin");

@@ -48,6 +48,15 @@ jwt:
 #     会把收到的 shareCode / userId / reportNo / blockCode / guarantorName / pageParams 全部回显。
 # ⚠️ 正式联调请置 false（届时返回明确错误，而不是 404）。
 # ⛔ 行内没有这一节（行内没有 mock，走真实链路）。
+#
+# 🔴 `credit.share.base-url`（信贷基础地址）**外网这份不配** —— 它是**行内**环境相关项：
+#    唯一消费方是行内专有件 `CreditShareUrlService`（依赖信贷 SSF，外网工程没有），
+#    所以外网配不配都不影响运行（点击走上面的 mock 链路，不碰 base-url）。
+#    行内那份需要在 `application-{dev,uat,prod}.yml` **新建** `credit.share` 段并配 base-url
+#    （注意：行内这三个 profile **原本没有** `credit.share` 段 ⇒ 是"新增一节"，不是"改一个值"）。
+#    · SIT：http://crcs-web-lb-sit.test:8080/crcs/   （末尾必须带 /）
+#    · uat / prod：待提供
+#    详见 doc/链接溯源对接说明_v1.md 的 T8。
 credit:
   share:
     mock-enabled: true

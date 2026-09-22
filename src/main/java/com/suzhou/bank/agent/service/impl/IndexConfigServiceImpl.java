@@ -23,7 +23,6 @@ import com.suzhou.bank.agent.util.UUIDGenerator;
 import com.suzhou.bank.agent.config.AgentProperties;
 import com.suzhou.bank.agent.config.ApiContext;
 import com.suzhou.bank.agent.config.ApiContextModel;
-import com.suzhou.bank.agent.mapper.AgentRoleMapper;
 import com.suzhou.bank.agent.entity.IndexBaseGroupEntity;
 import com.suzhou.bank.agent.entity.IndexParamsEntity;
 import com.suzhou.bank.agent.enums.DataTypeEnum;
@@ -84,10 +83,6 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
 
     @Autowired
     private ISysRoleIndexService sysRoleIndexService;
-
-    /** 菜单全通角色判定（sys_role.menu_permissions 含裸 "*"）——替代原 yml 的 role-filter-bypass-roles */
-    @Autowired
-    private AgentRoleMapper agentRoleMapper;
 
     @Autowired
     private IIndexRelateKnowledgeInfoService indexRelateKnowledgeInfoService;
@@ -1084,7 +1079,7 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
      *
      * <p><b>🔴 为什么"放行"不再返回 null（改为返回"全部启用中的分组"）</b>，三个理由：</p>
      * <ol>
-     *   <li><b>口径</b>：超管的语义是"被授权了全部分组"（公司环境那条角色实际就是授权全部分组），
+     *   <li><b>口径</b>：放行的语义是"被授权了全部分组"（初始化按全量灌 {@code sys_role_index}，<b>不是</b>不过滤），
      *       不是"完全不按分组过滤"。返回 null 会把 {@code index_params} 里 950 条
      *       <b>父节点不是分组</b>的行也当成一级指标列出来 —— 线上是 <b>136 条</b>，本工程却显示 1091 条。</li>
      *   <li><b>踩过的坑</b>：null 到了旧调用方，`CollectionUtils.isEmpty(null) == true` 会被误判成
@@ -1104,18 +1099,17 @@ public class IndexConfigServiceImpl implements IIndexConfigService {
             return listAllEnabledGroupIds();
         }
         ApiContextModel apiContextModel = ApiContext.getApiContextModel();
-
-        // ② 菜单全通角色放行（2026-09-22 统一口径）：
-        //    判定依据由「yml 里的角色编码白名单」改为「sys_role.menu_permissions 含裸 "*"」，
-        //    与宿主 AuthService#getUserMenuPermissions 返回 ["*"]、前端 menus.includes('*') 三处一个口径。
-        //    放行语义 =「被授权了全部分组」（返回全部启用分组编号），**不是** return null / 不过滤。
         List<String> roleCodes = apiContextModel.getRoleCode();
-        if (CollectionUtils.isNotEmpty(roleCodes)
-                && agentRoleMapper.countFullMenuRoles(roleCodes) > 0) {
-            return listAllEnabledGroupIds();
-        }
 
-        // ③ sys_role_index.role_id 的口径是「角色主键」（sys_role.id），由 ApiContext 按 userId 查出。
+        // 🔴 2026-09-22 第二次口径调整：**已删除原「菜单全通角色放行」分支**。
+        //    原分支按 `sys_role.menu_permissions` 含裸 "*" 判定（agentRoleMapper#countFullMenuRoles），
+        //    但客户最终确定的角色模型里**管理员并不持有 "*"**（管理员默认只看报告管理/智策引擎/系统管理）
+        //    ⇒ 该旁路既失效、又会让"数据授权页里配的东西不生效"，故整体移除。
+        //    现回归**纯数据表驱动**：指标可见性完全由 sys_role_index 决定，
+        //    配合「初始化灌全量 + 数据授权页一键全选」应对新增分组。
+        //    ⚠️ 因此 admin 的 sys_role_index 必须有数据，否则指标配置页会空白 —— 见增量 DML。
+
+        // ② sys_role_index.role_id 的口径是「角色主键」（sys_role.id），由 ApiContext 按 userId 查出。
         List<String> roleIdList = apiContextModel.getRoleIdList();
         if (CollectionUtils.isEmpty(roleIdList)) {
             log.warn("启用角色-指标过滤但取不到当前用户的角色主键（userId={}，roleCode={}），本次按「全部分组」放行；"

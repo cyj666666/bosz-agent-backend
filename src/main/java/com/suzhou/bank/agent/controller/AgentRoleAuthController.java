@@ -111,6 +111,23 @@ public class AgentRoleAuthController {
         return AgentResult.OK("保存成功");
     }
 
+    @Operation(summary = "角色数据授权-查询知识输出授权（全量）",
+            description = "跨所有知识分组返回该角色已授权的输出要求 id —— 供树形整体勾选回显")
+    @GetMapping("/knowledgeOutput/all/{roleId}")
+    public AgentResult<?> knowledgeOutputAuthAll(@PathVariable String roleId) {
+        return AgentResult.OK(nullToEmpty(
+                sysRoleKnowledgeOutputService.getAllKnowledgeIdListByRoleId(roleId)));
+    }
+
+    @Operation(summary = "角色数据授权-保存知识输出授权（全量）",
+            description = "整体覆盖该角色在**所有知识分组**下的输出要求授权；group_id 由后端按知识库反查")
+    @PostMapping("/knowledgeOutput/all")
+    public AgentResult<?> saveKnowledgeOutputAll(@RequestBody @Valid RoleAuthSaveReq req) {
+        sysRoleKnowledgeOutputService.saveRoleKnowledgeOutputAll(req.getRoleId(),
+                join(req.getPermissionIds()));
+        return AgentResult.OK("保存成功");
+    }
+
     /** null → 空列表：前端直接当数组用，省掉 null 判断（空列表 = 该角色无授权） */
     private static List<String> nullToEmpty(List<String> list) {
         return list == null ? Collections.<String>emptyList() : list;

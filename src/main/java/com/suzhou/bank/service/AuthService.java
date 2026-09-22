@@ -103,9 +103,15 @@ public class AuthService {
 
         // 2026-09-22 变更：原实现写死 `"admin".equals(role.getRoleCode())` 直接返回 ["*"]，
         // 导致库里 sys_role.menu_permissions 对 admin 形同虚设（改数据不生效）。
-        // 现改为「谁的数据里有 "*" 谁全通」——与以下两处同口径：
-        //   ① agent 侧「菜单全通角色」判定 AgentRoleMapper#countFullMenuRoles
-        //   ② 前端 menus.includes('*')（路由守卫放行 + 侧边菜单全渲染）
+        // 现改为「谁的数据里有 "*" 谁全通」——只与前端 menus.includes('*') 一处同源
+        // （路由守卫全放行 + 侧边菜单全渲染）。
+        //
+        // 🔴 "*" 的语义已**收窄**（同日第二次口径调整），现在只影响**菜单可见性**：
+        //    · agent 的「菜单全通数据旁路」已整体删除（AgentRoleMapper#countFullMenuRoles 已移除）
+        //      ⇒ 指标 / 知识可见性回归纯数据表驱动，与本分支无关；
+        //    · 系统管理接口准入也不再认它，改为「menu_permissions 含 /users、/roles、/role-auth 之一」
+        //      （见 AuthInterceptor#isSystemAdmin）。
+        //    ⇒ 客户确定的三角色模型里 admin **并不持有 "*"**，故本分支对默认数据不会命中。
         if (menus.contains("*")) {
             return new LinkedHashSet<>(Collections.singletonList("*"));
         }
