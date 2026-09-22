@@ -7,11 +7,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.JdbcUtils;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Types;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 动态数据源取数工具（agent 模块「指标取数」的执行引擎）
@@ -279,6 +287,89 @@ public class DynamicDBUtil {
             return jdbcTemplate.update(sql);
         } else {
             return jdbcTemplate.update(sql, param);
+        }
+    }
+
+    // ==================================================================================
+    // 取数兼容兜底（2026-09-23 · 行内 GaussDB 环境）
+    // ==================================================================================
+
+    /**
+     * 取数查询（<b>兼容兜底版</b>）—— 绕开 Spring 对 {@code numeric}/{@code decimal} 列的
+     * {@code getBigDecimal()} 直读，改读原始文本后自行转 {@link BigDecimal}。
+     *
+     * <p><b>🔴 为什么必须绕</b>：Spring 的 {@code JdbcUtils.getResultSetValue()} 按驱动上报的
+     * 列类型分派，命中 {@code Types.NUMERIC} / {@code Types.DECIMAL} 时<b>直接调用
+     * {@code rs.getBigDecimal(index)}、不做任何容错</b>。行内 GaussDB（MySQL 兼容模式，
+     * {@code sql_compatibility = M}）的 numeric 值在驱动侧转换时会带上<b>千分位</b>
+     * （形如 {@code 12,345.67}）⇒ 驱动抛 {@code 不良的类型值 bigdecimal}。</p>
+     *
+     * <p><b>为什么危害大</b>：该异常在 {@code SqlDataSetBuilder} 里被外层
+     * {@code catch (Exception)} 吞掉并返回 {@code null} ⇒ 表现为「指标取不到值」，
+     * 报告对应内容块再被 {@code emptyStrategy} 隐掉 ⇒ <b>页面看不出任何异常，静默失效</b>。
+     * 因为「字段是 decimal 类型」的指标数量很多，一旦触发就是<b>成片</b>的无数据。</p>
+     *
+     * <p><b>本方法的做法</b>：</p>
+     * <ol>
+     *   <li>{@code NUMERIC} / {@code DECIMAL} 列 ⇒ 用 {@code getString()} 读<b>原始文本</b>，
+     *       剥掉千分位后再 {@code new BigDecimal(...)}。值类型<b>仍然是 BigDecimal</b>
+     *       （下游规则引擎按数字参与计算，行为不变）。</li>
+     *   <li>整数列 ⇒ {@code getLong}/{@code getInt} + {@code wasNull()}（保持基本类型语义）。</li>
+     *   <li>其余列 ⇒ <b>完全沿用</b> Spring 的 {@code JdbcUtils.getResultSetValue()}，行为不变。</li>
+     * </ol>
+     *
+     * <p><b>兜不住的极端情况</b>：若剥掉逗号后仍不是数字（列里本就不是数字文本），
+     * 则<b>保留原始文本</b>并打 WARN —— 宁可让下游看到怪值，也不让整条取数失败。</p>
+     *
+     * @param jdbcTemplate 动态数据源的 NamedParameterJdbcTemplate
+     * @param sql          已替换过占位符的最终 SQL
+     * @param parameters   命名参数
+     * @return 结果行；读列失败时退化为原始文本，不抛异常
+     */
+    public static List<Map<String, Object>> queryForListCompat(
+            NamedParameterJdbcTemplate jdbcTemplate, String sql, Map<String, ?> parameters) {
+
+        RowMapper<Map<String, Object>> mapper = (rs, rowNum) -> {
+            ResultSetMetaData md = rs.getMetaData();
+            int cols = md.getColumnCount();
+            Map<String, Object> row = new LinkedHashMap<>(Math.max(cols * 2, 16));
+            for (int i = 1; i <= cols; i++) {
+                String label = md.getColumnLabel(i);
+                int type = md.getColumnType(i);
+                Object value;
+                if (type == Types.NUMERIC || type == Types.DECIMAL) {
+                    value = toBigDecimalSafe(rs.getString(i), label);
+                } else if (type == Types.BIGINT) {
+                    long v = rs.getLong(i);
+                    value = rs.wasNull() ? null : v;
+                } else if (type == Types.INTEGER || type == Types.SMALLINT || type == Types.TINYINT) {
+                    int v = rs.getInt(i);
+                    value = rs.wasNull() ? null : v;
+                } else {
+                    // 其余类型（字符串 / 时间 / 布尔 / JSON …）完全走 Spring 原逻辑，行为不变
+                    value = JdbcUtils.getResultSetValue(rs, i);
+                }
+                row.put(label, value);
+            }
+            return row;
+        };
+        return jdbcTemplate.query(sql, parameters, mapper);
+    }
+
+    /**
+     * 文本 → BigDecimal（剥千分位；非法文本不抛异常、原样返回）
+     * 参考先例：{@code SysDataSourceServiceImpl} 里的数值容错也是"读不到就退化为文本"。
+     */
+    private static Object toBigDecimalSafe(String text, String label) {
+        if (text == null || text.trim().isEmpty()) {
+            return null;
+        }
+        String clean = text.replace(",", "").trim();
+        try {
+            return new BigDecimal(clean);
+        } catch (NumberFormatException e) {
+            log.warn("列[{}]的值[{}]剥掉千分位后仍无法解析为数字，按原始文本返回（不中断取数）", label, text);
+            return text;
         }
     }
 }

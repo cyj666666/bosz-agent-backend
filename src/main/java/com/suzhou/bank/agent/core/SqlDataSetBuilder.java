@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.suzhou.bank.agent.db.DynamicDBUtil.getNamedParameterJdbcTemplate;
+import static com.suzhou.bank.agent.db.DynamicDBUtil.queryForListCompat;
 
 /**
  * SQL 类型指标的取数实现（本模块最核心的取数路径）
@@ -302,8 +303,14 @@ public class SqlDataSetBuilder implements DataSetBuilder {
             }
 
             // 执行sql查询
+            // 🔴 2026-09-23（行内专用加固）：原先直接用 jdbcTemplate.queryForList(...)，
+            //    Spring 会对 numeric/decimal 列调用 rs.getBigDecimal()；行内 GaussDB(M 模式)
+            //    驱动在这些列上会带上**千分位** ⇒ 抛「不良的类型值 bigdecimal」，
+            //    再被下面的 catch 吞掉、返回 null ⇒ 指标静默"取不到值"、报告成片无数据。
+            //    改用 queryForListCompat：numeric/decimal 走 getString + 剥千分位，
+            //    其余列行为完全不变。详见 DynamicDBUtil#queryForListCompat 的类注释。
             NamedParameterJdbcTemplate jdbcTemplate = getNamedParameterJdbcTemplate(dataSourceModel.getCode());
-            return jdbcTemplate.queryForList(scriptSql, parameters);
+            return queryForListCompat(jdbcTemplate, scriptSql, parameters);
         } catch (Exception e) {
             log.error("数据源查询数据异常，异常原因{}", ExceptionUtils.getStackTrace(e));
             return null;

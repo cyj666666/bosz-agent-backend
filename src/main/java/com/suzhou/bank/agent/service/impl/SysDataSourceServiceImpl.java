@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 
 import static com.suzhou.bank.agent.db.DynamicDBUtil.getJdbcTemplate;
 import static com.suzhou.bank.agent.db.DynamicDBUtil.getNamedParameterJdbcTemplate;
+import static com.suzhou.bank.agent.db.DynamicDBUtil.queryForListCompat;
 
 /**
  * @Description: 多数据源管理
@@ -209,7 +210,13 @@ public class SysDataSourceServiceImpl extends ServiceImpl<SysDataSourceMapper, S
         // 获取表数据
         List<Map<String, Object>> dataList = new ArrayList<>();
         try {
-            dataList = jdbcTemplate.queryForList(querySql, paramsDataSourceDataPreviewReq.getParameters());
+            // 🔴 2026-09-23（行内加固）：与 SqlDataSetBuilder 同源问题 ——
+            //    裸 queryForList 会让 Spring 对 numeric/decimal 列调 rs.getBigDecimal()，
+            //    行内 GaussDB(M 模式) 驱动在数值上带千分位 ⇒ 抛「不良的类型值 bigdecimal」。
+            //    预览的异常在这里虽然"看得见"（catch 后返回"未配置参数默认值"，容易误解成参数问题），
+            //    但仍应走兼容读法 —— 否则预览一炸，配置指标时会以为是自己 SQL 写错了。
+            dataList = queryForListCompat(jdbcTemplate, querySql,
+                    paramsDataSourceDataPreviewReq.getParameters());
         } catch (Exception e) {
             reviewDTO.setMsg("未配置参数默认值");
             reviewDTO.setCode("200000");
