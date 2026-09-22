@@ -437,6 +437,28 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
             log.info("第" + (i + 1) + "条数据：" + entity);
         }
 
+        /*
+         * 🔴 编号与指标表对不上时留痕（2026-09-22 加）。
+         *
+         * <p>这是"取不到数"里最隐蔽的一种成因：表达式里引用的指标编号在
+         * {@code app_finance_indicator_info} 里<b>根本不存在</b>（编号写错、被删、或指标没同步过来），
+         * 查库时静默返回 0 条 —— 表面上跟"取了数但没数据"一模一样，
+         * 但根因在<b>配置</b>而不是数据。</p>
+         *
+         * <p>实测代价：2026-09-22 15:09 规则 {@code zhaiwuyichang} 就是这么炸的，
+         * 日志里只有一句「涉及指标 0 个」，看不出是哪个编号失效，得人工去库里比对。</p>
+         *
+         * <p>只在不一致时打 WARN —— 正常规则（编号全部命中）不会触发，不产生噪音。</p>
+         */
+        if (paramIdList.size() > paramsList.size()) {
+            List<String> unknownCodes = new ArrayList<>(paramIdList);
+            for (IndexParamsEntity entity : paramsList) {
+                unknownCodes.remove(entity.getParamNo());
+            }
+            log.warn("规则[{}]有 {} 个指标编号在指标表中不存在：{}（表达式引用 {} 个，匹配到 {} 个）",
+                    req.getRuleCode(), unknownCodes.size(), unknownCodes, paramIdList.size(), paramsList.size());
+        }
+
         Map<String, Object> indexValueMap = knowledgeBaseConfigService.getIndexValueMap("", req.getRequestParams(), paramIdList, null);
         long end1 = System.currentTimeMillis();
 
@@ -543,25 +565,45 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
          */
         Object result;
         boolean executeFailed = false;
-        if (!paramsList.isEmpty() && missingValueCount == paramsList.size()) {
-            /*
-             * 🔴 全部指标都没取到值（2026-09-19 加）：指标值会被 indexValueMap 替换成空串，
-             * 表达式形如 `(''-''>=50)` —— 字符串做减法**必然**抛异常。既然注定算不成，
-             * 就没必要真去执行它，更不该为它刷一整坨 ERROR 堆栈：48 个 RULE 块全空时
-             * （例如报告编号换新、业务数据没跟过去），日志会被这些堆栈淹没，
-             * 真正的问题反而被埋。
-             *
-             * 语义与"执行失败"完全一致（executeFailed=true + result=null）：上层 provider 判
-             * `resultStatus == null` ⇒ 记 WARN「规则校验失败」+ 该块返回 null（模板
-             * emptyStrategy=HIDE）。既不会把它误判成"未命中"，也不会让报告中断。
-             *
-             * ⚠️ 部分指标缺失时**仍然照常执行** —— 那种情况下的 ERROR 日志是有信息量的（能看出
-             * 到底缺了哪几个指标），保留。
-             */
+        /*
+         * 🔴 判据改用「占位符」口径（2026-09-22 修正），不再依赖 paramsList 是否为空。
+         *
+         * <p>原判据是 `!paramsList.isEmpty() && missingValueCount == paramsList.size()`，
+         * 隐含假设「表达式引用的指标必然出现在 paramsList 里」。实测该假设不成立：
+         * 规则 {@code zhaiwuyichang} 的表达式引用了指标编号，但该编号在<b>指标表里查不到</b>
+         * → {@code getParamsList} 返回 0 条 → 前半段 {@code !paramsList.isEmpty()} 直接为 false
+         * → 落到 else 分支照常执行 → 占位符被 {@link QLExpressUtil#replaceExpressionIds}
+         * 替换成 {@code null} → 表达式变成 {@code ABS(null)>10} → QLExpress 按
+         * {@code abs(double)} 签名匹配，{@code null} 进不去 → 抛异常，刷一整坨 ERROR 堆栈。
+         * （日志实证 2026-09-22 15:09，规则[zhaiwuyichang]：「涉及指标 0 个，其中 0 个未取到值」）</p>
+         *
+         * <p>改成看表达式里**实际有几个指标占位符**之后，三种情形都能正确落位：</p>
+         * <ul>
+         *   <li>表达式没有占位符（纯字面量，如 {@code 1>0}）→ 照常执行，不受取数影响；</li>
+         *   <li>有占位符但一个都没值（含"指标表里根本查不到"）→ 跳过执行，判校验失败；</li>
+         *   <li>部分有值 → 照常执行，ERROR 日志保留（那种日志有信息量，能看出缺了哪几个指标）。</li>
+         * </ul>
+         *
+         * <p>跳过执行的语义与"执行失败"完全一致（{@code executeFailed=true} + {@code result=null}）：
+         * 上层 provider 判 {@code resultStatus == null} ⇒ 记 WARN「规则校验失败」+ 该块返回 null
+         * （模板 {@code emptyStrategy=HIDE}）。既不会被误判成"未命中"，也不会让报告中断。</p>
+         */
+        int placeholderCount = countMetricPlaceholders(parsedExpression);
+        if (placeholderCount > 0 && missingValueCount == paramsList.size()) {
             executeFailed = true;
             result = null;
-            log.warn("规则[{}]全部 {} 个指标均未取到值，跳过表达式执行（判为校验失败）",
-                    req.getRuleCode(), paramsList.size());
+            if (paramsList.isEmpty()) {
+                // 引用了指标但指标表一个都没匹配上 —— 这是**配置问题**（编号失效/被删），
+                // 与"取了数但没数据"完全两回事，日志必须能区分，否则排查会往数据侧白找。
+                log.warn("规则[{}]表达式引用了 {} 个指标占位符，但在指标表中均未匹配到（指标配置失效），"
+                                + "跳过表达式执行（判为校验失败）。原始表达式：{}",
+                        req.getRuleCode(), placeholderCount, parsedExpression);
+            } else {
+                // 48 个 RULE 块全空时（例如报告编号换新、业务数据没跟过去）日志会被这类堆栈淹没，
+                // 真正的问题反而被埋，所以这里只留一行 WARN。
+                log.warn("规则[{}]全部 {} 个指标均未取到值，跳过表达式执行（判为校验失败）",
+                        req.getRuleCode(), paramsList.size());
+            }
         } else {
             try {
                 result = QLExpressUtil.executeStrict(parsedExpression, indexValueMap);
@@ -752,6 +794,37 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
 
 
     /**
+     * 表达式里的指标占位符形态：{@code {编号}} 或 {@code {编号|名称}}
+     *
+     * <p>与 {@link #emptyMetricList} 的「第一优先」提取口径、以及
+     * {@link QLExpressUtil#replaceExpressionIds} 的替换口径完全一致，三处共用同一个正则，
+     * 避免出现"提取得出来但替换不掉"这种口径错位。</p>
+     */
+    private static final Pattern METRIC_PLACEHOLDER = Pattern.compile("\\{(\\d+)(?:\\|[^}]*)?\\}");
+
+    /**
+     * 数一数表达式里引用了几个指标（占位符个数）
+     *
+     * <p>用途：判断"表达式是否真的依赖取数结果"，见 {@code executeRule} 里跳过执行的判据
+     * （2026-09-22 新增）。</p>
+     *
+     * <p>⚠️ 这里**只数占位符、不做裸编号兜底**：{@link #emptyMetricList} 的 {@code \d+} 兜底会把
+     * 阈值也当成指标（实测 {@code ABS(9.8000)>10} 会提出 9 / 8000 / 10），拿它判
+     * "是否依赖取数"会误判 —— 一个纯字面量表达式会被判成"依赖指标"。</p>
+     */
+    private static int countMetricPlaceholders(String expression) {
+        if (StringUtils.isBlank(expression)) {
+            return 0;
+        }
+        int count = 0;
+        Matcher matcher = METRIC_PLACEHOLDER.matcher(expression);
+        while (matcher.find()) {
+            count++;
+        }
+        return count;
+    }
+
+    /**
      * 从表达式里提取「涉及到的指标编号」。
      *
      * <p><b>为什么优先取 {@code {编号|名称}} 里的编号</b>：表达式经 {@link #parseRule} 归一后，
@@ -768,7 +841,7 @@ public class AgentRuleServiceImpl extends ServiceImpl<AgentRuleMapper, AgentRule
         }
 
         // 1、优先：{编号|名称} 里的编号（与前端 RuleFormModal.tsx 的插入格式一致）
-        Matcher placeholderMatcher = Pattern.compile("\\{(\\d+)(?:\\|[^}]*)?\\}").matcher(parsedExpression);
+        Matcher placeholderMatcher = METRIC_PLACEHOLDER.matcher(parsedExpression);
         while (placeholderMatcher.find()) {
             addDistinct(idList, placeholderMatcher.group(1));
         }

@@ -89,6 +89,18 @@ public class OpenAiChatUtil {
     private static final int CONNECT_TIMEOUT_MILLIS = 30 * 1000;
 
     /**
+     * 流式建连的最大尝试次数（**含**首次）
+     *
+     * <p>只覆盖「建连 / TLS 握手阶段」的瞬时失败（{@code Connection reset} 等），
+     * 见 {@link #openStreamConnectionWithRetry}。取 3 是权衡结果：给瞬时抖动留一次翻身机会，
+     * 又不至于在服务端过载时把请求翻三倍压上去。</p>
+     */
+    private static final int STREAM_CONNECT_MAX_ATTEMPTS = 3;
+
+    /** 建连重试的线性退避基数（毫秒）：第 n 次重试前等 {@code n × 该值}（1s、2s） */
+    private static final long STREAM_CONNECT_RETRY_BACKOFF_MILLIS = 1000L;
+
+    /**
      * 流式调用的「结果行」使用的 {@code sort_no}
      *
      * <p>本工程 {@code call_llm_record} 的主键是 {@code (trace_id, sort_no)}，所以同一次调用里
@@ -178,7 +190,8 @@ public class OpenAiChatUtil {
                 log.info("流式调用开始! traceId[{}], model[{}]", traceId, model);
                 // 🔴 流式分支**必须**用裸 HttpURLConnection（见 openStreamConnection 的说明）：
                 //    换成 hutool 的 `buildRequest(...).execute()` 会让整条链路退化成"假流式"。
-                HttpURLConnection conn = openStreamConnection(url, apiKey, body);
+                //    建连失败带有限重试，见 openStreamConnectionWithRetry（2026-09-22 新增）。
+                HttpURLConnection conn = openStreamConnectionWithRetry(url, apiKey, body, traceId);
                 try {
                     int status = conn.getResponseCode();
                     if (status != 200) {
@@ -555,6 +568,56 @@ public class OpenAiChatUtil {
             os.flush();
         }
         return conn;
+    }
+
+    /**
+     * 建流式连接，**对建连阶段的瞬时网络失败做有限重试**（2026-09-22 新增）
+     *
+     * <h3>为什么需要</h3>
+     * <p>实测（2026-09-22 15:09，traceId {@code llm_360683944804454400}）：报告生成时多个块并发调模型，
+     * 其中一个在建连阶段被对端掐断 —— 堆栈是
+     * {@code SSLSocketImpl.startHandshake} → {@code HttpsClient.afterConnect} →
+     * {@code HttpURLConnection.getOutputStream0}，异常 {@code java.net.SocketException: Connection reset}。
+     * 这是**纯网络瞬时故障**（对端在 TLS 握手前就 RST 了连接，常见于并发建连被限流、
+     * 长连接被中间设备回收），与请求内容无关，重试通常一次就能过。</p>
+     *
+     * <p>而原实现是「一次干到底」：失败即记 500 流水 + 该块内容为空。报告是几十个块并发调模型的，
+     * 任何一次抖动都会让一个块直接空掉 —— 所以这里值得重试。</p>
+     *
+     * <h3>为什么只重试「建连阶段」</h3>
+     * <p>重试是否安全，取决于<b>有没有已经开始给前端推帧</b>：</p>
+     * <ul>
+     *   <li><b>建连 / 握手失败</b>（本方法覆盖的范围）→ 响应都还没拿到，一帧没推 → 重试安全；</li>
+     *   <li><b>流中途断开</b> → 已经推了若干帧，重试会让前端看到重复 / 错乱的内容 → <b>绝不重试</b>，
+     *       仍走原失败分支（在 {@code consumeStream} 那一层处理）。</li>
+     * </ul>
+     * <p>所以重试只包住 {@link #openStreamConnection} 一层，不包 {@code consumeStream}。</p>
+     *
+     * <p>⚠️ 尝试次数刻意压到 {@link #STREAM_CONNECT_MAX_ATTEMPTS} 次并带线性退避：这类失败往往
+     * 源于"并发建连过多"，重试过猛反而把服务端压得更死，得不偿失。</p>
+     */
+    private static HttpURLConnection openStreamConnectionWithRetry(String url, String apiKey, JSONObject body,
+                                                                   String traceId) throws IOException {
+        IOException lastError = null;
+        for (int attempt = 1; attempt <= STREAM_CONNECT_MAX_ATTEMPTS; attempt++) {
+            try {
+                return openStreamConnection(url, apiKey, body);
+            } catch (IOException e) {
+                lastError = e;
+                log.warn("流式调用建连失败（第 {}/{} 次尝试），traceId[{}]，原因：{}",
+                        attempt, STREAM_CONNECT_MAX_ATTEMPTS, traceId, e.toString());
+                if (attempt < STREAM_CONNECT_MAX_ATTEMPTS) {
+                    try {
+                        Thread.sleep(STREAM_CONNECT_RETRY_BACKOFF_MILLIS * attempt);
+                    } catch (InterruptedException ie) {
+                        // 保持中断语义：恢复标志位后立刻放弃重试，不把中断吞掉
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        throw lastError;
     }
 
     /** 读错误响应体（最多 500 字符），用于把 401/403 等鉴权错误的原因暴露到日志里 */
