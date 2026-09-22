@@ -18,19 +18,28 @@
 --       /indicators     指标数据（已删）
 --       /rules          知识库管理（已删）
 --
--- 注意：admin 角色走特判 —— AuthService#getUserMenuPermissions 对 role_code='admin'
---       直接返回 ["*"]，前端 MainLayout 把 "*" 解析为「全量菜单可见」，
---       因此 admin 那行的 menu_permissions 实际不参与渲染。这里照样更新，
---       是为了让数据本身准确（万一将来去掉 admin 特判，授权数据就是对的）。
+-- 2026-09-22 口径统一（重要）：
+--   admin 的 menu_permissions 由「具体清单」改为 **["*"]**（裸星号 = 菜单全通）。
+--   理由：`AuthService#getUserMenuPermissions` 已移除 `role_code=='admin'` 硬编码，
+--         改为「合并各角色 menu_permissions，含 '*' 即返回 ["*"]」；
+--         前端 `menus.includes('*')` 是唯一触发「侧边栏全渲染」的条件。
+--   ⇒ 若 admin 仍存具体清单（不含 '*'）：侧边栏只渲染清单里的项，
+--     **新加的菜单（如 /role-auth 数据授权）不会出现**，且登录返回的 menus 与
+--     接口准入（AuthInterceptor 另有 role_code=='admin' 兜底）会不一致。
+--   配套改动：AuthInitializer#initDefaultAdmin、sql/三个菜单_执行步骤.md 的建号 SQL、
+--             20260922_增量_角色菜单全通口径统一.sql（老环境升级用）。
+--
+--   注：admin 那行的值即便写错，接口侧仍有 `role_code=='admin'` 兜底、
+--       不会把自己锁在系统管理之外；但**菜单可见性只认数据**，故必须为 ["*"]。
 --
 -- 执行：本地库 127.0.0.1:5432/bosz，schema as_agent
 -- ============================================================================
 
 SET search_path = as_agent, public;
 
--- 角色 1：admin（系统管理员）—— 报告管理 + 系统管理 + agent 三个菜单
+-- 角色 1：admin（系统管理员）—— 菜单全通（*）
 UPDATE sys_role
-SET menu_permissions = '["/reports","/users","/roles","/agent/index-config","/agent/knowledge-config","/agent/rule"]'
+SET menu_permissions = '["*"]'
 WHERE id = 1;
 
 -- 角色 2：khjl（客户经理）—— 报告管理 + agent 三个菜单

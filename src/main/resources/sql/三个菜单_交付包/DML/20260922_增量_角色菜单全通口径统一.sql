@@ -12,19 +12,39 @@
 --   sys_role.menu_permissions 里含「裸 *」（如 ["*"]）的角色
 --     = 菜单全通（前端侧边菜单全渲染 + 路由守卫不拦截）
 --     = 数据全通（agent 指标树 / 知识库不做角色过滤，返回"全部启用分组"）
+--     = 系统管理接口可调（/api/user、/api/role、/api/agent/roleAuth）
+--
+-- 【四个消费点（改口径必须四处一起想）】
+--   ① AuthService#getUserMenuPermissions        → 合并各角色 menu_permissions，含 "*" 则返回 ["*"]（登录返回的 menus）
+--   ② 前端 menus.includes('*')                  → 路由守卫全放行 + 侧边栏全渲染
+--   ③ AuthInterceptor#isMenuAllPower            → 系统管理接口准入（**另保留 role_code=='admin' 兜底，见下**）
+--   ④ agent AgentRoleMapper#countFullMenuRoles  → 指标/知识的数据旁路
 --
 -- 【代码侧已同步改造（本次一并交付）】
 --   · AuthService#getUserMenuPermissions           → 合并各角色 menu_permissions，含 "*" 则返回 ["*"]
 --   · AgentRoleMapper#countFullMenuRoles           → 【新增】按角色编码统计「menu_permissions 含 *」的角色数
 --   · IndexConfigServiceImpl#getIndexIdListByRoleId → 用 countFullMenuRoles 放行（替代原 yml 白名单）
 --   · KnowledgeBaseConfigServiceImpl#getKnowledgeIdListByRoleId → 【新增】同样的放行（补齐原知识侧缺失的豁免）
+--   · AuthInterceptor#isMenuAllPower               → 【新增】原 `roles.contains("admin")` 改写为「含 * 为主口径
+--                                                    + role_code=='admin' 兜底」（兜底原因见下）
+--   · AuthInitializer#initDefaultAdmin             → 默认建号时 menu_permissions 由 "[]" 改为 ["*"]
 --   · AgentProperties#indexRoleFilterBypassRoles   → 字段已删除
 --   · application.yml                              → agent.index.role-filter-bypass-roles 已移除
 --
--- 【⚠️ 必须与代码同批上线】
---   只改代码不改数据 ⇒ admin 的 menus 会从 ["*"] 退化成那串具体清单，
---   数据层「含 *」判定不再命中 ⇒ **admin 反而看不到指标/知识**；
---   只改数据不改代码 ⇒ 代码仍走 `roleCode == "admin"` 硬编码，数据白改。
+-- 【🔴 AuthInterceptor 为何必须保留 admin 兜底（防不可逆自锁）】
+--   它守的 /api/user、/api/role 正是**系统管理自己的入口**。若只认 "*"：
+--     (a) 角色管理页的「菜单权限」多选可以把 admin 的 ["*"] 改成具体清单 ⇒ 改完 admin 立刻
+--         失去系统管理权限，而改回来又必须先进入角色管理页 ⇒ **永久锁死**；
+--     (b) 本仓库三处初始化脚本原先给 admin 存的是具体清单 / 空数组
+--         （AuthInitializer、agent_模块菜单授权_as_agent.sql、三个菜单_执行步骤.md）
+--         ⇒ 新环境没跑本增量就直接锁死。（这三处已同步改为 ["*"]。）
+--   兜底是「或」关系，不削弱主口径：普通角色只要数据里有 "*" 就能通过（这正是本次修复的目标）。
+--
+-- 【⚠️ 数据与代码必须同批上线】
+--   · 只改代码不改数据 ⇒ admin 的 menus 从 ["*"] 退化成具体清单 ⇒ 前端**按清单渲染**，
+--     本次新加的菜单（如 /role-auth「数据授权」）**不会出现**；同时数据旁路不再命中
+--     ⇒ admin 反而看不到指标 / 知识。（接口侧因兜底仍可调，但无入口。）
+--   · 只改数据不改代码 ⇒ AuthService 仍走 `roleCode == "admin"` 硬编码，数据对 admin 白改。
 -- =====================================================================
 
 UPDATE sys_role

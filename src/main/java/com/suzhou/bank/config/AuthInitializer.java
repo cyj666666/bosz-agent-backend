@@ -110,7 +110,15 @@ public class AuthInitializer implements CommandLineRunner {
 
     /** 创建默认管理员角色和用户 */
     private void initDefaultAdmin() {
-        // admin 菜单权限由 AuthService.ALL_MENUS 统一管理
+        // 🔴 admin 的 menu_permissions 必须是 ["*"]（裸星号 = 菜单全通），不能是 "[]"。
+        //    2026-09-22 口径统一后，「谁是管理员」完全由这份数据决定，四处同源：
+        //      ① AuthService#getUserMenuPermissions  → 含 "*" 则返回 ["*"]（登录返回的 menus）
+        //      ② 前端 menus.includes('*')            → 路由全放行 + 侧边栏全渲染
+        //      ③ AuthInterceptor#isMenuAllPower      → /api/user、/api/role、/api/agent/roleAuth 准入
+        //      ④ agent AgentRoleMapper#countFullMenuRoles → 指标/知识的数据旁路
+        //    若建成 "[]"，admin 登录后**侧边栏全空**（menus 为空 ⇒ 非 '*' 分支遍历不到任何菜单）。
+        //    （原注释"admin 菜单权限由 AuthService.ALL_MENUS 统一管理"是旧实现的说法，
+        //      ALL_MENUS 硬编码已于同日移除；AuthInterceptor 另保留 role_code=='admin' 兜底防自锁。）
         SysRole adminRole = sysRoleMapper.selectOne(
                 new LambdaQueryWrapper<SysRole>().eq(SysRole::getRoleCode, "admin"));
         if (adminRole == null) {
@@ -119,7 +127,7 @@ public class AuthInitializer implements CommandLineRunner {
                 adminRole.setRoleCode("admin");
                 adminRole.setRoleName("系统管理员");
                 adminRole.setDescription("拥有所有权限");
-                adminRole.setMenuPermissions("[]");
+                adminRole.setMenuPermissions("[\"*\"]");
                 adminRole.setCreatedAt(new Date());
                 sysRoleMapper.insert(adminRole);
                 log.info("默认角色已创建: admin");
