@@ -19,21 +19,12 @@ import org.apache.poi.xwpf.usermodel.XWPFStyles;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTColor;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHyperlink;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTMarkupRange;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTText;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTUnderline;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STUnderline;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -62,17 +53,27 @@ import java.util.regex.Pattern;
  *       前端的 {@code mdToHtml} 专门有 {@code looksLikeHtml(src) return src} 分支照顾它）。
  *       本类现按**同一套判据**（见 {@link #looksLikeHtml}）分流：HTML 先归一成 markdown
  *       （{@link #htmlToMarkdownLike}）再统一渲染 ⇒ 标签不再泄漏成文字。</li>
- *   <li><b>要"下载下来就有目录"</b> —— 不再插 TOC 域 + 占位说明（那需要用户按 F9）。
- *       改为生成 <b>静态目录</b>：文档开头列出全部章节（按层级缩进），
- *       每条带**内部超链接**（指向正文标题处的书签，点击可跳转）。</li>
+ *   <li><b>目录：正文顶部不放目录段落，也不插 TOC 域</b>（TOC 域打开时是空的、要按 F9，
+ *       客户明确否掉）。目录交给 <b>Word 左侧「导航窗格」</b>（视图 → 导航窗格 / {@code Ctrl+F}），
+ *       它的**唯一依据是标题的「大纲级别」** ⇒ 见 {@link #applyOutlineLevel}。</li>
  *   <li><b>排版规范化</b> —— 正文首行缩进 2 字符、1.5 倍行距、段后 6pt、表格字号与前后间距、
  *       中文字体显式指定（正文宋体 / 标题黑体）。</li>
- *   <li><b>溯源表格不导出</b> —— {@code analysisType=TRACE_TABLE} / {@code fillType=TABLE} 整块跳过。
- *       （页面上它本来也不是表格内容，而是一个"溯源入口"按钮，点开才弹窗。）</li>
+ *   <li><b>溯源表格不导出</b> —— 判据是 {@code analysisType=TRACE_TABLE}（页面上它不是表格内容，
+ *       而是一个"溯源入口"按钮，点开才弹窗）。
+ *       ⚠️ <b>不要拿 {@code fillType=TABLE} 当判据</b> —— 那是**普通数据表格**，
+ *       客户明确要求导出（2026-09-23 曾因这个误判把数据表格整类跳掉，端到端探针才抓出来）。</li>
  * </ol>
  *
  * <p><b>导出规则汇总</b>：只写正文；跳过 ① 溯源表格 ② 溯源链接块（SOURCE_LINK，交互按钮）
  * ③ 已标记 INVALID 的风险块 ④ 空内容且 {@code emptyStrategy=HIDE} 的块。</p>
+ *
+ * <p>🔴 <b>导航窗格无法由文档强制打开</b>（2026-09-23 查证，微软官方定论）：显示状态属
+ * Word **客户端**设置、不随文档走；唯一强制手段是 VBA 宏，而收件人必须允许宏运行 ⇒ 不采用。
+ * ✅ 但它是<b>"粘性"</b>的：用户按一次 {@code Ctrl+F} 后，其后打开任何文档都会自动带
+ * ⇒ 以**操作说明**交付即可，文档里不塞提示文字（客户明确不要）。</p>
+ * <p>🔴 <b>{@code new XWPFDocument()} 生成的包不含 {@code styles.xml}</b> ⇒ 必须先用
+ * {@link #ensureStyles} 补样式表，否则 {@code setStyle("HeadingN")} 全是**悬空引用**
+ * （详见 {@link #ensureStyles} 的注释）。</p>
  *
  * <p>⚠️ 扩展名是 {@code .docx}（POI 产出 OOXML）：写成 {@code .doc} 会触发 Word「格式与扩展名不符」告警。</p>
  * <p>⚠️ 不引第三方 markdown/HTML 库：本工程构建走离线（{@code mvn -o}）拉不到新包 ⇒
@@ -119,10 +120,6 @@ public class ReportWordExportService {
     private static final int INDENT_FIRST_LINE = 480;
     /** 行距倍数 */
     private static final double LINE_SPACING = 1.5;
-    /** 目录超链接配色（与前端主色一致） */
-    private static final String TOC_LINK_COLOR = "1664FF";
-    /** 书签名前缀（避免与文档内其它书签撞名） */
-    private static final String BOOKMARK_PREFIX = "RPT_TOC_";
 
     /**
      * "这段内容是不是 HTML" 的判据
@@ -159,20 +156,6 @@ public class ReportWordExportService {
         }
     }
 
-    /** 目录条目（两遍扫描共用：先收集写目录，再写正文时按同一 anchor 插书签） */
-    private static class TocEntry {
-
-        private final int level;
-        private final String title;
-        private final String anchor;
-
-        TocEntry(int level, String title, String anchor) {
-            this.level = level;
-            this.title = title;
-            this.anchor = anchor;
-        }
-    }
-
     /* ==================== 入口 ==================== */
 
     /**
@@ -202,9 +185,8 @@ public class ReportWordExportService {
             //    否则后面 setStyle("HeadingN") 全是悬空引用
             ensureStyles(doc);
             writeDocumentTitle(doc, detail);
-            // 目录：先收集条目 → 写静态目录 → 再写正文（正文标题按同一 anchor 插书签）
-            List<TocEntry> toc = collectTocEntries(detail);
-            writeTableOfContents(doc, toc);
+            // 🔴 2026-09-23 第三轮：**不再写正文顶部的静态目录**（客户明确要求删）。
+            //    目录改由 Word **左侧导航窗格**提供 —— 靠标题的大纲级别，见 applyOutlineLevel。
             writeBody(doc, detail);
             doc.write(out);
         } catch (Exception e) {
@@ -275,35 +257,6 @@ public class ReportWordExportService {
         }
     }
 
-    /**
-     * 静态目录（客户要求"下载下来就有"）
-     *
-     * <p>🔴 为什么不插 TOC 域：域在 Word 打开时是**空的**，要用户按 F9（或点"更新域"提示）才出现内容 ——
-     * 客户明确说不要那句提示、要打开就有。静态目录没有页码，但**每一条都是内部超链接，点击可跳到对应章节**；
-     * 配合标题的 Heading 样式，Word 的**导航窗格**也能直接用。</p>
-     */
-    private void writeTableOfContents(XWPFDocument doc, List<TocEntry> toc) {
-        XWPFParagraph title = doc.createParagraph();
-        title.setAlignment(ParagraphAlignment.CENTER);
-        title.setSpacingBefore(SPACE_BEFORE_HEADING);
-        title.setSpacingAfter(SPACE_AFTER_HEADING);
-        XWPFRun tr = title.createRun();
-        tr.setText("目    录");
-        applyFont(tr, FONT_HEADING, SIZE_H2);
-        tr.setBold(true);
-
-        for (TocEntry entry : toc) {
-            XWPFParagraph p = doc.createParagraph();
-            // 按层级缩进（一级顶格、二级 +1 字符、三级 +2 字符）
-            p.setIndentationLeft(Math.max(0, entry.level - 1) * 240);
-            p.setSpacingAfter(60);
-            p.setSpacingBetween(1.2, LineSpacingRule.AUTO);
-            addInternalLink(p, entry.title, entry.anchor);
-        }
-        // 目录与正文之间空一行
-        doc.createParagraph();
-    }
-
     /** 正文：报告级块 → 目录树（标题 + 本节点块 + 子节点） */
     private void writeBody(XWPFDocument doc, ReportDetailVO detail) {
         Map<String, ReportRiskItem> riskByBlock = indexRisks(detail.getRisks());
@@ -321,7 +274,7 @@ public class ReportWordExportService {
         }
     }
 
-    /** 递归写目录节点：标题（HeadingN + 书签）+ 本节点块 + 子节点 */
+    /** 递归写目录节点：标题（HeadingN 样式 + 大纲级别）+ 本节点块 + 子节点 */
     private void writeCatalog(XWPFDocument doc, ReportCatalogNode node, Map<String, ReportRiskItem> riskByBlock) {
         if (node == null) {
             return;
@@ -336,17 +289,12 @@ public class ReportWordExportService {
             applyOutlineLevel(h, headingLevel);
             h.setSpacingBefore(SPACE_BEFORE_HEADING);
             h.setSpacingAfter(SPACE_AFTER_HEADING);
-            // ② 书签：目录里的超链接指向这里（顺序必须「bookmarkStart → run → bookmarkEnd」）
-            String anchor = anchorOf(node);
-            CTBookmark start = h.getCTP().addNewBookmarkStart();
-            start.setName(anchor);
-            start.setId(BigInteger.valueOf(nextBookmarkId()));
+            // ② 标题文本（不再插书签 —— 静态目录已删，没人再引用它；
+            //    导航窗格靠的是上一层的大纲级别，与书签无关）
             XWPFRun hr = h.createRun();
             hr.setText(node.getCatalogName());
             applyFont(hr, FONT_HEADING, headingFontSize(headingLevel));
             hr.setBold(true);
-            CTMarkupRange end = h.getCTP().addNewBookmarkEnd();
-            end.setId(start.getId());
         }
         if (!CollectionUtils.isEmpty(node.getBlocks())) {
             for (ReportBlockVO block : node.getBlocks()) {
@@ -459,9 +407,13 @@ public class ReportWordExportService {
         if (block == null) {
             return;
         }
-        // ① 溯源表格 / 表格类块：页面上是"溯源入口"按钮，不是正文表格 ⇒ 不导出
-        if (ReportConstants.ANALYSIS_TRACE_TABLE.equalsIgnoreCase(block.getAnalysisType())
-                || ReportConstants.FILL_TABLE.equalsIgnoreCase(block.getFillType())) {
+        // ① 溯源表格：页面上是"溯源入口"按钮，不是正文表格 ⇒ 不导出
+        //    🔴 判据**只看 analysisType=TRACE_TABLE**（溯源表格的 fillType 恰好也是 TABLE）。
+        //    ⛔ 绝不能把 fillType=TABLE 也当判据 —— 那是**普通数据表格**：
+        //    `AnalysisMaterialBuilder` 明确把 TABLE 块当正常材料纳入分析、`AgentReportContentProvider`
+        //    也判它 analysable ⇒ 跳掉它等于直接违反客户"导出要含数据表格"。
+        //    （2026-09-23 实锤：本轮就是这么误伤的，端到端探针跑出 TABLE_COUNT=0 才发现。）
+        if (ReportConstants.ANALYSIS_TRACE_TABLE.equalsIgnoreCase(block.getAnalysisType())) {
             return;
         }
         // ② 溯源链接（SOURCE_LINK）：交互按钮
@@ -729,76 +681,6 @@ public class ReportWordExportService {
                 r.setText(parts[i]);
             }
         }
-    }
-
-    /* ==================== 目录 / 书签 / 超链接 ==================== */
-
-    /** 收集目录条目（与 {@link #anchorOf} 同一套 anchor，保证目录链接能跳到正文标题） */
-    private List<TocEntry> collectTocEntries(ReportDetailVO detail) {
-        List<TocEntry> list = new ArrayList<>();
-        if (!CollectionUtils.isEmpty(detail.getCatalogs())) {
-            for (ReportCatalogNode node : detail.getCatalogs()) {
-                collectTocEntries(node, list);
-            }
-        }
-        return list;
-    }
-
-    private void collectTocEntries(ReportCatalogNode node, List<TocEntry> out) {
-        if (node == null) {
-            return;
-        }
-        if (StringUtils.hasText(node.getCatalogName())) {
-            int level = node.getCatalogLevel() == null ? 1 : node.getCatalogLevel();
-            out.add(new TocEntry(level, node.getCatalogName(), anchorOf(node)));
-        }
-        if (!CollectionUtils.isEmpty(node.getChildren())) {
-            for (ReportCatalogNode child : node.getChildren()) {
-                collectTocEntries(child, out);
-            }
-        }
-    }
-
-    /**
-     * 书签名 = 前缀 + 目录编码
-     *
-     * <p>⚠️ 书签名只允许字母/数字/下划线（且不能以数字开头）⇒ 非法字符一律换成下划线，
-     * 编码为空时退化成按序号生成（保证唯一）。</p>
-     */
-    private String anchorOf(ReportCatalogNode node) {
-        String code = node.getCatalogCode();
-        String safe = StringUtils.hasText(code) ? code.replaceAll("[^A-Za-z0-9_]", "_") : null;
-        if (!StringUtils.hasText(safe)) {
-            // ⚠️ 不用 hashCode 兜底：Integer.MIN_VALUE 取绝对值仍是负数 ⇒ 书签名里会带 '-' 非法字符
-            safe = "N" + nextBookmarkId();
-        }
-        return BOOKMARK_PREFIX + safe;
-    }
-
-    private int bookmarkSeq = 1000;
-
-    private int nextBookmarkId() {
-        return ++bookmarkSeq;
-    }
-
-    /**
-     * 往段落里加一个**内部超链接**（指向文档内书签）
-     *
-     * <p>POI 没有高层 API ⇒ 直接操作 XML：{@code w:hyperlink w:anchor="书签名"} 里放 run +
-     * 颜色/下划线（模拟 Word 超链接外观）。</p>
-     */
-    private void addInternalLink(XWPFParagraph paragraph, String text, String anchor) {
-        CTP ctp = paragraph.getCTP();
-        CTHyperlink link = ctp.addNewHyperlink();
-        link.setAnchor(anchor);
-        CTR ctr = link.addNewR();
-        CTText t = ctr.addNewT();
-        t.setStringValue(text);
-        CTRPr rPr = ctr.addNewRPr();
-        CTColor color = rPr.addNewColor();
-        color.setVal(TOC_LINK_COLOR);
-        CTUnderline underline = rPr.addNewU();
-        underline.setVal(STUnderline.SINGLE);
     }
 
     /* ==================== 工具 ==================== */
