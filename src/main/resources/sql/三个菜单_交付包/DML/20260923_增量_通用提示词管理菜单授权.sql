@@ -27,22 +27,35 @@
 -- 【语法口径】全程只用「PG / MySQL 兼容模式交集语法」：
 --   CASE WHEN / POSITION(str IN str) / REPLACE / IS NULL —— 两库均可执行。
 --   ⛔ 不用 || （行内 M 模式下是逻辑或）、不用 REGEXP、不用 MODIFY。
+--
+-- 🔴 【2026-09-23 踩坑 · 首次执行报 42601 syntax error at or near ","】
+--   `POSITION` **只认 `POSITION(子串 IN 源串)` 一种写法**，逗号形式
+--   `POSITION(子串, 源串)` 在 PG 的语法层直接不成立 ⇒ 报的是
+--   `syntax error at or near ","`（**不是**"函数不存在"，很容易误判成别的问题）。
+--   · openGauss(PG 模式)：❌ 逗号形式
+--   · GaussDB(MySQL 兼容 M 模式)：同样建议只用 IN 形式
+--   ⇒ 一律写 `POSITION(x IN y)`；要取函数式写法请用 `INSTR`（MySQL 系）/ `STRPOS`（PG），
+--     那两个**不通用**，本工程禁用。
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
 -- ① 授权：给 admin 追加 "/prompt-config"
 --
---    四条分支的意义（按序命中）：
+--    五条分支的意义（按序命中）：
 --      1) 已含该键            → 原样返回（**幂等**）
---      2) NULL 或 "[]"（无引号即空数组）→ 直接赋值成只含该键的数组（避免拼出 [,"/x"] 这种非法 JSON）
---      3) 非空数组            → 在末尾 `]` 前追加（菜单路径不含 `]`，REPLACE 不会误伤）
---      4) 其它意外形态        → 兜底赋成只含该键的数组
+--      2) 已含裸 "*"          → 原样返回（菜单全通，本来就能看到；不为它追加脏键）
+--      3) NULL 或 "[]"（无引号即空数组）→ 直接赋值成只含该键的数组（避免拼出 [,"/x"] 这种非法 JSON）
+--      4) 非空数组            → 在末尾 `]` 前追加（菜单路径不含 `]`，REPLACE 不会误伤）
+--      5) 其它意外形态        → 兜底赋成只含该键的数组
 -- ---------------------------------------------------------------------
 UPDATE sys_role
    SET menu_permissions = CASE
          WHEN POSITION('"/prompt-config"' IN menu_permissions) > 0
               THEN menu_permissions
-         WHEN menu_permissions IS NULL OR POSITION('"', menu_permissions) = 0
+         -- 已含裸 "*"（菜单全通）⇒ 本来就能看到该菜单，不加也不影响，避免把数据搞脏
+         WHEN POSITION('"*"' IN menu_permissions) > 0
+              THEN menu_permissions
+         WHEN menu_permissions IS NULL OR POSITION('"' IN menu_permissions) = 0
               THEN '["/prompt-config"]'
          WHEN POSITION(']' IN menu_permissions) > 0
               THEN REPLACE(menu_permissions, ']', ',"/prompt-config"]')
@@ -67,4 +80,4 @@ SELECT role_code, role_name, menu_permissions
 --    SET menu_permissions = REPLACE(menu_permissions, ']', ',"/prompt-config"]')
 --  WHERE role_code = 'tec_admin'
 --    AND POSITION('"/prompt-config"' IN menu_permissions) = 0
---    AND POSITION('"', menu_permissions) > 0;
+--    AND POSITION('"' IN menu_permissions) > 0;
