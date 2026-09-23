@@ -9,61 +9,74 @@ import com.suzhou.bank.service.report.model.ReportDetailVO;
 import com.suzhou.bank.service.report.model.ReportRiskItem;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.xwpf.usermodel.LineSpacingRule;
+import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFStyle;
+import org.apache.poi.xwpf.usermodel.XWPFStyles;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
-import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTColor;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHyperlink;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTMarkupRange;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSimpleField;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTText;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTUnderline;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STUnderline;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigInteger;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 报告 Word 导出（真 .docx，POI/XWPF 生成）—— 2026-09-23 测试反馈 #8
  *
- * <p><b>为什么改成后端生成</b>：原实现是前端拼一段 HTML 塞进
- * {@code Blob('application/msword')} 的伪 doc —— 能打开，但**目录与多级标题层级**保不住
- * （那是浏览器导出 doc 的固有限制），而客户明确要求"目录正常、各个层级标题正常"。</p>
+ * <p><b>为什么后端生成</b>：原实现是前端拼 HTML 塞 {@code Blob('application/msword')} 的伪 doc，
+ * 保不住目录与多级标题层级，而客户要求"目录正常、各个层级标题正常"。</p>
  *
- * <p><b>本实现的口径（对齐客户 7 条细则）</b>：</p>
+ * <p><b>2026-09-23 第二轮修订（客户实测 4 条反馈）</b>：</p>
  * <ol>
- *   <li>浏览器自动触发下载 —— 由接口 {@code Content-Disposition: attachment} 实现；</li>
- *   <li>文件名 {@code {公司名称}-日常贷后检查报告-yyyyMMdd.docx}（见 {@link #buildFileName}）；</li>
- *   <li>所见即所得：只导出**当前版本实际有内容的章节**（标题 + 正文 + 数据表格），结构取自
- *       {@link ReportService#detail(String)} 的目录树，与页面同源；</li>
- *   <li>已采纳段落保留修改后内容 —— 正文内容读的就是实例表（人工改过就是改后的，天然满足）；</li>
- *   <li>已标记无效的段落不出现 —— {@code analysisType=RULE} 且对应风险 {@code status=INVALID} 的块整块跳过；</li>
- *   <li>不含导航栏 / 工具栏 / 侧边面板 / 操作按钮 / 溯源链接 —— 只写正文；{@code fillType=SOURCE_LINK}
- *       的块（"溯源链接"按钮）直接跳过；表格溯源入口本就是前端交互，md 表格里没有按钮；</li>
- *   <li>普通 Word 样式：一级/二级/三级目录用 Word 内置 {@code Heading1/2/3} 样式
- *       + 文档开头插**真 TOC 域**（域指令见 {@link #writeTocField}），
- *       在 Word 里更新域即得带页码的目录。</li>
+ *   <li>🔴 <b>正文里的 {@code <p>} 字面量</b> —— 根因：内容块 {@code content} 是
+ *       <b>markdown 与 HTML 两种形态混存</b>（前端就地编辑保存的是 innerHTML；
+ *       前端的 {@code mdToHtml} 专门有 {@code looksLikeHtml(src) return src} 分支照顾它）。
+ *       本类现按**同一套判据**（见 {@link #looksLikeHtml}）分流：HTML 先归一成 markdown
+ *       （{@link #htmlToMarkdownLike}）再统一渲染 ⇒ 标签不再泄漏成文字。</li>
+ *   <li><b>要"下载下来就有目录"</b> —— 不再插 TOC 域 + 占位说明（那需要用户按 F9）。
+ *       改为生成 <b>静态目录</b>：文档开头列出全部章节（按层级缩进），
+ *       每条带**内部超链接**（指向正文标题处的书签，点击可跳转）。</li>
+ *   <li><b>排版规范化</b> —— 正文首行缩进 2 字符、1.5 倍行距、段后 6pt、表格字号与前后间距、
+ *       中文字体显式指定（正文宋体 / 标题黑体）。</li>
+ *   <li><b>溯源表格不导出</b> —— {@code analysisType=TRACE_TABLE} / {@code fillType=TABLE} 整块跳过。
+ *       （页面上它本来也不是表格内容，而是一个"溯源入口"按钮，点开才弹窗。）</li>
  * </ol>
  *
- * <p>🔴 <b>两件必须知道的事</b>：</p>
- * <ul>
- *   <li><b>扩展名是 {@code .docx} 不是 {@code .doc}</b>：POI 产出的是 OOXML（doсx）格式，
- *       若把文件名写成 {@code .doc}，Word 会提示"文件格式与扩展名不符"。客户需求里写的是
- *       {@code .doc}，实际按 {@code .docx} 给（内容仍是 Word 可正常打开的兼容文档）。</li>
- *   <li><b>TOC 是"域"</b>：Word 打开时目录处会显示提示文字（本实现在域内放了占位说明），
- *       按 {@code Ctrl+A → F9}（或右键→更新域）即生成带页码的完整目录 —— 这是 Word 域机制
- *       的固有行为，不是导出出错。</li>
- * </ul>
+ * <p><b>导出规则汇总</b>：只写正文；跳过 ① 溯源表格 ② 溯源链接块（SOURCE_LINK，交互按钮）
+ * ③ 已标记 INVALID 的风险块 ④ 空内容且 {@code emptyStrategy=HIDE} 的块。</p>
  *
- * <p>⚠️ <b>不引第三方 markdown 库</b>：本工程构建走离线（{@code mvn -o}），新增依赖拉不到包；
- * 且正文的 markdown 形态是**受控的**（由 {@code TraceTableBuilder} / 提示词产出：
- * 段落、表格、少量列表与加粗），故用 {@link #writeMarkdown} 做轻量解析即可。</p>
+ * <p>⚠️ 扩展名是 {@code .docx}（POI 产出 OOXML）：写成 {@code .doc} 会触发 Word「格式与扩展名不符」告警。</p>
+ * <p>⚠️ 不引第三方 markdown/HTML 库：本工程构建走离线（{@code mvn -o}）拉不到新包 ⇒
+ * 用受控的轻量解析（内容形态是可控的：段落/表格/列表/少量行内标记）。</p>
  *
  * @author 曹陆宇
  * @since 1.4.0
@@ -78,11 +91,53 @@ public class ReportWordExportService {
     /**
      * 导出文件落对象存储（行内 = 内容平台；外网 = MOCK）
      *
-     * <p>🔴 这是另一个"两版实现不同"的接缝，与
-     * {@link com.suzhou.bank.service.report.gateway.AfterLoanRiskApplyGateway} 同一套路子：
-     * 本类只认接口，两版代码逐字相同。**best-effort** —— 存不上去不影响用户下载。</p>
+     * <p>🔴 与 {@code AfterLoanRiskApplyGateway} 同一套接缝：本类只认接口、两版代码逐字相同。
+     * **best-effort** —— 存不上去不影响用户下载。</p>
      */
     private final ReportExportStorageGateway exportStorageGateway;
+
+    /* ==================== 版式参数（要调外观改这里） ==================== */
+
+    /** 正文字体（中文用 eastAsia 显式指定，否则 Word 可能回退成别的字体） */
+    private static final String FONT_BODY = "宋体";
+    /** 标题字体 */
+    private static final String FONT_HEADING = "黑体";
+    /** 正文字号（pt）：小四 */
+    private static final int SIZE_BODY = 12;
+    /** 表格字号（pt） */
+    private static final int SIZE_TABLE = 10;
+    private static final int SIZE_H1 = 16;
+    private static final int SIZE_H2 = 14;
+    private static final int SIZE_H3 = 12;
+    private static final int SIZE_DOC_TITLE = 20;
+    /** 正文段后间距（twips，120 = 6pt） */
+    private static final int SPACE_AFTER_BODY = 120;
+    /** 标题段前/段后（twips） */
+    private static final int SPACE_BEFORE_HEADING = 240;
+    private static final int SPACE_AFTER_HEADING = 120;
+    /** 首行缩进 2 字符：2 × 12pt × 20 twips/pt = 480 */
+    private static final int INDENT_FIRST_LINE = 480;
+    /** 行距倍数 */
+    private static final double LINE_SPACING = 1.5;
+    /** 目录超链接配色（与前端主色一致） */
+    private static final String TOC_LINK_COLOR = "1664FF";
+    /** 书签名前缀（避免与文档内其它书签撞名） */
+    private static final String BOOKMARK_PREFIX = "RPT_TOC_";
+
+    /**
+     * "这段内容是不是 HTML" 的判据
+     *
+     * <p>🔴 与前端 {@code useReportInstance.ts#looksLikeHtml} 的**正则逐字对应**，
+     * 改一处必须对看 —— 两边判据不一致会出现"页面看着对、导出却带标签"的裂缝。</p>
+     */
+    private static final Pattern HTML_LIKE = Pattern.compile(
+            "<(p|div|ol|ul|li|table|thead|tbody|tr|td|th|h[1-6]|br|strong|em|span)\\b[^>]*>",
+            Pattern.CASE_INSENSITIVE);
+
+    /** 任意 HTML 标签 */
+    private static final Pattern ANY_TAG = Pattern.compile("<[^>]+>");
+
+    /* ==================== 导出结果 ==================== */
 
     /** 导出结果（字节 + 建议文件名，控制器据此设 header） */
     public static class ExportResult {
@@ -104,12 +159,27 @@ public class ReportWordExportService {
         }
     }
 
+    /** 目录条目（两遍扫描共用：先收集写目录，再写正文时按同一 anchor 插书签） */
+    private static class TocEntry {
+
+        private final int level;
+        private final String title;
+        private final String anchor;
+
+        TocEntry(int level, String title, String anchor) {
+            this.level = level;
+            this.title = title;
+            this.anchor = anchor;
+        }
+    }
+
+    /* ==================== 入口 ==================== */
+
     /**
      * 生成 .docx
      *
-     * @param reportNo 报告编号
-     * @return 字节 + 建议文件名
-     * @throws IllegalStateException 报告不存在 / 生成失败（由控制器转成 4xx/5xx）
+     * @param reportNo   报告编号
+     * @param operatorNo 操作人账号（同步对象存储时记录"谁导出的"）
      */
     public ExportResult export(String reportNo, String operatorNo) {
         if (!StringUtils.hasText(reportNo)) {
@@ -119,7 +189,6 @@ public class ReportWordExportService {
         try {
             detail = reportService.detail(reportNo);
         } catch (RuntimeException e) {
-            // detail() 在报告不存在时会抛业务异常 —— 统一换成导出侧的可读文案
             throw new IllegalStateException("读取报告详情失败：" + e.getMessage(), e);
         }
         if (detail == null) {
@@ -129,8 +198,13 @@ public class ReportWordExportService {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         // try-with-resources：XWPFDocument 关闭时会把内容写进 out
         try (XWPFDocument doc = new XWPFDocument()) {
-            writeTitle(doc, detail);
-            writeTocField(doc);
+            // 🔴 必须先补样式表：POI 空模板不含 styles.xml（见 ensureStyles），
+            //    否则后面 setStyle("HeadingN") 全是悬空引用
+            ensureStyles(doc);
+            writeDocumentTitle(doc, detail);
+            // 目录：先收集条目 → 写静态目录 → 再写正文（正文标题按同一 anchor 插书签）
+            List<TocEntry> toc = collectTocEntries(detail);
+            writeTableOfContents(doc, toc);
             writeBody(doc, detail);
             doc.write(out);
         } catch (Exception e) {
@@ -140,52 +214,15 @@ public class ReportWordExportService {
 
         byte[] bytes = out.toByteArray();
         String fileName = buildFileName(detail);
-        // 落对象存储（行内 = 内容平台）——best-effort，失败只告警，⛔ 不影响用户下载
         storeToObjectStorage(fileName, bytes, detail, operatorNo);
         return new ExportResult(bytes, fileName);
     }
 
     /**
-     * 把导出文件同步到对象存储（行内 = 内容平台）
-     *
-     * <p>🔴 <b>为什么放在"生成之后、返回之前"且整体 try-catch</b>：</p>
-     * <ul>
-     *   <li>文件已经生成好了 —— 上传是我方的额外动作，**不能因为平台抖动让用户下载失败**；</li>
-     *   <li>但也不能静默：失败要打 ERROR 并带上 reportNo/文件名，便于事后补传。</li>
-     * </ul>
-     *
-     * <p>⚠️ 目前是**同步**调用：若行内内容平台上传耗时明显（大文件/慢链路），
-     * 建议把本方法体改成 {@code @Async} 或投递到线程池 —— 那时记得同时把
-     * "上传失败" 的可见性补上（例如落一张待补传表），否则就退化成静默失效了。</p>
-     */
-    private void storeToObjectStorage(String fileName, byte[] bytes, ReportDetailVO detail, String operatorNo) {
-        try {
-            ReportExportStorageGateway.ExportFile file = new ReportExportStorageGateway.ExportFile(
-                    fileName, bytes, detail.getReportNo(), detail.getCheckTaskNo(),
-                    detail.getCustomerName(), operatorNo,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-            ReportExportStorageGateway.StoreResult result = exportStorageGateway.store(file);
-            if (result != null && result.isStored()) {
-                log.info("导出文件已同步到对象存储：reportNo={} fileName={} objectKey={}",
-                        detail.getReportNo(), fileName, result.getObjectKey());
-            } else {
-                // 外网 MOCK、或行内上传失败 —— 必须留下可见痕迹
-                log.warn("导出文件未同步到对象存储：reportNo={} fileName={} size={}B 说明={}",
-                        detail.getReportNo(), fileName, bytes.length,
-                        result == null ? "网关返回 null" : result.getMessage());
-            }
-        } catch (Exception e) {
-            log.error("导出文件同步对象存储异常（已忽略，用户下载不受影响）：reportNo={} fileName={} 原因={}",
-                    detail.getReportNo(), fileName, e.getMessage(), e);
-        }
-    }
-
-    /**
      * 文件名：{@code {公司名称}-日常贷后检查报告-yyyyMMdd.docx}
      *
-     * <p>用**导出当天**的日期（客户给的是「yyyyMMdd」未指明基准；取下载日最符合
-     * "这是今天导出的那份报告"的直觉）。公司名称里的文件名非法字符（{@code \ / : * ? " < > |}）
-     * 一律替换成下划线 —— 否则浏览器会丢掉整个文件名、或截断。</p>
+     * <p>用**导出当天**日期；公司名称里的文件名非法字符（{@code \ / : * ? " < > |} 与空白）
+     * 一律替换成下划线，否则浏览器会丢文件名或截断。</p>
      */
     public String buildFileName(ReportDetailVO detail) {
         String company = detail == null ? null : detail.getCustomerName();
@@ -199,58 +236,83 @@ public class ReportWordExportService {
 
     /* ==================== 文档骨架 ==================== */
 
-    /** 报告头：大标题（报告标题）+ 客户名称一行 */
-    private void writeTitle(XWPFDocument doc, ReportDetailVO detail) {
+    /** 报告头：标题（居中加粗）+ 客户/编号/日期三行小字 */
+    private void writeDocumentTitle(XWPFDocument doc, ReportDetailVO detail) {
         String title = StringUtils.hasText(detail.getReportTitle())
                 ? detail.getReportTitle() : "日常贷后检查报告";
         XWPFParagraph p = doc.createParagraph();
-        p.setStyle("Title");
+        p.setAlignment(ParagraphAlignment.CENTER);
+        p.setSpacingAfter(120);
         XWPFRun r = p.createRun();
         r.setText(title);
+        applyFont(r, FONT_HEADING, SIZE_DOC_TITLE);
         r.setBold(true);
-        r.setFontSize(22);
 
+        // 客户名称 / 报告编号 / 生成时间 —— 客户经理拿到纸质件也能对上号
+        StringBuilder meta = new StringBuilder();
         if (StringUtils.hasText(detail.getCustomerName())) {
-            XWPFParagraph sub = doc.createParagraph();
-            XWPFRun sr = sub.createRun();
-            sr.setText("客户名称：" + detail.getCustomerName());
-            sr.setFontSize(11);
+            meta.append("客户名称：").append(detail.getCustomerName());
+        }
+        if (StringUtils.hasText(detail.getReportNo())) {
+            if (meta.length() > 0) {
+                meta.append("    ");
+            }
+            meta.append("报告编号：").append(detail.getReportNo());
+        }
+        if (StringUtils.hasText(detail.getCheckTaskNo())) {
+            if (meta.length() > 0) {
+                meta.append("    ");
+            }
+            meta.append("日检流水号：").append(detail.getCheckTaskNo());
+        }
+        if (meta.length() > 0) {
+            XWPFParagraph mp = doc.createParagraph();
+            mp.setAlignment(ParagraphAlignment.CENTER);
+            mp.setSpacingAfter(60);
+            XWPFRun mr = mp.createRun();
+            mr.setText(meta.toString());
+            applyFont(mr, FONT_BODY, 10);
         }
     }
 
     /**
-     * 插入真 TOC 域
+     * 静态目录（客户要求"下载下来就有"）
      *
-     * <p>域指令 = {@code TOC} + 开关：取标题级别 1~3、条目带超链接、隐藏制表位页码、改用大纲级别。
-     * 域里放了一句占位说明，用户在 Word 里更新域后会被真实目录替换。</p>
-     *
-     * <p>⚠️ 本注释刻意<b>不写那两个反斜杠开关</b>：Java 源码里 {@code 反斜杠+u} 会被当作 Unicode 转义
-     * 预处理（**注释里也生效**）⇒ 写成 {@code 反斜杠u} 直接编译报「非法的 Unicode 转义」。
-     * 真正的域指令在下面的字符串常量里（那里用的是双反斜杠转义，安全）。</p>
+     * <p>🔴 为什么不插 TOC 域：域在 Word 打开时是**空的**，要用户按 F9（或点"更新域"提示）才出现内容 ——
+     * 客户明确说不要那句提示、要打开就有。静态目录没有页码，但**每一条都是内部超链接，点击可跳到对应章节**；
+     * 配合标题的 Heading 样式，Word 的**导航窗格**也能直接用。</p>
      */
-    private void writeTocField(XWPFDocument doc) {
-        XWPFParagraph p = doc.createParagraph();
-        CTP ctp = p.getCTP();
-        CTSimpleField field = ctp.addNewFldSimple();
-        field.setInstr("TOC \\o \"1-3\" \\h \\z \\u");
-        XWPFRun hint = p.createRun();
-        hint.setText("（目录：在 Word 中按 Ctrl+A 后 F9、或右键「更新域」即可生成带页码的目录）");
-        hint.setFontSize(9);
-        hint.setItalic(true);
+    private void writeTableOfContents(XWPFDocument doc, List<TocEntry> toc) {
+        XWPFParagraph title = doc.createParagraph();
+        title.setAlignment(ParagraphAlignment.CENTER);
+        title.setSpacingBefore(SPACE_BEFORE_HEADING);
+        title.setSpacingAfter(SPACE_AFTER_HEADING);
+        XWPFRun tr = title.createRun();
+        tr.setText("目    录");
+        applyFont(tr, FONT_HEADING, SIZE_H2);
+        tr.setBold(true);
+
+        for (TocEntry entry : toc) {
+            XWPFParagraph p = doc.createParagraph();
+            // 按层级缩进（一级顶格、二级 +1 字符、三级 +2 字符）
+            p.setIndentationLeft(Math.max(0, entry.level - 1) * 240);
+            p.setSpacingAfter(60);
+            p.setSpacingBetween(1.2, LineSpacingRule.AUTO);
+            addInternalLink(p, entry.title, entry.anchor);
+        }
+        // 目录与正文之间空一行
+        doc.createParagraph();
     }
 
-    /** 正文：按目录树顺序（一级→其下块→二级→…）写；同时保证"当前可见章节"才出现 */
+    /** 正文：报告级块 → 目录树（标题 + 本节点块 + 子节点） */
     private void writeBody(XWPFDocument doc, ReportDetailVO detail) {
-        // 无效风险的块编号集合：这些块整块不导出（客户细则 5）
         Map<String, ReportRiskItem> riskByBlock = indexRisks(detail.getRisks());
 
-        // 报告级内容块（catalogCode 为空，如报告头大标题）——正文最上方
         if (!CollectionUtils.isEmpty(detail.getHeadBlocks())) {
             for (ReportBlockVO block : detail.getHeadBlocks()) {
-                writeBlock(doc, block, riskByBlock, 1);
+                writeBlock(doc, block, riskByBlock);
             }
         }
-
         if (CollectionUtils.isEmpty(detail.getCatalogs())) {
             return;
         }
@@ -259,28 +321,36 @@ public class ReportWordExportService {
         }
     }
 
-    /** 递归写目录节点：标题（HeadingN）+ 本节点内容块 + 子节点 */
+    /** 递归写目录节点：标题（HeadingN + 书签）+ 本节点块 + 子节点 */
     private void writeCatalog(XWPFDocument doc, ReportCatalogNode node, Map<String, ReportRiskItem> riskByBlock) {
         if (node == null) {
             return;
         }
         int level = node.getCatalogLevel() == null ? 1 : node.getCatalogLevel();
-        // Word 内置标题样式只有 1~9；目录最深三级，直接映射
         int headingLevel = Math.max(1, Math.min(9, level));
         if (StringUtils.hasText(node.getCatalogName())) {
             XWPFParagraph h = doc.createParagraph();
-            // ① 套 Word 内置标题样式 —— TOC 域就是靠它抓目录项的（必做）
+            // ① 套 Word 内置标题样式（负责字体/字号/加粗这些"外观"）
             h.setStyle("Heading" + headingLevel);
+            // ①.5 🔴 显式写「大纲级别」—— Word **左侧导航窗格**唯一认的就是它（见 applyOutlineLevel）
+            applyOutlineLevel(h, headingLevel);
+            h.setSpacingBefore(SPACE_BEFORE_HEADING);
+            h.setSpacingAfter(SPACE_AFTER_HEADING);
+            // ② 书签：目录里的超链接指向这里（顺序必须「bookmarkStart → run → bookmarkEnd」）
+            String anchor = anchorOf(node);
+            CTBookmark start = h.getCTP().addNewBookmarkStart();
+            start.setName(anchor);
+            start.setId(BigInteger.valueOf(nextBookmarkId()));
             XWPFRun hr = h.createRun();
             hr.setText(node.getCatalogName());
-            // ② 再叠一层直接格式做兜底：万一某台机器的 Word 模板里没有内置 Heading 样式
-            //    （样式缺失时 setStyle 静默不生效），层级也还能从字号/加粗上分出来。
+            applyFont(hr, FONT_HEADING, headingFontSize(headingLevel));
             hr.setBold(true);
-            hr.setFontSize(headingFontSize(headingLevel));
+            CTMarkupRange end = h.getCTP().addNewBookmarkEnd();
+            end.setId(start.getId());
         }
         if (!CollectionUtils.isEmpty(node.getBlocks())) {
             for (ReportBlockVO block : node.getBlocks()) {
-                writeBlock(doc, block, riskByBlock, headingLevel);
+                writeBlock(doc, block, riskByBlock);
             }
         }
         if (!CollectionUtils.isEmpty(node.getChildren())) {
@@ -291,81 +361,231 @@ public class ReportWordExportService {
     }
 
     /**
+     * 补齐文档样式表：{@code Normal} + {@code Heading1~9}
+     *
+     * <p>🔴 <b>为什么必须自己写</b>（2026-09-23 拆包实测发现）：POI 的 {@code new XWPFDocument()}
+     * 生成的是**极简 OOXML 包，不带 styles.xml**（保存时只写 {@code document.xml} + {@code settings.xml}）。
+     * 于是 {@code setStyle("Heading1")} 写出去的 {@code w:pStyle w:val="Heading1"} 是
+     * <b>悬空引用</b> —— 文档里压根没有这个样式定义。后果：
+     * ① Word「样式」窗格 / 大纲视图里看不到标题样式；② 用户以后自己插目录域抓不到标题。</p>
+     *
+     * <p>外观本来就由直接格式（{@link #applyFont}）兜着，所以补样式不是"为了好看"，
+     * 而是**让文档规范**：样式真的存在，Word 的样式库、大纲视图、导航窗格才都正常。</p>
+     *
+     * <p>🔴 顺带把 {@code outlineLvl} 也写进样式定义 —— 段落上那份见 {@link #applyOutlineLevel}，
+     * 两条腿都站住（样式被替换了段落还在，段落漏了样式还在）。</p>
+     *
+     * <p>⚠️ best-effort：补样式失败只记 WARN，**不中断导出**（外观有直接格式兜底）。</p>
+     */
+    private static void ensureStyles(XWPFDocument doc) {
+        try {
+            XWPFStyles styles = doc.createStyles();
+
+            // 正文默认样式（宋体小四）——让 Word 的"默认字体"与导出内容一致
+            CTStyle normal = CTStyle.Factory.newInstance();
+            normal.setType(STStyleType.PARAGRAPH);
+            normal.setStyleId("Normal");
+            normal.addNewName().setVal("Normal");
+            applyStyleFont(normal.addNewRPr(), FONT_BODY, SIZE_BODY, false);
+            styles.addStyle(new XWPFStyle(normal));
+
+            for (int level = 1; level <= 9; level++) {
+                CTStyle ct = CTStyle.Factory.newInstance();
+                ct.setType(STStyleType.PARAGRAPH);
+                ct.setStyleId("Heading" + level);
+                // Word 中文版会把 name 本地化显示成"标题 N"，这里给标准英文名即可
+                ct.addNewName().setVal("heading " + level);
+                ct.addNewBasedOn().setVal("Normal");
+                ct.addNewNext().setVal("Normal");
+                // qFormat：让该样式在 Word 的"样式库"里冒头（空元素即 true）
+                ct.addNewQFormat();
+                // 大纲级别：导航窗格 / 目录域的依据（⚠️ 0 起算）
+                ct.addNewPPr().addNewOutlineLvl().setVal(BigInteger.valueOf(level - 1));
+                applyStyleFont(ct.addNewRPr(), FONT_HEADING, headingFontSize(level), true);
+                styles.addStyle(new XWPFStyle(ct));
+            }
+        } catch (Exception e) {
+            log.warn("补齐 Word 样式表失败（不影响导出，外观由直接格式兜底）：{}", e.getMessage());
+        }
+    }
+
+    /** 给样式定义写字体（与 {@link #applyFont} 同一套参数，避免样式与直接格式打架） */
+    private static void applyStyleFont(CTRPr rPr, String font, int size, boolean bold) {
+        CTFonts fonts = rPr.addNewRFonts();
+        fonts.setAscii(font);
+        fonts.setHAnsi(font);
+        fonts.setEastAsia(font);
+        if (bold) {
+            rPr.addNewB().setVal(true);
+        }
+        // 字号单位是"半磅"：12pt ⇒ 24
+        rPr.addNewSz().setVal(BigInteger.valueOf(size * 2L));
+    }
+
+    /**
+     * 给标题段落显式写「大纲级别」（{@code w:pPr/w:outlineLvl}）—— Word **左侧导航窗格**的依据
+     *
+     * <p>🔴 <b>为什么要单独写</b>（2026-09-23 客户第二轮反馈：要"左侧目录"）：</p>
+     * <p>Word 导航窗格（视图 → 导航窗格，或 {@code Ctrl+F}）**只列出大纲级别为 1~9 的段落**
+     * —— 它不认 {@code HeadingN} 这个名字，只认这个数值属性。内置标题样式通常
+     * "硬编码"了大纲级别，但那**是样式模板给的**：样式一旦被替换、重命名或被 Word
+     * 判为未知样式，导航窗格立刻变空（连标题外观都会一起丢）。</p>
+     * <p>⇒ 直接写进**段落**是最硬的保证：文档在，层级就在，与样式是否被识别无关。</p>
+     *
+     * <p>⚠️ 值**从 0 起算**：1 级标题 ⇒ {@code outlineLvl=0}，2 级 ⇒ {@code 1}，最大 {@code 8}。</p>
+     *
+     * @param p            标题段落
+     * @param headingLevel 1 起的标题层级（与本类 {@code HeadingN} 的 N 同一个值）
+     */
+    private static void applyOutlineLevel(XWPFParagraph p, int headingLevel) {
+        CTPPr pPr = p.getCTP().getPPr();
+        if (pPr == null) {
+            pPr = p.getCTP().addNewPPr();
+        }
+        CTDecimalNumber lvl = pPr.getOutlineLvl();
+        if (lvl == null) {
+            lvl = pPr.addNewOutlineLvl();
+        }
+        lvl.setVal(BigInteger.valueOf(Math.max(0, Math.min(8, headingLevel - 1))));
+    }
+
+    /**
      * 写一个内容块
      *
-     * <p>跳过规则（按客户细则 5 / 6）：</p>
-     * <ul>
-     *   <li>{@code fillType=SOURCE_LINK} —— 那是"溯源链接"按钮，属交互元素，不导出；</li>
-     *   <li>{@code emptyStrategy=HIDE} 且内容为空 —— 页面上本来就看不见，导出也不该出现；</li>
-     *   <li>{@code analysisType=RULE} 且对应风险 {@code status=INVALID} —— 已标记无效的段落不导出。</li>
-     * </ul>
+     * <p>跳过规则：① 溯源表格（客户明确不要）② 溯源链接块 ③ 已标记 INVALID 的风险块
+     * ④ 空内容且策略为 HIDE 的块。</p>
      */
-    private void writeBlock(XWPFDocument doc, ReportBlockVO block, Map<String, ReportRiskItem> riskByBlock,
-                            int catalogLevel) {
+    private void writeBlock(XWPFDocument doc, ReportBlockVO block, Map<String, ReportRiskItem> riskByBlock) {
         if (block == null) {
             return;
         }
+        // ① 溯源表格 / 表格类块：页面上是"溯源入口"按钮，不是正文表格 ⇒ 不导出
+        if (ReportConstants.ANALYSIS_TRACE_TABLE.equalsIgnoreCase(block.getAnalysisType())
+                || ReportConstants.FILL_TABLE.equalsIgnoreCase(block.getFillType())) {
+            return;
+        }
+        // ② 溯源链接（SOURCE_LINK）：交互按钮
         if (ReportConstants.FILL_SOURCE_LINK.equalsIgnoreCase(block.getFillType())) {
             return;
         }
+        // ③ 已标记无效的风险块：整块不出现
         ReportRiskItem risk = riskByBlock.get(block.getBlockCode());
         if (risk != null && ReportConstants.RISK_INVALID.equalsIgnoreCase(risk.getStatus())) {
             return;
         }
         String content = block.getContent();
         boolean blank = !StringUtils.hasText(content);
+        // ④ 空内容 + HIDE：页面上本来就看不见
         if (blank && ReportConstants.EMPTY_HIDE.equalsIgnoreCase(block.getEmptyStrategy())) {
             return;
         }
         if (blank) {
-            // PLACEHOLDER：页面上显示"暂无数据"占位，导出保留同一口径
+            // PLACEHOLDER：页面显示"暂无数据"，导出保持同一口径
             XWPFParagraph p = doc.createParagraph();
             XWPFRun r = p.createRun();
             r.setText("暂无数据");
+            applyFont(r, FONT_BODY, SIZE_BODY);
             r.setItalic(true);
             return;
         }
-        writeMarkdown(doc, content, null);
+        writeRichText(doc, content);
     }
 
-    /* ==================== 轻量 markdown → docx ==================== */
+    /* ==================== 内容渲染（HTML / markdown 双形态） ==================== */
 
     /**
-     * 把一段 markdown 写进文档
+     * 渲染一段内容：**先判形态、再归一、最后统一按 markdown 写**
      *
-     * <p>支持（够用即可，不做完整 md 解析）：表格（{@code |a|b|} + {@code |---|} 分隔行）、
-     * 有序/无序列表、行内加粗 {@code **x**}、普通段落、以及 {@code #} 标题**降级为加粗段落**
-     * （正文标题由结构渲染、不由模型写 —— 若内容里真出现 {@code #}，不并入目录层级，避免打乱目录）。</p>
-     *
-     * @param styleOverride 段落样式覆盖（当前调用方传 null，保留给将来"表格单元格内嵌文本"用）
+     * <p>这条链路是修"导出里出现 {@code <p>} 字面量"的关键 —— 不能再假定内容一定是 markdown。</p>
      */
-    private void writeMarkdown(XWPFDocument doc, String md, String styleOverride) {
+    private void writeRichText(XWPFDocument doc, String content) {
+        String normalized = looksLikeHtml(content) ? htmlToMarkdownLike(content) : content;
+        writeMarkdown(doc, normalized);
+    }
+
+    /** 与前端 `looksLikeHtml` 同款判据（见 {@link #HTML_LIKE}） */
+    static boolean looksLikeHtml(String text) {
+        return StringUtils.hasText(text) && HTML_LIKE.matcher(text).find();
+    }
+
+    /**
+     * HTML 片段 → markdown-ish 纯文本
+     *
+     * <p>只做**受控转换**（内容形态是可控的），目标是"不留标签、结构不丢"：</p>
+     * <ul>
+     *   <li>{@code <p>}/{@code <div>}/{@code </...>} 等块级 → 段落分隔（双换行）</li>
+     *   <li>{@code <br>} → 单换行</li>
+     *   <li>{@code <strong>}/{@code <b>} → {@code **加粗**}；{@code <em>}/{@code <i>} → 去掉（不加斜体，中文斜体观感差）</li>
+     *   <li>{@code <li>} → {@code - }；{@code <ul>}/{@code <ol>} → 段落分隔</li>
+     *   <li>{@code <tr>}/{@code <td>}/{@code <th>} → 竖线表格（与 md 表格同构，下游同一套渲染）</li>
+     *   <li>其余标签一律剥离；常见实体做还原</li>
+     * </ul>
+     */
+    static String htmlToMarkdownLike(String html) {
+        if (!StringUtils.hasText(html)) {
+            return "";
+        }
+        String s = html;
+        // 1) 换行与块级边界
+        s = s.replaceAll("(?i)<br\\s*/?>", "\n");
+        s = s.replaceAll("(?i)</(p|div|h[1-6]|ul|ol|table|thead|tbody)\\s*>", "\n\n");
+        s = s.replaceAll("(?i)<(p|div|h[1-6]|ul|ol|table|thead|tbody)\\b[^>]*>", "");
+        // 2) 行内标记
+        s = s.replaceAll("(?i)</?(strong|b)\\b[^>]*>", "**");
+        s = s.replaceAll("(?i)</?(em|i)\\b[^>]*>", "");
+        // 3) 列表项
+        s = s.replaceAll("(?i)<li\\b[^>]*>", "\n- ");
+        s = s.replaceAll("(?i)</li\\s*>", "\n");
+        // 4) 表格：行边界先换行，单元格之间补竖线，与 md 表格同构
+        s = s.replaceAll("(?i)</?(tr)\\b[^>]*>", "\n");
+        s = s.replaceAll("(?i)</(td|th)\\s*>", " | ");
+        s = s.replaceAll("(?i)<(td|th)\\b[^>]*>", "| ");
+        // 5) 其余标签全部剥离（含 img / a / span 等 —— 正文里不需要）
+        s = ANY_TAG.matcher(s).replaceAll("");
+        // 6) 实体还原
+        s = s.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", "\"").replace("&#39;", "'").replace("&apos;", "'")
+                .replace("&amp;", "&");
+        // 7) 压掉多余空行（3 个以上换行 → 2 个）
+        s = s.replaceAll("\n{3,}", "\n\n");
+        return s.trim();
+    }
+
+    /**
+     * 轻量 markdown → docx
+     *
+     * <p>支持：表格（{@code |a|b|} + {@code |---|} 分隔行）、无序/有序列表、行内 {@code **加粗**}、
+     * 代码围栏、普通段落；{@code #} 标题**降级为加粗段落**（正文标题由结构渲染，不并入目录层级）。</p>
+     */
+    private void writeMarkdown(XWPFDocument doc, String md) {
+        if (!StringUtils.hasText(md)) {
+            return;
+        }
         String[] lines = md.replace("\r\n", "\n").replace("\r", "\n").split("\n", -1);
         int i = 0;
         while (i < lines.length) {
-            String line = lines[i];
-            String trimmed = line.trim();
-
-            // 空行：分段
+            String trimmed = lines[i].trim();
             if (trimmed.isEmpty()) {
                 i++;
                 continue;
             }
-            // 代码围栏：整段按等宽文本输出（内容里偶有 JSON 片段）
+            // 代码围栏：等宽小字输出（内容里偶有 JSON 片段）
             if (trimmed.startsWith("```")) {
                 i++;
                 while (i < lines.length && !lines[i].trim().startsWith("```")) {
                     XWPFParagraph p = doc.createParagraph();
+                    p.setIndentationLeft(240);
+                    p.setSpacingAfter(0);
                     XWPFRun r = p.createRun();
                     r.setFontFamily("Consolas");
                     r.setFontSize(9);
                     r.setText(lines[i]);
                     i++;
                 }
-                i++; // 跳过收尾的 ```
+                i++;
                 continue;
             }
-            // 表格：本行是 |...| 且下一行是分隔行 |---|---|
+            // 表格：本行是 |...| 且下一行是分隔行
             if (isTableRow(trimmed) && i + 1 < lines.length && isTableSeparator(lines[i + 1].trim())) {
                 int end = i + 2;
                 while (end < lines.length && isTableRow(lines[end].trim())) {
@@ -375,38 +595,39 @@ public class ReportWordExportService {
                 i = end;
                 continue;
             }
-            // 标题：降级为加粗段落（见方法注释）
+            // 内容内的 # 标题：降级为加粗正文（不缩进，与正文区分）
             int hashes = countHeadingHashes(trimmed);
             if (hashes > 0) {
                 XWPFParagraph p = doc.createParagraph();
-                if (styleOverride != null) {
-                    p.setStyle(styleOverride);
-                }
+                p.setSpacingBefore(120);
+                p.setSpacingAfter(SPACE_AFTER_BODY);
                 XWPFRun r = p.createRun();
+                applyFont(r, FONT_HEADING, SIZE_BODY);
                 r.setBold(true);
                 writeInline(r, trimmed.substring(Math.min(trimmed.length(), hashes)).trim());
                 i++;
                 continue;
             }
-            // 列表
+            // 无序列表
             if (isBullet(trimmed)) {
                 XWPFParagraph p = doc.createParagraph();
                 p.setIndentationLeft(360);
+                p.setSpacingAfter(60);
+                p.setSpacingBetween(LINE_SPACING, LineSpacingRule.AUTO);
                 XWPFRun r = p.createRun();
+                applyFont(r, FONT_BODY, SIZE_BODY);
                 r.setText("· ");
                 writeInline(r, stripBullet(trimmed));
                 i++;
                 continue;
             }
-            // 普通段落（连续非空行合并成一段，避免每行一个段落）
+            // 普通段落：连续非空行合并成一段（避免"每行一段"的碎排版）
             StringBuilder sb = new StringBuilder();
             int j = i;
             while (j < lines.length) {
                 String t = lines[j].trim();
-                if (t.isEmpty() || t.startsWith("```") || isTableRow(t) || countHeadingHashes(t) > 0) {
-                    break;
-                }
-                if (isBullet(t)) {
+                if (t.isEmpty() || t.startsWith("```") || isTableRow(t) || countHeadingHashes(t) > 0
+                        || isBullet(t)) {
                     break;
                 }
                 if (sb.length() > 0) {
@@ -419,17 +640,23 @@ public class ReportWordExportService {
                 i++;
                 continue;
             }
-            XWPFParagraph p = doc.createParagraph();
-            if (styleOverride != null) {
-                p.setStyle(styleOverride);
-            }
-            XWPFRun r = p.createRun();
-            writeInline(r, sb.toString());
+            writeBodyParagraph(doc, sb.toString());
             i = j;
         }
     }
 
-    /** md 表格 → XWPFTable（第一行表头加粗，列数按分隔行确定） */
+    /** 正文段落：首行缩进 2 字符 + 1.5 倍行距 + 段后 6pt（客户反馈的"格式不规范"就在这里） */
+    private void writeBodyParagraph(XWPFDocument doc, String text) {
+        XWPFParagraph p = doc.createParagraph();
+        p.setIndentationFirstLine(INDENT_FIRST_LINE);
+        p.setSpacingAfter(SPACE_AFTER_BODY);
+        p.setSpacingBetween(LINE_SPACING, LineSpacingRule.AUTO);
+        XWPFRun r = p.createRun();
+        applyFont(r, FONT_BODY, SIZE_BODY);
+        writeInline(r, text);
+    }
+
+    /** md 表格 → XWPFTable（表头加粗 + 浅灰底 + 细边框 + 表格前后留白） */
     private void writeTable(XWPFDocument doc, String[] lines, int start, int end) {
         List<String> rows = new ArrayList<>();
         for (int k = start; k < end; k++) {
@@ -448,6 +675,17 @@ public class ReportWordExportService {
         }
         XWPFTable table = doc.createTable(rows.size(), cols);
         table.setWidth("100%");
+        try {
+            table.setInsideHBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "BFBFBF");
+            table.setInsideVBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "BFBFBF");
+            table.setTopBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "BFBFBF");
+            table.setBottomBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "BFBFBF");
+            table.setLeftBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "BFBFBF");
+            table.setRightBorder(XWPFTable.XWPFBorderType.SINGLE, 4, 0, "BFBFBF");
+        } catch (Exception e) {
+            // 边框只是观感，设不上不影响内容 —— 不让它把导出搞失败
+            log.warn("设置表格边框失败（忽略）：{}", e.getMessage());
+        }
         for (int r = 0; r < rows.size(); r++) {
             List<String> cells = splitRow(rows.get(r));
             XWPFTableRow row = table.getRow(r);
@@ -456,20 +694,22 @@ public class ReportWordExportService {
                 if (cell == null) {
                     continue;
                 }
-                // 清掉 POI 预置的空段落，改成我们自己的
                 cell.removeParagraph(0);
                 XWPFParagraph p = cell.addParagraph();
+                p.setSpacingAfter(0);
                 XWPFRun run = p.createRun();
-                run.setFontSize(9);
+                run.setFontSize(SIZE_TABLE);
+                run.setFontFamily(FONT_BODY, XWPFRun.FontCharRange.eastAsia);
                 run.setBold(r == 0);
                 writeInline(run, c < cells.size() ? cells.get(c) : "");
             }
         }
-        // 表格后空一行，避免与下一段贴在一起
-        doc.createParagraph();
+        // 表格与后续正文之间的呼吸空间
+        XWPFParagraph gap = doc.createParagraph();
+        gap.setSpacingAfter(0);
     }
 
-    /** 行内标记：只处理 `**加粗**`（其余标记原样保留，避免误删内容） */
+    /** 行内标记：只处理 {@code **加粗**}（其余标记原样保留，避免误删内容） */
     private void writeInline(XWPFRun target, String text) {
         if (!StringUtils.hasText(text)) {
             return;
@@ -484,23 +724,101 @@ public class ReportWordExportService {
             } else {
                 XWPFRun r = target.getParagraph().createRun();
                 r.setBold(i % 2 == 1);
-                r.setFontSize(target.getFontSize() > 0 ? target.getFontSize() : 10);
+                r.setFontSize(target.getFontSize() > 0 ? target.getFontSize() : SIZE_BODY);
+                r.setFontFamily(FONT_BODY, XWPFRun.FontCharRange.eastAsia);
                 r.setText(parts[i]);
             }
         }
     }
 
-    /* ==================== 小工具（纯静态） ==================== */
+    /* ==================== 目录 / 书签 / 超链接 ==================== */
 
-    /** 标题字号兜底：一级 16pt / 二级 14pt / 三级 12pt（再深按 12pt 处理） */
+    /** 收集目录条目（与 {@link #anchorOf} 同一套 anchor，保证目录链接能跳到正文标题） */
+    private List<TocEntry> collectTocEntries(ReportDetailVO detail) {
+        List<TocEntry> list = new ArrayList<>();
+        if (!CollectionUtils.isEmpty(detail.getCatalogs())) {
+            for (ReportCatalogNode node : detail.getCatalogs()) {
+                collectTocEntries(node, list);
+            }
+        }
+        return list;
+    }
+
+    private void collectTocEntries(ReportCatalogNode node, List<TocEntry> out) {
+        if (node == null) {
+            return;
+        }
+        if (StringUtils.hasText(node.getCatalogName())) {
+            int level = node.getCatalogLevel() == null ? 1 : node.getCatalogLevel();
+            out.add(new TocEntry(level, node.getCatalogName(), anchorOf(node)));
+        }
+        if (!CollectionUtils.isEmpty(node.getChildren())) {
+            for (ReportCatalogNode child : node.getChildren()) {
+                collectTocEntries(child, out);
+            }
+        }
+    }
+
+    /**
+     * 书签名 = 前缀 + 目录编码
+     *
+     * <p>⚠️ 书签名只允许字母/数字/下划线（且不能以数字开头）⇒ 非法字符一律换成下划线，
+     * 编码为空时退化成按序号生成（保证唯一）。</p>
+     */
+    private String anchorOf(ReportCatalogNode node) {
+        String code = node.getCatalogCode();
+        String safe = StringUtils.hasText(code) ? code.replaceAll("[^A-Za-z0-9_]", "_") : null;
+        if (!StringUtils.hasText(safe)) {
+            // ⚠️ 不用 hashCode 兜底：Integer.MIN_VALUE 取绝对值仍是负数 ⇒ 书签名里会带 '-' 非法字符
+            safe = "N" + nextBookmarkId();
+        }
+        return BOOKMARK_PREFIX + safe;
+    }
+
+    private int bookmarkSeq = 1000;
+
+    private int nextBookmarkId() {
+        return ++bookmarkSeq;
+    }
+
+    /**
+     * 往段落里加一个**内部超链接**（指向文档内书签）
+     *
+     * <p>POI 没有高层 API ⇒ 直接操作 XML：{@code w:hyperlink w:anchor="书签名"} 里放 run +
+     * 颜色/下划线（模拟 Word 超链接外观）。</p>
+     */
+    private void addInternalLink(XWPFParagraph paragraph, String text, String anchor) {
+        CTP ctp = paragraph.getCTP();
+        CTHyperlink link = ctp.addNewHyperlink();
+        link.setAnchor(anchor);
+        CTR ctr = link.addNewR();
+        CTText t = ctr.addNewT();
+        t.setStringValue(text);
+        CTRPr rPr = ctr.addNewRPr();
+        CTColor color = rPr.addNewColor();
+        color.setVal(TOC_LINK_COLOR);
+        CTUnderline underline = rPr.addNewU();
+        underline.setVal(STUnderline.SINGLE);
+    }
+
+    /* ==================== 工具 ==================== */
+
+    /** 中文字体必须显式设 eastAsia，否则 Word 可能回退成默认字体、观感不一致 */
+    private static void applyFont(XWPFRun run, String font, int size) {
+        run.setFontFamily(font, XWPFRun.FontCharRange.eastAsia);
+        run.setFontFamily(font);
+        run.setFontSize(size);
+    }
+
+    /** 标题字号：一级 16pt / 二级 14pt / 三级 12pt */
     private static int headingFontSize(int level) {
         if (level <= 1) {
-            return 16;
+            return SIZE_H1;
         }
         if (level == 2) {
-            return 14;
+            return SIZE_H2;
         }
-        return 12;
+        return SIZE_H3;
     }
 
     private static Map<String, ReportRiskItem> indexRisks(List<ReportRiskItem> risks) {
@@ -519,7 +837,7 @@ public class ReportWordExportService {
         return trimmed.startsWith("|") && trimmed.length() > 1;
     }
 
-    /** 分隔行：| --- | :---: | 等（只含 | - : 空格） */
+    /** 分隔行：{@code | --- | :---: |} 等（只含 | - : 空格） */
     private static boolean isTableSeparator(String trimmed) {
         if (!isTableRow(trimmed)) {
             return false;
@@ -532,9 +850,8 @@ public class ReportWordExportService {
         return trimmed.indexOf('-') >= 0;
     }
 
-    /** 拆一行表格为单元格（去掉首尾竖线，保留内容原样） */
+    /** 拆一行表格为单元格（去掉首尾竖线） */
     private static List<String> splitRow(String trimmed) {
-        List<String> cells = new ArrayList<>();
         String body = trimmed;
         if (body.startsWith("|")) {
             body = body.substring(1);
@@ -542,6 +859,7 @@ public class ReportWordExportService {
         if (body.endsWith("|")) {
             body = body.substring(0, body.length() - 1);
         }
+        List<String> cells = new ArrayList<>();
         for (String cell : body.split("\\|", -1)) {
             cells.add(cell.trim());
         }
@@ -565,5 +883,32 @@ public class ReportWordExportService {
 
     private static String stripBullet(String trimmed) {
         return trimmed.substring(2).trim();
+    }
+
+    /**
+     * 把导出文件同步到对象存储（行内 = 内容平台）
+     *
+     * <p>🔴 <b>best-effort</b>：文件已生成好，上传失败**不能让用户下载失败**；但也不能静默 ——
+     * 失败打 ERROR 并带 reportNo/文件名，便于事后补传。</p>
+     */
+    private void storeToObjectStorage(String fileName, byte[] bytes, ReportDetailVO detail, String operatorNo) {
+        try {
+            ReportExportStorageGateway.ExportFile file = new ReportExportStorageGateway.ExportFile(
+                    fileName, bytes, detail.getReportNo(), detail.getCheckTaskNo(),
+                    detail.getCustomerName(), operatorNo,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+            ReportExportStorageGateway.StoreResult result = exportStorageGateway.store(file);
+            if (result != null && result.isStored()) {
+                log.info("导出文件已同步到对象存储：reportNo={} fileName={} objectKey={}",
+                        detail.getReportNo(), fileName, result.getObjectKey());
+            } else {
+                log.warn("导出文件未同步到对象存储：reportNo={} fileName={} size={}B 说明={}",
+                        detail.getReportNo(), fileName, bytes.length,
+                        result == null ? "网关返回 null" : result.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("导出文件同步对象存储异常（已忽略，用户下载不受影响）：reportNo={} fileName={} 原因={}",
+                    detail.getReportNo(), fileName, e.getMessage(), e);
+        }
     }
 }

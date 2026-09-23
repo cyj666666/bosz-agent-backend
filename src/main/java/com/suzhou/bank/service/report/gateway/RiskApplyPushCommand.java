@@ -76,7 +76,13 @@ public class RiskApplyPushCommand {
         /** 信号内容 ← 我方 {@code app_report_warning_advice.signalDesc} */
         private String riskMessage;
 
-        /** 预警信号排查描述 ← 我方 {@code app_report_warning_advice.riskDesc} */
+        /**
+         * 预警信号排查描述 ← 我方 {@code app_report_warning_advice.riskDesc}
+         *
+         * <p>✅ <b>口径已定案（2026-09-23 客户书面确认）</b>：本字段就是**排查描述**，取 {@code riskDesc}
+         * —— 信贷侧 DTO 里该字段的注释写的是「是否签署调查（Y/N）」，那**不是**本系统要填的语义，
+         * ⛔ 不要按 Y/N 填。</p>
+         */
         private String signInvestigation;
 
         /**
