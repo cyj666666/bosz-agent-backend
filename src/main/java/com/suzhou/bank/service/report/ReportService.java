@@ -104,11 +104,17 @@ public interface ReportService {
      * 只更新 {@code app_report_ai_risk.status}；正文与 riskDesc 均不变
      * （"无效"表示该风险不参与报告，前端渲染时整块隐藏）。</p>
      *
-     * @param reportNo  报告编号
-     * @param blockCode 内容块编号
-     * @param status    ADOPTED-已采纳 / INVALID-已无效 / PENDING-待处理（其它值按 PENDING 处理）
+     * <p>🆕 2026-09-23（测试反馈 #6）：同时往 {@code app_report_action_log} 写一条**用户行为流水**
+     * （谁、何时、从什么状态改成了什么状态）。留痕失败只告警、**不影响状态更新本身**。</p>
+     *
+     * @param reportNo     报告编号
+     * @param blockCode    内容块编号
+     * @param status       ADOPTED-已采纳 / INVALID-已无效 / PENDING-待处理（其它值按 PENDING 处理）
+     * @param operatorNo   操作人账号（可为空 —— 取不到登录态时不阻断操作，只在流水里留空）
+     * @param operatorName 操作人姓名（取不到回落账号）
      */
-    void updateRiskStatus(String reportNo, String blockCode, String status);
+    void updateRiskStatus(String reportNo, String blockCode, String status,
+                          String operatorNo, String operatorName);
 
     /**
      * 修改规则类正文内容（同事务同步风险列表文案）
@@ -230,12 +236,31 @@ public interface ReportService {
      * 更新某条预警建议的处理状态（采纳 / 无效 / 恢复待处理）
      * <p>只改处理状态与处理人、处理时间，预警信号内容本身不变。</p>
      *
+     * <p>🆕 2026-09-23（测试反馈 #6 + #7）本方法额外做两件事：</p>
+     * <ol>
+     *   <li><b>写用户行为流水</b>（{@code app_report_action_log}）—— 含变更前后状态；</li>
+     *   <li><b>采纳时推送预警信号给信贷</b>（经 {@link com.suzhou.bank.service.report.gateway.AfterLoanRiskApplyGateway}）：
+     *       仅当「状态由非 ADOPTED 变为 ADOPTED」且 {@code isRiskApply} 判定为 true 时推一次
+     *       （重复点采纳不会重复推；改成无效不会"撤回"，信贷侧自行处理）。
+     *       ⚠️ 推送是 <b>best-effort</b>：失败只告警，<b>不回滚</b>采纳状态。</li>
+     * </ol>
+     *
      * @param adviceId     预警建议明细ID（app_report_warning_advice.id）
      * @param status       目标状态：ADOPTED / INVALID / PENDING
      * @param operatorNo   操作人账号
      * @param operatorName 操作人姓名
+     * @param isRiskApply  信贷入参 {@code isRiskApply} 原样透传（{@code "true"/"false"} 或空）
+     *                     ——**不返回或为空即视为 true**（客户 2026-09-23 定的默认值）。
+     *                     只有显式的 {@code "false"/"0"/"no"/"n"} 才表示"不要推送"。
+     *                     <p>⚠️ 该参数**只在信贷跳转场景才有意义**（{@code /api/credit/resolve}
+     *                     仅服务 {@code /credit/report} 独立页）。列表 → 详情那条路径没有信贷上下文，
+     *                     前端会**显式传 {@code "false"}**；契约里的"缺省即 true"由**信贷页**负责补值
+     *                     （resolve 返回的字段缺失时补 {@code "true"} 再传下来），
+     *                     ⛔ 不是"调用方不传就当推"。</p>
+     * @param workid       信贷入参 {@code workid}（审批任务编号，来自详情页 /api/credit/resolve 的 params）
      */
-    void updateWarningAdviceStatus(Long adviceId, String status, String operatorNo, String operatorName);
+    void updateWarningAdviceStatus(Long adviceId, String status, String operatorNo, String operatorName,
+                                   String isRiskApply, String workid);
 
     /**
      * 一键串行触发：全文分析 → 预警建议（前端「智能体分析」按钮的唯一入口）

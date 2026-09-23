@@ -203,9 +203,13 @@ public class ReportController {
      * @return 空响应体
      */
     @PostMapping("/instance/risk/status")
-    public Result<Void> updateRiskStatus(@RequestBody ReportRiskStatusRequest request) {
+    public Result<Void> updateRiskStatus(@RequestBody ReportRiskStatusRequest request,
+                                        HttpServletRequest httpRequest) {
         try {
-            reportService.updateRiskStatus(request.getReportNo(), request.getBlockCode(), request.getStatus());
+            // 2026-09-23（测试反馈 #6）：带上操作人 —— 服务层要写「用户行为流水」；
+            // 取不到登录态（理论上不会，AuthInterceptor 已拦）时传 null，不阻断操作。
+            reportService.updateRiskStatus(request.getReportNo(), request.getBlockCode(), request.getStatus(),
+                    currentUsername(httpRequest), currentRealName(httpRequest));
             return Result.ok();
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
@@ -411,7 +415,12 @@ public class ReportController {
         try {
             reportService.updateWarningAdviceStatus(
                     request.getId(), request.getStatus(),
-                    currentUsername(httpRequest), currentRealName(httpRequest));
+                    currentUsername(httpRequest), currentRealName(httpRequest),
+                    // 2026-09-23（测试反馈 #7）：信贷跳转页带来的两个参数原样透传。
+                    // ⚠️ 列表 → 详情那条路径不经过 /api/credit/resolve、没有信贷上下文，
+                    //    前端会**显式传 isRiskApply=false**（不是靠后端缺省推断）；
+                    //    契约里的"缺省即 true" 由信贷页在 resolve 缺字段时补值来兑现。
+                    request.getIsRiskApply(), request.getWorkid());
             return Result.ok();
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());

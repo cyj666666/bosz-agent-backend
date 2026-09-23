@@ -3,6 +3,7 @@ package com.suzhou.bank.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.suzhou.bank.entity.Report;
+import com.suzhou.bank.entity.report.AppReportActionLog;
 import com.suzhou.bank.entity.report.AppReportAiAnalysis;
 import com.suzhou.bank.entity.report.AppReportAiRisk;
 import com.suzhou.bank.entity.report.AppReportCatalog;
@@ -12,6 +13,7 @@ import com.suzhou.bank.entity.report.AppReportRiskEditLog;
 import com.suzhou.bank.entity.report.AppReportWarningAdvice;
 import com.suzhou.bank.entity.report.AppReportWarningAdviceBatch;
 import com.suzhou.bank.mapper.ReportMapper;
+import com.suzhou.bank.mapper.report.AppReportActionLogMapper;
 import com.suzhou.bank.mapper.report.AppReportAiAnalysisMapper;
 import com.suzhou.bank.mapper.report.AppReportAiRiskMapper;
 import com.suzhou.bank.mapper.report.AppReportCatalogMapper;
@@ -24,6 +26,8 @@ import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
 import com.suzhou.bank.service.report.ai.ReportAiAnalysisTask;
 import com.suzhou.bank.service.report.ai.ReportWarningAdviceTask;
+import com.suzhou.bank.service.report.gateway.AfterLoanRiskApplyGateway;
+import com.suzhou.bank.service.report.gateway.RiskApplyPushCommand;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockVO;
 import com.suzhou.bank.service.report.model.ReportCatalogNode;
@@ -143,6 +147,13 @@ public class ReportServiceImpl implements ReportService {
     private final AppReportAiAnalysisMapper aiAnalysisMapper;
     private final AppReportWarningAdviceBatchMapper warningBatchMapper;
     private final AppReportWarningAdviceMapper warningAdviceMapper;
+    /** 用户行为流水（采纳 / 无效，AI 风险与预警建议共用；2026-09-23 测试反馈 #6） */
+    private final AppReportActionLogMapper actionLogMapper;
+    /**
+     * 预警信号推送网关（2026-09-23 测试反馈 #7）—— 两版实现互不相同的唯一接缝。
+     * <p>外网注入 MOCK（未真实推送），行内注入接 CRCS 的实现。业务代码只认这个接口。</p>
+     */
+    private final AfterLoanRiskApplyGateway riskApplyGateway;
     private final ReportContentProvider contentProvider;
     private final ReportAiAnalysisTask aiAnalysisTask;
     private final ReportWarningAdviceTask warningAdviceTask;
@@ -1066,10 +1077,31 @@ public class ReportServiceImpl implements ReportService {
         return vo;
     }
 
+    /** 行为对象类型①：AI 风险要点（app_report_ai_risk） */
+    private static final String ACTION_TARGET_AI_RISK = "AI_RISK";
+
+    /** 行为对象类型②：预警建议（app_report_warning_advice） */
+    private static final String ACTION_TARGET_WARNING_ADVICE = "WARNING_ADVICE";
+
+    /** 行为流水里「对象名称」的入库长度上限（列宽 512，留余量避免边界报错） */
+    private static final int ACTION_TARGET_NAME_MAX = 500;
+
     @Override
-    public void updateRiskStatus(String reportNo, String blockCode, String status) {
+    public void updateRiskStatus(String reportNo, String blockCode, String status,
+                                 String operatorNo, String operatorName) {
         requireReportNoAndBlock(reportNo, blockCode);
         String normalized = normalizeRiskStatus(status);
+
+        // 0) 改之前先取原行：行为流水要记「从什么状态改成了什么」，顺带拿 ruleName 当展示名
+        AppReportAiRisk before = riskMapper.selectOne(Wrappers.<AppReportAiRisk>lambdaQuery()
+                .eq(AppReportAiRisk::getReportNo, reportNo)
+                .eq(AppReportAiRisk::getBlockCode, blockCode)
+                .last("LIMIT 1"));
+        if (before == null) {
+            throw new ReportGenerateException("未找到对应的 AI 风险记录（reportNo=" + reportNo
+                    + "，blockCode=" + blockCode + "）");
+        }
+
         int updated = riskMapper.update(null, Wrappers.<AppReportAiRisk>lambdaUpdate()
                 .eq(AppReportAiRisk::getReportNo, reportNo)
                 .eq(AppReportAiRisk::getBlockCode, blockCode)
@@ -1078,7 +1110,13 @@ public class ReportServiceImpl implements ReportService {
             throw new ReportGenerateException("未找到对应的 AI 风险记录（reportNo=" + reportNo
                     + "，blockCode=" + blockCode + "）");
         }
-        log.info("AI 风险状态更新：reportNo={} blockCode={} status={}", reportNo, blockCode, normalized);
+
+        // 用户行为流水（2026-09-23 测试反馈 #6）—— 留痕失败只告警，不影响上面的状态更新
+        writeActionLog(ACTION_TARGET_AI_RISK, reportNo, before.getId(), blockCode, before.getRuleName(),
+                before.getStatus(), normalized, operatorNo, operatorName);
+
+        log.info("AI 风险状态更新：reportNo={} blockCode={} status={}（{}→{}） 操作人={}",
+                reportNo, blockCode, normalized, before.getStatus(), normalized, operatorName);
     }
 
     @Override
@@ -1518,12 +1556,21 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public void updateWarningAdviceStatus(Long adviceId, String status,
-                                          String operatorNo, String operatorName) {
+    public void updateWarningAdviceStatus(Long adviceId, String status, String operatorNo, String operatorName,
+                                          String isRiskApply, String workid) {
         if (adviceId == null) {
             throw new ReportGenerateException("预警建议ID不能为空");
         }
         String normalized = normalizeRiskStatus(status);
+
+        // 0) 改之前先取原行：① 流水要记变更前状态；② 采纳推送要用它的等级/描述。
+        //    ⚠️ 用 selectById 而不是只 update —— 少这一次查询，就得多写一份"靠调用方传 before"的隐式契约。
+        AppReportWarningAdvice before = warningAdviceMapper.selectById(adviceId);
+        if (before == null) {
+            throw new ReportGenerateException("未找到对应的预警建议（id=" + adviceId + "）");
+        }
+        String statusBefore = before.getStatus();
+
         int updated = warningAdviceMapper.update(null,
                 Wrappers.<AppReportWarningAdvice>lambdaUpdate()
                         .eq(AppReportWarningAdvice::getId, adviceId)
@@ -1535,7 +1582,160 @@ public class ReportServiceImpl implements ReportService {
         if (updated == 0) {
             throw new ReportGenerateException("未找到对应的预警建议（id=" + adviceId + "）");
         }
-        log.info("预警建议状态更新：id={} status={} 操作人={}", adviceId, normalized, operatorName);
+        log.info("预警建议状态更新：id={} status={}（{}→{}） 操作人={}",
+                adviceId, normalized, statusBefore, normalized, operatorName);
+
+        // ① 用户行为流水（2026-09-23 测试反馈 #6）
+        writeActionLog(ACTION_TARGET_WARNING_ADVICE, before.getReportNo(), adviceId,
+                before.getSeqNo() == null ? null : String.valueOf(before.getSeqNo()),
+                before.getSignalDesc(), statusBefore, normalized, operatorNo, operatorName);
+
+        // ② 采纳 ⇒ 推送预警信号给信贷（2026-09-23 测试反馈 #7）
+        //    只在「由非采纳 → 采纳」这一瞬推一次：重复点采纳不重复推；改成无效不"撤回"
+        //    （信贷侧收到信号后如何处置不归我们管，我方也没有撤回接口）。
+        boolean adoptedNow = RISK_ADOPTED.equals(normalized) && !RISK_ADOPTED.equalsIgnoreCase(statusBefore);
+        if (adoptedNow && flagTrue(isRiskApply, true)) {
+            pushWarningSignal(before, workid, operatorNo);
+        } else if (adoptedNow) {
+            log.info("预警信号推送已按入参关闭：adviceId={} isRiskApply={}", adviceId, isRiskApply);
+        }
+    }
+
+    /* ==================== 用户行为流水 & 预警推送（2026-09-23 批次 C） ==================== */
+
+    /**
+     * 写一条用户行为流水（{@code app_report_action_log}）
+     *
+     * <p>🔴 <b>绝不让留痕失败影响主流程</b>：整体 try-catch，失败只打 ERROR。
+     * 理由是这条流水是"审计留痕"，而用户的操作（采纳/无效）本身已经成功落库 ——
+     * 因为记不上日志就让用户看到"操作失败"，会让他重复点击、把状态来回改。</p>
+     *
+     * <p>⚠️ 反过来说，也**不能静默**：ERROR 日志必须带足定位信息（对象类型/报告/对象ID/原因）。</p>
+     */
+    private void writeActionLog(String targetType, String reportNo, Long targetId, String targetCode,
+                                String targetName, String statusBefore, String statusAfter,
+                                String operatorNo, String operatorName) {
+        try {
+            AppReportActionLog row = new AppReportActionLog();
+            row.setTargetType(targetType);
+            row.setReportNo(reportNo);
+            row.setTargetId(targetId);
+            row.setTargetCode(targetCode);
+            row.setTargetName(truncateText(targetName, ACTION_TARGET_NAME_MAX));
+            row.setStatusBefore(statusBefore);
+            row.setStatusAfter(statusAfter);
+            row.setOperatorNo(operatorNo);
+            row.setOperatorName(StringUtils.hasText(operatorName) ? operatorName : operatorNo);
+            row.setCheckTaskNo(resolveCheckTaskNo(reportNo));
+            actionLogMapper.insert(row);
+        } catch (Exception e) {
+            log.error("写用户行为流水失败（不影响本次操作结果）：targetType={} reportNo={} targetId={} 原因={}",
+                    targetType, reportNo, targetId, e.getMessage(), e);
+        }
+    }
+
+    /** 报告编号 → 日检流水号（流水表按它归档、可跨版本追溯）；取不到就留空，不阻断 */
+    private String resolveCheckTaskNo(String reportNo) {
+        if (!StringUtils.hasText(reportNo)) {
+            return null;
+        }
+        try {
+            Report report = reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
+                    .eq(Report::getReportNo, reportNo)
+                    .last("LIMIT 1"));
+            return report == null ? null : report.getCheckTaskNo();
+        } catch (Exception e) {
+            log.warn("行为流水取日检流水号失败，该字段留空：reportNo={} 原因={}", reportNo, e.getMessage());
+            return null;
+        }
+    }
+
+    private static String truncateText(String text, int max) {
+        if (text == null) {
+            return null;
+        }
+        return text.length() <= max ? text : text.substring(0, max);
+    }
+
+    /**
+     * 信贷侧布尔入参口径（客户 2026-09-23 约定）
+     *
+     * <p>"不返回或返回空 ⇒ 默认 true"是本项目最容易踩反的地方：这里**只管"是不是明确的假"**，
+     * 其余（含 {@code true}/{@code "true"}/{@code yes}/各种未知字符串）一律按默认值走。</p>
+     *
+     * <p>⚠️ 与前端 `boolFlag()` 是同一套口径，两边改一处必须对看。</p>
+     *
+     * <p>🔴 <b>但"缺省 true"只在信贷场景成立</b>：{@code isRiskApply} 来自
+     * {@code /api/credit/resolve}（只服务信贷跳转独立页）。列表 → 详情那条路径没有信贷上下文，
+     * 前端会**显式传 {@code "false"}** ⇒ 这里的缺省分支实际只兜"信贷页漏传"这一种情况。
+     * ⛔ 不要把这个默认值理解成"任何调用方不传都推" —— 那会让列表进详情的用户点个采纳，
+     * 在 {@code workid} 为空的前提下也往信贷推一条信号。</p>
+     */
+    private static boolean flagTrue(String value, boolean defaultValue) {
+        if (!StringUtils.hasText(value)) {
+            return defaultValue;
+        }
+        String v = value.trim().toLowerCase();
+        if ("false".equals(v) || "0".equals(v) || "no".equals(v) || "n".equals(v)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 推送一条预警信号到信贷（best-effort，<b>绝不回滚采纳</b>）
+     *
+     * <p>装配口径（客户给定）：{@code serialNo} = {@code report.check_task_no}；
+     * {@code workid} = 详情页 /api/credit/resolve 的 params；信号 = 本次被采纳的那一条
+     * （{@code triggerMode} 固定 3-AI预警、{@code warningLevel} 走 RED→6/ORANGE→5/YELLOW→4 映射、
+     * {@code riskMessage}←signalDesc、{@code signInvestigation}←riskDesc）。</p>
+     *
+     * <p>⚠️ <b>等级映射不出来时跳过推送并打 ERROR</b>：给信贷发一个错等级比不发更糟
+     * （会让客户按错误的紧急度处理）。这里刻意"宁可不发"。</p>
+     */
+    private void pushWarningSignal(AppReportWarningAdvice advice, String workid, String operatorNo) {
+        try {
+            String creditLevel = RiskApplyPushCommand.Signal.toCreditWarningLevel(advice.getWarningLevel());
+            if (creditLevel == null) {
+                log.error("预警信号等级无法映射，已跳过推送：adviceId={} warningLevel={}（我方仅支持 RED/ORANGE/YELLOW）",
+                        advice.getId(), advice.getWarningLevel());
+                return;
+            }
+            Report report = reportMapper.selectOne(Wrappers.<Report>lambdaQuery()
+                    .eq(Report::getReportNo, advice.getReportNo())
+                    .last("LIMIT 1"));
+            if (report == null) {
+                log.error("预警信号推送缺少报告记录，已跳过：adviceId={} reportNo={}",
+                        advice.getId(), advice.getReportNo());
+                return;
+            }
+
+            RiskApplyPushCommand command = new RiskApplyPushCommand();
+            command.setReportNo(advice.getReportNo());
+            command.setCheckTaskNo(report.getCheckTaskNo());
+            command.setWorkid(workid);
+            command.setCustomerId(report.getCustomerId());
+            command.setCustomerName(report.getCustomerName());
+            // 行内实现会把它当 userId 传给上游（记调用流水）
+            command.setOperatorNo(operatorNo);
+            // 当前定位：点一条采纳就推一条，暂不支持批量（要批量只需往这个 list 里多塞元素）
+            command.setSignals(Collections.singletonList(RiskApplyPushCommand.Signal.of(
+                    advice.getWarningLevel(), advice.getSignalDesc(), advice.getRiskDesc())));
+
+            AfterLoanRiskApplyGateway.PushResult result = riskApplyGateway.pushWarningSignal(command);
+            if (result != null && result.isPushed()) {
+                log.info("预警信号已推送信贷：adviceId={} serialNo={} workid={} 说明={}",
+                        advice.getId(), report.getCheckTaskNo(), workid, result.getMessage());
+            } else {
+                // 外网 MOCK、或行内推送失败 —— 必须留下可见痕迹，不能悄悄过去
+                log.warn("预警信号未推送信贷：adviceId={} serialNo={} workid={} 说明={}",
+                        advice.getId(), report.getCheckTaskNo(), workid,
+                        result == null ? "网关返回 null" : result.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("预警信号推送异常（已忽略，采纳状态仍然有效）：adviceId={} 原因={}",
+                    advice.getId(), e.getMessage(), e);
+        }
     }
 
     /** 批次 + 明细 → VO（红橙黄条数现算，不在表里存，避免与实际明细不一致） */
