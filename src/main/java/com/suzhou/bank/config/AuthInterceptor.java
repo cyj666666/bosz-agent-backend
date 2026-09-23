@@ -39,7 +39,8 @@ public class AuthInterceptor implements HandlerInterceptor {
      *
      * <p>🔴 <b>这份清单有三处消费点，改一处必须三处一起想</b>：</p>
      * <ol>
-     *   <li>本类 —— 后端接口准入（{@code /api/user}、{@code /api/role}、{@code /api/agent/roleAuth}）</li>
+     *   <li>本类 —— 后端接口准入（{@code /api/user}、{@code /api/role}、{@code /api/agent/roleAuth}、
+     *       {@code /api/report/prompt}）</li>
      *   <li>{@code src/layouts/MainLayout.vue} —— 「系统管理」下拉是否渲染</li>
      *   <li>{@code src/pages/system/RoleList.vue} —— 「菜单权限」多选框能否勾选分配</li>
      * </ol>
@@ -47,9 +48,14 @@ public class AuthInterceptor implements HandlerInterceptor {
      * <p>⚠️ {@code /role-auth}（数据授权）从"仅超管可见"改为<b>可分配的普通菜单项</b>：
      * 新口径是"能看系统管理菜单就能用"，若继续把它排除在可分配清单之外，
      * 就会出现「菜单渲染了但接口 403」或「接口能调但菜单看不到」的裂缝。</p>
+     *
+     * <p>🆕 2026-09-23：新增 {@code /prompt-config}（通用提示词管理）。前端的两个消费点
+     * （{@code MainLayout#SYSTEM_MENU_CHILDREN} 与 {@code RoleList} 的可选项）都由
+     * {@code src/agent/menu.ts} 的 {@code agentSystemMenus} 派生，改那一处即可同时生效；
+     * <b>只有本常量需要手工同步</b>。</p>
      */
     private static final List<String> SYSTEM_MENU_KEYS =
-            Arrays.asList("/users", "/roles", "/role-auth");
+            Arrays.asList("/users", "/roles", "/role-auth", "/prompt-config");
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
@@ -89,7 +95,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         String path = request.getRequestURI();
         if (!path.endsWith("/change-password")
                 && (path.startsWith("/api/user") || path.startsWith("/api/role")
-                    || path.startsWith("/api/agent/roleAuth"))) {
+                    || path.startsWith("/api/agent/roleAuth")
+                    // 2026-09-23 新增：通用提示词管理（改提示词会影响所有报告产出，属系统管理级操作）
+                    || path.startsWith("/api/report/prompt"))) {
             if (!isSystemAdmin(roles)) {
                 sendError(response, 403, "无权限，仅系统管理员可操作");
                 return false;

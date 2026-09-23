@@ -10,6 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+
 /**
  * 提示词取用服务
  *
@@ -80,6 +84,48 @@ public class ReportPromptService {
         // 模板里没有占位符：追加素材，避免模型完全看不到内容
         log.warn("提示词模板缺少 {material} 占位符，已把素材追加到末尾：promptCode={}", prompt.getPromptCode());
         return template + "\n\n" + body;
+    }
+
+    /* ==================== 配置页（通用提示词管理）读写，2026-09-23 新增 ==================== */
+
+    /**
+     * 列出全部提示词（供「系统管理 → 通用提示词管理」列表页）
+     *
+     * <p>读表异常（表没建 / 字段不符）⇒ 返回空列表并告警，<b>不抛异常</b>：
+     * 与 {@link #resolve(String)} 同一套「表不可用也要让系统跑起来」的原则。</p>
+     *
+     * <p>排序按 {@code promptCode}，让列表顺序稳定、可预期（不依赖库的默认物理顺序）。</p>
+     */
+    public List<AppReportPrompt> listAll() {
+        try {
+            return promptMapper.selectList(Wrappers.<AppReportPrompt>lambdaQuery()
+                    .orderByAsc(AppReportPrompt::getPromptCode));
+        } catch (Exception e) {
+            log.warn("读取提示词表失败，返回空列表：{}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 更新「系统提示词」（配置页唯一允许修改的字段）
+     *
+     * <p>🔴 <b>{@code updateTime} 必须显式写</b>：该列 DDL 是
+     * {@code TIMESTAMP DEFAULT CURRENT_TIMESTAMP}，<b>没有</b> {@code ON UPDATE CURRENT_TIMESTAMP}，
+     * 依赖数据库自动刷新会让「更新时间」永远等于创建时间（MySQL 与 PG 两边都是这个行为）。</p>
+     *
+     * <p>改完<b>立即生效、无需重启</b>：{@link #resolve(String)} 每次调用都重新查表。</p>
+     *
+     * @param id           主键
+     * @param systemPrompt 新的系统提示词（允许为空串 —— 视为"清空"，取用时按 {@code hasText} 回落到代码兜底）
+     * @return 是否命中并更新了一行
+     */
+    public boolean updateSystemPrompt(Long id, String systemPrompt) {
+        Date now = new Date();
+        int rows = promptMapper.update(null, Wrappers.<AppReportPrompt>lambdaUpdate()
+                .set(AppReportPrompt::getSystemPrompt, systemPrompt)
+                .set(AppReportPrompt::getUpdateTime, now)
+                .eq(AppReportPrompt::getId, id));
+        return rows > 0;
     }
 
     private AppReportPrompt selectByCode(String promptCode) {
