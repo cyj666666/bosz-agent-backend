@@ -9,6 +9,7 @@ import com.suzhou.bank.entity.SysUser;
 import com.suzhou.bank.mapper.SysUserMapper;
 import com.suzhou.bank.service.report.ReportGenerateException;
 import com.suzhou.bank.service.report.ReportService;
+import com.suzhou.bank.service.report.export.ReportWordExportService;
 import com.suzhou.bank.service.report.mock.ReportShareUrlMockService;
 import com.suzhou.bank.service.report.model.ReportAiAnalysisVO;
 import com.suzhou.bank.service.report.model.ReportBlockContentRequest;
@@ -22,12 +23,17 @@ import com.suzhou.bank.service.report.model.ReportVersionVO;
 import com.suzhou.bank.service.report.model.ReportWarningAdviceStatusRequest;
 import com.suzhou.bank.service.report.model.ReportWarningAdviceVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
+import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +51,7 @@ import java.util.Map;
  * @author cyj666666
  * @since 1.0.0
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/report")
 @RequiredArgsConstructor
@@ -58,6 +65,9 @@ public class ReportController {
 
     /** 🔴 外网专用 MOCK：链接溯源「换一次性链接」的模拟实现（行内没有、也不该有 → 见类尾注释） */
     private final ReportShareUrlMockService reportShareUrlMockService;
+
+    /** 报告 Word 导出（真 .docx；2026-09-23 测试反馈 #8） */
+    private final ReportWordExportService reportWordExportService;
 
     /** 🔴 外网专用：mock 开关（默认 false ⇒ 接口返回明确错误，而不是 404） */
     @Value("${credit.share.mock-enabled:false}")
@@ -425,6 +435,59 @@ public class ReportController {
         } catch (ReportGenerateException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    /**
+     * 导出报告 Word（真 .docx，2026-09-23 测试反馈 #8）
+     *
+     * <p>与页面同源取数（{@code ReportService#detail}），只写正文：标题层级用 Word 内置
+     * {@code Heading1~3} + 文档开头真 TOC 域；⛔ 不含导航/侧栏/按钮/溯源链接；
+     * ⛔ 已标记无效的段落不导出。</p>
+     *
+     * <p><b>返回</b>：{@code application/vnd.openxmlformats-officedocument.wordprocessingml.document}
+     * + {@code Content-Disposition: attachment} ⇒ 浏览器**自动触发下载**。</p>
+     *
+     * <p>🔴 <b>文件名用 RFC 5987 双写</b>：中文文件名必须放 {@code filename*=UTF-8''<percent-encoded>}，
+     * 同时给一个 ASCII 的 {@code filename=} 兜底（老浏览器只认前者会退化成乱码/丢掉后缀）。
+     * ⚠️ 扩展名是 {@code .docx}：POI 产出 OOXML，写成 {@code .doc} 会让 Word 提示"格式与扩展名不符"。</p>
+     *
+     * <p>⚠️ <b>失败时返回 JSON 而不是文件</b>（HTTP 400）：前端拿到 blob 后要先看 content-type，
+     * 是 JSON 就当错误提示读出来，否则会下载到一个内容是错误信息的"假文档"。</p>
+     */
+    @GetMapping("/instance/export-word")
+    public ResponseEntity<byte[]> exportWord(@RequestParam String reportNo,
+                                             HttpServletRequest httpRequest) {
+        try {
+            // operatorNo 一并透传：行内要把导出文件同步到内容平台，需要记"谁导出的"
+            ReportWordExportService.ExportResult result =
+                    reportWordExportService.export(reportNo, currentUsername(httpRequest));
+            String encoded = URLEncoder.encode(result.getFileName(), "UTF-8").replace("+", "%20");
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"report.docx\"; filename*=UTF-8''" + encoded);
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentType(MediaType.parseMediaType(
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                    .contentLength(result.getBytes().length)
+                    .body(result.getBytes());
+        } catch (Exception e) {
+            log.error("导出 Word 失败：reportNo={} 原因={}", reportNo, e.getMessage(), e);
+            byte[] body = ("{\"code\":500,\"message\":\"导出失败：" + escapeJson(e.getMessage())
+                    + "\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            return ResponseEntity.status(400)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body);
+        }
+    }
+
+    /** 极简 JSON 转义：错误信息可能带引号/换行，直接拼会破掉 JSON */
+    private static String escapeJson(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", " ").replace("\r", " ");
     }
 
     /** 取当前登录账号（AuthInterceptor 已写入 request attribute） */

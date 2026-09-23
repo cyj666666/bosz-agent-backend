@@ -16,8 +16,11 @@ import java.util.List;
  *   <li>{@code checkTaskNo} → 信贷侧 {@code serialNo}（业务流水号）= {@code report.check_task_no}；</li>
  *   <li>{@code workid} → 信贷侧 {@code workid}（审批任务编号）= 详情页 {@code /api/credit/resolve}
  *       返回的 params 里的 {@code workid}；</li>
- *   <li>{@code signals} → 信贷侧 {@code warningSignals} 数组。<b>当前每次只推 1 条</b>
- *       （点一条预警信号采纳就推一条，暂不支持批量），字段仍是列表形态以便将来扩展。</li>
+ *   <li>{@code signals} → 信贷侧 {@code AflAddRiskApplyRequest.signalList} 数组
+ *       （⚠️ 信贷侧的字段名是 {@code signalList}，**不是** {@code warningSignals}，
+ *       元素类型是信贷自己的 {@code RiskSignal} ⇒ 由行内实现负责映射，见
+ *       {@code CrcsAfterLoanAiService#newRiskApplyN}）。
+ *       <b>当前每次只推 1 条</b>（点一条采纳推一条，暂不支持批量），字段仍是列表形态以便将来扩展。</li>
  * </ul>
  *
  * @author 曹陆宇
