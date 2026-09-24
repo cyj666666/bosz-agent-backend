@@ -14,6 +14,7 @@ import com.suzhou.bank.entity.report.AppReportContentBlock;
 import com.suzhou.bank.mapper.report.AppGuarantorInfoMapper;
 import com.suzhou.bank.service.report.ai.CollectingSseEmitter;
 import com.suzhou.bank.service.report.ai.LargeModelGatewayClient;
+import com.suzhou.bank.service.report.ai.ReportPromptService;
 import com.suzhou.bank.service.report.model.ReportConstants;
 import com.suzhou.bank.service.report.spi.ContentPayload;
 import com.suzhou.bank.service.report.spi.ReportContentProvider;
@@ -162,6 +163,14 @@ public class AgentReportContentProvider implements ReportContentProvider {
     private final TraceTableBuilder traceTableBuilder;
 
     private final LargeModelGatewayClient largeModelGatewayClient;
+
+    /**
+     * 提示词取用服务（表 {@code app_report_prompt} 优先、代码兜底）
+     *
+     * <p>2026-09-24 起「风险要点总结」的提示词不再硬编码在本类，改由它按
+     * {@code promptCode = RULE_SUMMARY} 取表 —— 与全文分析 / 预警建议同一套链路。</p>
+     */
+    private final ReportPromptService reportPromptService;
 
     /**
      * 「这份报告有没有业务数据」的进程内缓存（键 = reportNo）。
@@ -681,28 +690,30 @@ public class AgentReportContentProvider implements ReportContentProvider {
      */
     private static final String TAIL_MARK = "#TAIL#";
 
-    /** 总结用的系统提示词（可直接改这里，不必动代码结构） */
-    private static final String RULE_SUMMARY_SYSTEM_PROMPT =
-            "你是银行贷后检查报告的风险汇总助手。用户会给你一组已经判定命中的风险要点"
-                    + "（每条含规则名称、所在章节、风险文案）。\n"
-                    + "请**严格按下面的三段式**输出，不要输出任何多余文字、不要用 markdown 代码块：\n\n"
-                    + "【第 1 行】必须以 " + PICK_MARK + " 开头，后面用 | 分隔你挑出的"
-                    + "**最严重、最需要关注的最多 " + MAX_RISK_ITEMS + " 条**的**规则名称**；"
-                    + "名称必须与素材里给的规则名称**逐字一致**，不得改写、不得漏字或加字。\n\n"
-                    + "【第 2 段 · 开篇总述】用 <p> 输出一段 **200~300 字** 的整体总结，依次讲清："
-                    + "① 本次贷后检查共识别风险点几个（**用素材里给的条数**）、主要集中于哪几个方面；"
-                    + "② 其中哪 2~3 项是最突出的风险信号、建议优先处理；"
-                    + "③ 客户经理应做的动作（核实真实情况及成因、逐项落实整改措施、"
-                    + "评估对授信安全的影响、必要时启动授信策略重评或合同违约处理程序）。"
-                    + "**这一段必须以「其中最突出的风险信息情况如下：」单独一句收尾。**"
-                    + "⚠️ 这一段**不要**逐条罗列要点 —— 要点由正文的条目块单独渲染，你再列一遍就重复了。\n\n"
-                    + "【第 3 段】单独占一行，只输出 " + TAIL_MARK + " 作为分隔。\n\n"
-                    + "【第 4 段 · 收尾结论】用 <p> 输出一段 **80~150 字** 的收尾，必须以「综上，」开头："
-                    + "把上面挑出的那几项风险归纳成「分别指向什么问题」"
-                    + "（如持续经营能力弱化 / 偿债结构恶化 / 第二还款来源削弱），"
-                    + "点明已对银行授信安全构成何种压力，并给出总体管控建议"
-                    + "（如尽快采取针对性措施、防范风险叠加共振）。措辞不要与开篇总述重复。\n\n"
-                    + "不要臆造材料里没有的信息。";
+    /**
+     * 总结用的系统提示词 —— 🔴 <b>2026-09-24 起不再写在本类里（客户要求：别放代码里）</b>
+     *
+     * <p>取用链路（与「全文分析」「预警建议」完全一致）：</p>
+     * <ol>
+     *   <li><b>首选</b>：表 {@code app_report_prompt}（{@code promptCode = RULE_SUMMARY}）——
+     *       由 {@code ReportPromptService#resolve} 在每次调用时重新查表，<b>改完立即生效、不用重启</b>；</li>
+     *   <li><b>兜底</b>：表里没配 / 被停用 / 读不到时，回落
+     *       {@code ReportRuleSummaryPrompt#systemPrompt()}，
+     *       正文在 {@code resources/report-prompt/RULE_SUMMARY.system.txt}。</li>
+     * </ol>
+     *
+     * <p>⚠️ <b>该提示词正文里带三个与解析强耦合的标记</b>：{@code #PICK#}（选中清单行，对应
+     * {@code PICK_MARK}）、{@code #TAIL#}（开篇/收尾分隔，对应 {@code TAIL_MARK}）、
+     * 「最多 5 条」（对应 {@code MAX_RISK_ITEMS}）。<b>改表里的提示词时这三个必须原样保留</b>，
+     * 否则解析不到会走兜底分支（取模板顺序前 N 条），行为与预期不符。</p>
+     *
+     * <p>🔴 <b>该条在「通用提示词管理」页面不展示</b>（库中 {@code sceneType = 'SYSTEM'}）——
+     * 正因为上面这层强耦合，让业务人员在界面上改会把报告生成搞坏。</p>
+     *
+     * <p>2026-09-24 客户反馈的两处修复（「【第 1 行】」被模型抄进正文、开篇总述带「四是/其12是」序号）
+     * 已写进表里的文本与兜底资源文件。<b>配套的还有素材侧</b>：
+     * {@link #buildSummaryMaterial} 里不能再带数字序号，否则模型仍会把素材编号读成中文序数复述。</p>
+     */
 
     /** 总结素材里「每条风险文案」的截断长度（素材太长会让模型倾向忠实罗列而不是归纳） */
     private static final int SUMMARY_MATERIAL_PER_HIT_CHARS = 120;
@@ -725,9 +736,14 @@ public class AgentReportContentProvider implements ReportContentProvider {
         long start = System.currentTimeMillis();
         String raw;
         try {
+            // 提示词：表 app_report_prompt（promptCode=RULE_SUMMARY）优先 —— 改完立即生效、无需重启；
+            // 表里没配 / 被停用 / 读不到时由 ReportPromptService 内部回落到资源文件兜底
+            ReportPromptService.ResolvedPrompt prompt =
+                    reportPromptService.resolve(ReportConstants.PROMPT_RULE_SUMMARY);
             // 用报告模块自己的大模型配置（report.ai-analysis.lm-code），与全文分析/预警建议一致
             LargeModelGatewayClient.LlmResult res = largeModelGatewayClient.chat(
-                    RULE_SUMMARY_SYSTEM_PROMPT, buildSummaryMaterial(context, ruleHits));
+                    prompt.getSystemPrompt(),
+                    reportPromptService.renderUserPrompt(prompt, buildSummaryMaterial(context, ruleHits)));
             raw = res == null ? null : trimToNull(res.getContent());
         } catch (Throwable e) {
             // 🔴 与单块取数同一口径：总结失败只记日志，不中断整份报告
@@ -872,12 +888,14 @@ public class AgentReportContentProvider implements ReportContentProvider {
             material.append("【企业名称】").append(context.getCustomerName()).append('\n');
         }
         material.append("【命中风险要点共 ").append(ruleHits.size()).append(" 条】\n");
-        int n = 0;
         for (RuleHit hit : ruleHits) {
-            n++;
-            material.append(n).append(". 【所在章节】").append(nullToDash(hit.getCatalogName()))
-                    .append(" 【规则名称】").append(nullToDash(hit.getBlockName())).append('\n')
-                    .append("   风险文案：")
+            // 🔴 2026-09-24 客户反馈（风险要点正文出现「四是…」「其12是…」「其16是…」）：
+            //    **素材里绝对不能带数字序号** —— 原来写的是 `n + ". "`，模型把 "4." "12." "16."
+            //    读成中文序数，直接复述进「开篇总述」变成"四是…""其12是…"（客户明确不要）。
+            //    改用无色块的 "- " + "｜" 分隔，去掉任何可被读成序号的编号。
+            material.append("- 章节：").append(nullToDash(hit.getCatalogName()))
+                    .append(" ｜ 规则：").append(nullToDash(hit.getBlockName())).append('\n')
+                    .append("  描述：")
                     .append(abbreviate(stripHtml(hit.getContent()), SUMMARY_MATERIAL_PER_HIT_CHARS))
                     .append('\n');
         }

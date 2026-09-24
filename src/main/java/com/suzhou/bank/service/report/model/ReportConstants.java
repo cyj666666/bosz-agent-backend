@@ -136,6 +136,22 @@ public final class ReportConstants {
     /** 提示词：AI 预警建议 */
     public static final String PROMPT_WARNING_ADVICE = "WARNING_ADVICE";
 
+    /**
+     * 提示词：风险要点总结（2026-09-24 从代码挪进表）
+     *
+     * <p>「一、（一）风险要点」三段式里，开篇总述 + 收尾结论由<b>一次大模型调用</b>产出。</p>
+     */
+    public static final String PROMPT_RULE_SUMMARY = "RULE_SUMMARY";
+
+    /**
+     * 提示词场景：系统内置（⛔ 「通用提示词管理」页面<b>不展示</b>）
+     *
+     * <p>标记在 {@code app_report_prompt.sceneType} 上。这类提示词与代码里的解析契约强耦合
+     * （如 {@code #PICK#} / {@code #TAIL#} 分隔标记、条数上限），业务人员在页面上改动会直接把
+     * 报告生成搞坏 ⇒ 只允许在库里改，不在界面上暴露。</p>
+     */
+    public static final String PROMPT_SCENE_SYSTEM = "SYSTEM";
+
     // ==================== 预警建议等级（app_report_warning_advice.warningLevel） ====================
 
     /** 建议预警等级：红色预警 */

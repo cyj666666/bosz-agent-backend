@@ -45,7 +45,8 @@ public class ReportPromptService {
      * 取提示词（表优先，兜底次之）
      *
      * @param promptCode 提示词编码，见 {@link ReportConstants#PROMPT_AI_FULL_ANALYSIS} /
-     *                   {@link ReportConstants#PROMPT_WARNING_ADVICE}
+     *                   {@link ReportConstants#PROMPT_WARNING_ADVICE} /
+     *                   {@link ReportConstants#PROMPT_RULE_SUMMARY}
      */
     public ResolvedPrompt resolve(String promptCode) {
         String system = null;
@@ -89,16 +90,27 @@ public class ReportPromptService {
     /* ==================== 配置页（通用提示词管理）读写，2026-09-23 新增 ==================== */
 
     /**
-     * 列出全部提示词（供「系统管理 → 通用提示词管理」列表页）
+     * 列出可配置的提示词（供「系统管理 → 通用提示词管理」列表页）
      *
      * <p>读表异常（表没建 / 字段不符）⇒ 返回空列表并告警，<b>不抛异常</b>：
      * 与 {@link #resolve(String)} 同一套「表不可用也要让系统跑起来」的原则。</p>
      *
      * <p>排序按 {@code promptCode}，让列表顺序稳定、可预期（不依赖库的默认物理顺序）。</p>
+     *
+     * <p>🔴 <b>排除系统内置项</b>（{@code sceneType = 'SYSTEM'}，2026-09-24）：这类提示词
+     * （如 {@code RULE_SUMMARY} 风险要点总结）的输出格式与代码里的解析契约强耦合
+     * （{@code #PICK#} / {@code #TAIL#} 标记、条数上限），业务人员在界面上改会把报告生成搞坏
+     * ⇒ 只在库里维护、不在配置页暴露。<b>由数据驱动</b>（看 {@code sceneType}），
+     * 不是在这里写死某个 promptCode —— 以后再有系统内置项，只要把 sceneType 置为 SYSTEM 即可。</p>
+     *
+     * <p>⚠️ 判据必须带上 {@code IS NULL}：老数据 / 手工插入的行可能没填 {@code sceneType}，
+     * 直接写 {@code <> 'SYSTEM'} 会因为 SQL 三值逻辑把 NULL 行一起排除掉（列表凭空少条目）。</p>
      */
     public List<AppReportPrompt> listAll() {
         try {
             return promptMapper.selectList(Wrappers.<AppReportPrompt>lambdaQuery()
+                    .and(w -> w.isNull(AppReportPrompt::getSceneType)
+                            .or().ne(AppReportPrompt::getSceneType, ReportConstants.PROMPT_SCENE_SYSTEM))
                     .orderByAsc(AppReportPrompt::getPromptCode));
         } catch (Exception e) {
             log.warn("读取提示词表失败，返回空列表：{}", e.getMessage());
@@ -151,12 +163,18 @@ public class ReportPromptService {
         if (ReportConstants.PROMPT_WARNING_ADVICE.equals(promptCode)) {
             return ReportWarningAdvicePrompt.systemPrompt();
         }
+        if (ReportConstants.PROMPT_RULE_SUMMARY.equals(promptCode)) {
+            return ReportRuleSummaryPrompt.systemPrompt();
+        }
         return ReportAiAnalysisPrompt.systemPrompt();
     }
 
     private static String fallbackTemplate(String promptCode) {
         if (ReportConstants.PROMPT_WARNING_ADVICE.equals(promptCode)) {
             return ReportWarningAdvicePrompt.userPromptTemplate();
+        }
+        if (ReportConstants.PROMPT_RULE_SUMMARY.equals(promptCode)) {
+            return ReportRuleSummaryPrompt.userPromptTemplate();
         }
         return ReportAiAnalysisPrompt.userPromptTemplate();
     }

@@ -111,6 +111,14 @@ public class ReportWordExportService {
     private static final int SIZE_H2 = 14;
     private static final int SIZE_H3 = 12;
     private static final int SIZE_DOC_TITLE = 20;
+    /**
+     * 文档大标题 —— **固定文案**
+     *
+     * <p>🔴 2026-09-24 客户定稿：**不再取 {@code reportInfo.reportTitle}**
+     * （那个值是"对公客户日常定期检查报告"），统一写成「对公客户日常贷后检查报告」，
+     * 与导出文件名的口径（{@code {公司名称}-日常贷后检查报告-yyyyMMdd.docx}）保持一致。</p>
+     */
+    private static final String DOC_TITLE = "对公客户日常贷后检查报告";
     /** 正文段后间距（twips，120 = 6pt） */
     private static final int SPACE_AFTER_BODY = 120;
     /** 标题段前/段后（twips） */
@@ -218,39 +226,50 @@ public class ReportWordExportService {
 
     /* ==================== 文档骨架 ==================== */
 
-    /** 报告头：标题（居中加粗）+ 客户/编号/日期三行小字 */
+    /**
+     * 报告头：**大标题**（居中加粗）+ **一行**元信息（客户名称 / 报告编号 / 日检流水号）
+     *
+     * <p>🔴 2026-09-24 客户定稿（原版面被评"看着相当奇怪"）：</p>
+     * <ol>
+     *   <li>大标题固定为「{@link #DOC_TITLE}」，不再取 {@code reportTitle}；</li>
+     *   <li>元信息三项**放进同一个段落**（整段居中）—— 超过行宽时由 Word 自动折行，
+     *       折行后每行仍居中（客户原话："放一行…换行居中吧，注意版面"）；</li>
+     *   <li>与标题 / 正文之间留出间距，避免贴着正文。</li>
+     * </ol>
+     * <p>⚠️ 模板里的「报告头」三块（{@code BLK_HEAD_01/02/03}）与这里**内容重合**，
+     * 已在 {@link #writeBody} 里跳过，否则首页会重复出现"客户名称 + 日常贷后检查报告"两行。</p>
+     */
     private void writeDocumentTitle(XWPFDocument doc, ReportDetailVO detail) {
-        String title = StringUtils.hasText(detail.getReportTitle())
-                ? detail.getReportTitle() : "日常贷后检查报告";
         XWPFParagraph p = doc.createParagraph();
         p.setAlignment(ParagraphAlignment.CENTER);
         p.setSpacingAfter(120);
         XWPFRun r = p.createRun();
-        r.setText(title);
+        r.setText(DOC_TITLE);
         applyFont(r, FONT_HEADING, SIZE_DOC_TITLE);
         r.setBold(true);
 
-        // 客户名称 / 报告编号 / 生成时间 —— 客户经理拿到纸质件也能对上号
+        // 客户名称 / 报告编号 / 日检流水号 —— 三项**同一段、整段居中**（超宽自动折行且仍居中）
         StringBuilder meta = new StringBuilder();
         if (StringUtils.hasText(detail.getCustomerName())) {
             meta.append("客户名称：").append(detail.getCustomerName());
         }
         if (StringUtils.hasText(detail.getReportNo())) {
             if (meta.length() > 0) {
-                meta.append("    ");
+                meta.append("　　");
             }
             meta.append("报告编号：").append(detail.getReportNo());
         }
         if (StringUtils.hasText(detail.getCheckTaskNo())) {
             if (meta.length() > 0) {
-                meta.append("    ");
+                meta.append("　　");
             }
             meta.append("日检流水号：").append(detail.getCheckTaskNo());
         }
         if (meta.length() > 0) {
             XWPFParagraph mp = doc.createParagraph();
             mp.setAlignment(ParagraphAlignment.CENTER);
-            mp.setSpacingAfter(60);
+            mp.setSpacingBefore(120);
+            mp.setSpacingAfter(240);
             XWPFRun mr = mp.createRun();
             mr.setText(meta.toString());
             applyFont(mr, FONT_BODY, 10);
@@ -261,8 +280,16 @@ public class ReportWordExportService {
     private void writeBody(XWPFDocument doc, ReportDetailVO detail) {
         Map<String, ReportRiskItem> riskByBlock = indexRisks(detail.getRisks());
 
+        // 🔴 报告级块（catalogCode 为空）= 页面的「报告头」：报告主标题（=客户名称）/
+        //    报告副标题（="日常贷后检查报告"）/ 报告说明 ⇒ 内容与 Word 文档头**完全重合**，
+        //    2026-09-24 客户要求不再导出（否则首页会重复出现"客户名称 + 日常贷后检查报告"两行）。
+        // ⚠️ headBlocks 里**还混着另一种**：catalogCode 有值、但目录已停用而落到这里的兜底块
+        //    （见 ReportServiceImpl#detail 的注释）—— 那些是真实正文，**必须保留**，故按 catalogCode 判。
         if (!CollectionUtils.isEmpty(detail.getHeadBlocks())) {
             for (ReportBlockVO block : detail.getHeadBlocks()) {
+                if (!StringUtils.hasText(block.getCatalogCode())) {
+                    continue;
+                }
                 writeBlock(doc, block, riskByBlock);
             }
         }
