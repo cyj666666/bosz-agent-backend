@@ -65,11 +65,12 @@ public class AppReportWarningAdviceBatch {
     @TableField("modelName")
     private String modelName;
 
-    /** 送进大模型的素材快照（便于追溯与复算） */
-    @TableField("sourceSnapshot")
-    private String sourceSnapshot;
-
-    /** 实际使用的提示词快照 */
+    /**
+     * 实际使用的提示词快照（= systemPrompt + userPrompt，**userPrompt 里已含送模型的素材**）
+     *
+     * <p>🔴 <b>2026-09-27 删除 {@code sourceSnapshot} 列</b>：它是本列的子串、且全仓无读取
+     * —— 详见 {@link AppReportAiAnalysis} 同名字段上的说明（两张表同构，一起改的）。</p>
+     */
     @TableField("promptSnapshot")
     private String promptSnapshot;
 

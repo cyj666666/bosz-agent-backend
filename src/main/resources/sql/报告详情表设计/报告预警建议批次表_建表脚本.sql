@@ -11,6 +11,16 @@
 -- 并发约束：同一 reportNo 同时只允许一条 status='RUNNING'（应用层校验，不加唯一约束）。
 -- 约定：不使用 IF NOT EXISTS；不使用反引号 / ENGINE / CHARSET；
 --       camelCase 列名（实体必须显式 @TableField）；COMMENT ON 独立语句；索引名全库唯一。
+--
+-- 🔴 **行内建库后必须补一步**（2026-09-27）：
+--   本表 `promptSnapshot` 会存**上限 6 万字符的素材**（中文 ≈ 18 万字节），
+--   而行内（集中式 GaussDB M 模式）的 `TEXT` 上限**只有 65,535 字节** ⇒ 必然报 `Data too long`。
+--   ⇒ 行内建完表后，**执行** `sql/agent/行内专用_大文本列改MEDIUMTEXT_20260927.sql`
+--     把该列改成 `MEDIUMTEXT`(16MB)。
+--   ⚠️ 外网 openGauss(PG) 的 TEXT 是 1GB，**不需要**改 —— 故此处保持 `TEXT` 以维持两库通用。
+--
+-- 🔴 2026-09-27 变更：**删除 `sourceSnapshot` 列**（与 `app_report_ai_analysis` 同构、一起改的）。
+--   原由：它是 `promptSnapshot` 的子串（素材已嵌进 userPrompt）⇒ 零独有信息 + 全仓无读取。
 -- =============================================================================
 
 CREATE TABLE app_report_warning_advice_batch (
@@ -25,7 +35,6 @@ CREATE TABLE app_report_warning_advice_batch (
     promptCode         VARCHAR(64),
     lmCode             VARCHAR(100),
     modelName          VARCHAR(100),
-    sourceSnapshot     TEXT,
     promptSnapshot     TEXT,
     operatorNo         VARCHAR(64),
     operatorName       VARCHAR(128),
@@ -52,8 +61,7 @@ COMMENT ON COLUMN app_report_warning_advice_batch.coreTip IS '核心提示（模
 COMMENT ON COLUMN app_report_warning_advice_batch.promptCode IS '所用提示词编码（app_report_prompt.promptCode）';
 COMMENT ON COLUMN app_report_warning_advice_batch.lmCode IS '所用大模型配置编码（large_model_config.lm_code）';
 COMMENT ON COLUMN app_report_warning_advice_batch.modelName IS '实际调用的模型名';
-COMMENT ON COLUMN app_report_warning_advice_batch.sourceSnapshot IS '送进大模型的素材快照（便于追溯与复算）';
-COMMENT ON COLUMN app_report_warning_advice_batch.promptSnapshot IS '实际使用的提示词快照';
+COMMENT ON COLUMN app_report_warning_advice_batch.promptSnapshot IS '实际使用的提示词快照（systemPrompt + userPrompt，userPrompt 里已含送模型的素材）';
 COMMENT ON COLUMN app_report_warning_advice_batch.operatorNo IS '触发人账号';
 COMMENT ON COLUMN app_report_warning_advice_batch.operatorName IS '触发人姓名';
 COMMENT ON COLUMN app_report_warning_advice_batch.costMillis IS '大模型调用耗时（毫秒）';

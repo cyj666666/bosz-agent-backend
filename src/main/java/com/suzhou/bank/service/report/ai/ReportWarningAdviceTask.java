@@ -121,7 +121,7 @@ public class ReportWarningAdviceTask {
             update.setModelName(result.getModelName());
             update.setLmCode(result.getLmCode());
             update.setCostMillis(result.getCostMillis());
-            update.setSourceSnapshot(material);
+            // 🔴 2026-09-27：不再写 sourceSnapshot（promptSnapshot 的 [user] 段已含素材，且全仓无读取）
             update.setPromptSnapshot(promptSnapshot);
             update.setFailReason(null);
             update.setGenerateTime(now);
@@ -142,7 +142,7 @@ public class ReportWarningAdviceTask {
                 update.setId(batchId);
                 update.setStatus(ReportConstants.ANALYSIS_STATUS_FAILED);
                 update.setFailReason(reason);
-                update.setSourceSnapshot(material);
+                // 🔴 2026-09-27：不再写 sourceSnapshot（同成功分支）
                 update.setPromptSnapshot(promptSnapshot);
                 update.setGenerateTime(new Date());
                 batchMapper.updateById(update);

@@ -90,7 +90,9 @@ public class ReportAiAnalysisTask {
             update.setModelName(result.getModelName());
             update.setLmCode(result.getLmCode());
             update.setCostMillis(result.getCostMillis());
-            update.setSourceSnapshot(material);
+            // 🔴 2026-09-27：不再写 sourceSnapshot —— 它是下面 promptSnapshot 的子串
+            //    （renderUserPrompt 已把 material 嵌进 userPrompt），且全仓无读取；
+            //    素材仍可从 promptSnapshot 的 [user] 段查看。
             update.setPromptSnapshot("[system]\n" + systemPrompt + "\n\n[user]\n" + userPrompt);
             update.setFailReason(null);
             update.setGenerateTime(new Date());

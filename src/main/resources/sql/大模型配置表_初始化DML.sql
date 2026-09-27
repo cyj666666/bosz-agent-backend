@@ -101,5 +101,6 @@ VALUES
 --      enable_thinking / chat_template_kwargs（需改代码）
 --    · 连接超时 / UnknownHost                                    → 运行环境没有公网出口，
 --      需改走行内统一网关（把 url 换成网关地址）
--- 3) 想看实际发出去的请求，查 app_report_ai_analysis 的 source_snapshot / prompt_snapshot
+-- 3) 想看实际发出去的请求，查 app_report_ai_analysis 的 promptSnapshot
+--    （systemPrompt + userPrompt，**素材已含在 [user] 段里**；原 sourceSnapshot 列已于 2026-09-27 删除）
 -- -----------------------------------------------------------------------------

@@ -7,6 +7,18 @@
 -- 并发约束：同一 reportNo 同时只允许一条 status='RUNNING'（应用层校验，不加唯一约束）。
 -- 约定：不使用 IF NOT EXISTS；不使用反引号 / ENGINE / CHARSET；
 --       camelCase 列名（实体必须显式 @TableField）；COMMENT ON 独立语句；索引名全库唯一。
+--
+-- 🔴 **行内建库后必须补一步**（2026-09-27）：
+--   本表 `promptSnapshot` 会存**上限 6 万字符的素材**（中文 ≈ 18 万字节），
+--   而行内（集中式 GaussDB M 模式）的 `TEXT` 上限**只有 65,535 字节** ⇒ 必然报 `Data too long`。
+--   ⇒ 行内建完表后，**执行** `sql/agent/行内专用_大文本列改MEDIUMTEXT_20260927.sql`
+--     把该列改成 `MEDIUMTEXT`(16MB)。
+--   ⚠️ 外网 openGauss(PG) 的 TEXT 是 1GB，**不需要**改 —— 故此处保持 `TEXT` 以维持两库通用。
+--
+-- 🔴 2026-09-27 变更：**删除 `sourceSnapshot` 列**。
+--   原由：① 它是 `promptSnapshot` 的子串（`renderUserPrompt` 三个分支都把素材嵌进 userPrompt）
+--         ⇒ 零独有信息；② 全仓无任何读取（纯写不读）；③ 行内 TEXT 仅 64KB 本就存不下。
+--   ⇒ 排查「当时 AI 看到了什么」看 `promptSnapshot` 即可（素材在 `[user]` 段里）。
 -- =============================================================================
 
 CREATE TABLE app_report_ai_analysis (
@@ -21,7 +33,6 @@ CREATE TABLE app_report_ai_analysis (
     riskLevel          VARCHAR(32),
     lmCode             VARCHAR(100),
     modelName          VARCHAR(100),
-    sourceSnapshot     TEXT,
     promptSnapshot     TEXT,
     operatorNo         VARCHAR(64),
     operatorName       VARCHAR(128),
@@ -48,8 +59,7 @@ COMMENT ON COLUMN app_report_ai_analysis.summary IS '综合结论摘要';
 COMMENT ON COLUMN app_report_ai_analysis.riskLevel IS '大模型给出的总体风险等级';
 COMMENT ON COLUMN app_report_ai_analysis.lmCode IS '所用大模型配置编码（large_model_config.lm_code）';
 COMMENT ON COLUMN app_report_ai_analysis.modelName IS '实际调用的模型名';
-COMMENT ON COLUMN app_report_ai_analysis.sourceSnapshot IS '送进大模型的素材快照（正文摘取 + 外部数据，便于追溯与复算）';
-COMMENT ON COLUMN app_report_ai_analysis.promptSnapshot IS '实际使用的提示词快照';
+COMMENT ON COLUMN app_report_ai_analysis.promptSnapshot IS '实际使用的提示词快照（systemPrompt + userPrompt，userPrompt 里已含送模型的素材）';
 COMMENT ON COLUMN app_report_ai_analysis.operatorNo IS '触发人账号';
 COMMENT ON COLUMN app_report_ai_analysis.operatorName IS '触发人姓名';
 COMMENT ON COLUMN app_report_ai_analysis.costMillis IS '大模型调用耗时（毫秒）';

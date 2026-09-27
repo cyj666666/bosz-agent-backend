@@ -63,11 +63,19 @@ public class AppReportAiAnalysis {
     @TableField("modelName")
     private String modelName;
 
-    /** 送进大模型的素材快照（正文摘取 + 外部数据，便于追溯与复算） */
-    @TableField("sourceSnapshot")
-    private String sourceSnapshot;
-
-    /** 实际使用的提示词快照 */
+    /**
+     * 实际使用的提示词快照（= systemPrompt + userPrompt，**userPrompt 里已含送模型的素材**）
+     *
+     * <p>🔴 <b>2026-09-27 删除 {@code sourceSnapshot} 列</b>，原由：</p>
+     * <ol>
+     *   <li>它是本列的<b>子串</b> —— {@code renderUserPrompt} 三个分支都把 material 嵌进 userPrompt
+     *       ⇒ 零独有信息；</li>
+     *   <li>全仓无任何读取（纯写不读）；</li>
+     *   <li>行内 M 模式 `TEXT` 仅 64KB，素材上限 6 万字符（中文约 18 万字节）本就存不下，
+     *       留着要么报错要么白占一份存储。</li>
+     * </ol>
+     * <p>排查"当时 AI 看到了什么"看本列即可（素材在 {@code [user]} 段里）。</p>
+     */
     @TableField("promptSnapshot")
     private String promptSnapshot;
 
