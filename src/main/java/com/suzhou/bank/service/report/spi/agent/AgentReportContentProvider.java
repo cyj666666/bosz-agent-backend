@@ -241,12 +241,67 @@ public class AgentReportContentProvider implements ReportContentProvider {
         String analysisType = block.getAnalysisType();
 
         // ③-1 表格溯源：agentCode = 表英文名（app_*），agentParams = 查询条件（可带 `列=值` 过滤令牌）。
-        //      🔴 严格按条件查，**不做担保人轮询**。
         //      若放它去走知识库链路（拿表名当 moduleCode 查知识配置）→ 查不到 →
         //      每次报告都往 fail_reason 里写"调用失败"。
+        //
+        // 🔴 2026-09-27（客户口径变更）：表格溯源**也按担保人轮询** ——
+        //    「十二、（二）」下每个担保人要有**自己的一套**溯源表格（担保人信息表 / 企业征信快照表 /
+        //    担保人征信表）。判据与知识库 / 智策引擎块**完全一致**（复用同一套元令牌）：
+        //      · agentParams 里出现 `guarantorName`          → 需要担保人口径；
+        //      · `guarantorMode=OWN`                         → 借款人本人（用 entName），**不轮询**；
+        //      · `guarantorMode=NATURAL` / 其他（默认 LEGAL）→ **按人轮询**，每人一段；
+        //      · `guarantorEmph=1`                           → 段落带「企业/自然人担保人：XXX」名字行。
+        //    （历史口径：09-17~09-26 是「严格按条件查、绝不轮询」，即一个块只出一份、
+        //      多个担保人的数据全在一张表里。）
         if (ReportConstants.ANALYSIS_TRACE_TABLE.equals(analysisType)) {
             long traceStart = System.currentTimeMillis();
             try {
+                List<String> traceParams = parseAgentParams(block.getAgentParams());
+                boolean traceNeedGuarantor = traceParams.contains(PARAM_GUARANTOR_NAME);
+                String traceMode = tokenValue(traceParams, GUARANTOR_MODE_TOKEN);
+                boolean traceOwn = MODE_OWN.equalsIgnoreCase(traceMode);
+                boolean traceNatural = MODE_NATURAL.equalsIgnoreCase(traceMode);
+                boolean traceEmph = traceParams.contains(GUARANTOR_EMPH_TOKEN);
+
+                if (traceNeedGuarantor && !traceOwn) {
+                    // —— 按担保人轮询：每人查一次表、各包一个 <div class="rpt-guarantor"> ——
+                    List<String> guarantors = listGuarantors(context.getReportNo(), traceNatural);
+                    if (CollectionUtils.isEmpty(guarantors)) {
+                        log.info("【报告内容加工】表格溯源：无{}担保人(跳过该块) reportNo={} block={}({}) 表={}",
+                                traceNatural ? "自然人" : "企业", context.getReportNo(),
+                                blockCode, block.getBlockName(), agentCode);
+                        return null;
+                    }
+                    // 元令牌（guarantorMode / guarantorEmph）不是表列，先剔掉再拼查询条件，
+                    // 否则 buildMd 会逐个令牌记「表里没有该列，跳过此条件」的 WARN
+                    String traceQueryParams = stripGuarantorMetaTokens(block.getAgentParams());
+                    StringBuilder sb = new StringBuilder();
+                    for (String guarantor : guarantors) {
+                        Map<String, String> values = new HashMap<>();
+                        values.put(PARAM_REPORT_NO, context.getReportNo());
+                        values.put(PARAM_ENT_NAME, context.getCustomerName());
+                        values.put(PARAM_GUARANTOR_NAME, guarantor);
+                        String md = traceTableBuilder.buildMd(agentCode, traceQueryParams, values);
+                        if (!StringUtils.hasText(md)) {
+                            continue;
+                        }
+                        appendGuarantorPiece(sb, traceNatural, guarantors.size(), guarantor, md, traceEmph);
+                    }
+                    if (sb.length() == 0) {
+                        log.info("【报告内容加工】表格溯源无内容(按担保人轮询) reportNo={} block={}({}) "
+                                        + "表={} 担保人数={} 耗时={}ms",
+                                context.getReportNo(), blockCode, block.getBlockName(), agentCode,
+                                guarantors.size(), System.currentTimeMillis() - traceStart);
+                        return null;
+                    }
+                    log.info("【报告内容加工】表格溯源完成(按担保人轮询) reportNo={} block={}({}) "
+                                    + "表={} 担保人数={} 字数={} 耗时={}ms",
+                            context.getReportNo(), blockCode, block.getBlockName(), agentCode,
+                            guarantors.size(), sb.length(), System.currentTimeMillis() - traceStart);
+                    return new ContentPayload(sb.toString());
+                }
+
+                // —— 不轮询（无担保人口径 / OWN 借款人本人）：老行为，一份 ——
                 Map<String, String> values = new HashMap<>();
                 values.put(PARAM_REPORT_NO, context.getReportNo());
                 values.put(PARAM_ENT_NAME, context.getCustomerName());
@@ -628,13 +683,46 @@ public class AgentReportContentProvider implements ReportContentProvider {
         if (sb.length() > 0) {
             sb.append('\n');
         }
-        sb.append("<div class=\"rpt-guarantor").append(emph ? " rpt-guarantor-emph" : "").append("\">\n");
+        // 🔴 2026-09-27：每段都带 `data-guarantor="XXX"`（**不显示**，只作标记）。
+        //    前端据此把「各块里同一个担保人的内容」对齐与重组 —— 例如
+        //    ① 表格溯源按担保人拆多入口；②「担保人段」成套渲染。
+        //    ⚠️ **不能靠段落顺序对应**：某人内容为空时上面的循环会 `continue` 跳过，
+        //    段落数就与担保人数对不上，按顺序取会整体错位。
+        sb.append("<div class=\"rpt-guarantor").append(emph ? " rpt-guarantor-emph" : "")
+                .append("\" data-guarantor=\"").append(escapeHtml(guarantor)).append("\">\n");
         if (emph) {
             String label = natural ? "自然人担保人" : "企业担保人";
             sb.append("<p class=\"rpt-guarantor-name\">").append(escapeHtml(label)).append("：")
                     .append(escapeHtml(guarantor)).append("</p>\n");
         }
         sb.append(piece).append("\n</div>");
+    }
+
+    /**
+     * 剔掉 {@code agentParams} 里的「**元令牌**」（{@code guarantorMode=…} / {@code guarantorEmph=1}）。
+     *
+     * <p>这两个令牌是**给本类读的**（决定轮询口径与是否加名字行），不是业务表列 ——
+     * 表格溯源拼查询条件时若带着它们，{@link TraceTableBuilder} 会逐条记
+     * 「表里没有该列，跳过此条件」的 WARN（无害但刷屏）。
+     * 其余参数（{@code reportNo} / {@code entName} / {@code guarantorName} / {@code 列=值} 过滤令牌）
+     * **原样保留**。</p>
+     */
+    private static String stripGuarantorMetaTokens(String agentParams) {
+        if (!StringUtils.hasText(agentParams)) {
+            return agentParams;
+        }
+        List<String> keep = new ArrayList<>();
+        for (String raw : agentParams.split(",")) {
+            String token = raw == null ? "" : raw.trim();
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (token.startsWith(GUARANTOR_MODE_TOKEN + "=") || token.equals(GUARANTOR_EMPH_TOKEN)) {
+                continue;
+            }
+            keep.add(token);
+        }
+        return String.join(",", keep);
     }
 
     /**
