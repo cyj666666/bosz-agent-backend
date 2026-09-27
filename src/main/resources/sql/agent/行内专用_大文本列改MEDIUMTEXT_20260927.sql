@@ -63,7 +63,14 @@
 --      在行内**仅本 agent 使用**，改列类型无跨系统影响，不受「行内表结构不能动」那条口径约束。
 --   3. 列类型由 TEXT 变宽为 MEDIUMTEXT（同族字符串类型）⇒ 对 Java / MyBatis-Plus 无影响，
 --      **不需要改代码、不需要重新打包**。
---   4. 脚本用 `ALTER COLUMN ... TYPE`（PG 语法）。**若行内报语法错**，改用文末的 `MODIFY COLUMN` 备选写法。
+--   4. 🔴 **语法：行内（M 兼容模式）必须用 `MODIFY COLUMN`** ——
+--      2026-09-27 行内实测：`ALTER TABLE … ALTER COLUMN … TYPE MEDIUMTEXT` **报「不支持 TYPE」**。
+--      本脚本正文已全部改为 `MODIFY COLUMN`；PG 风格写法见文末「备选」，
+--      那套**只在外网 openGauss(PG) 上用**，别再拿到行内跑。
+--   5. ⚠️ `MODIFY COLUMN` 在 MySQL 语义下**会重置列定义**（没写出来的属性会丢：
+--      NOT NULL / DEFAULT / 内联 COMMENT）。✅ 已核对这 6 列建表时**都是裸 `TEXT,`**
+--      （无 NOT NULL、无 DEFAULT，注释走独立的 `COMMENT ON COLUMN`）⇒ 只写类型是安全的。
+--      **改完顺手核一下列注释还在不在**，若丢了用文末的 `COMMENT ON COLUMN` 补回。
 --   5. （可选，建议）这 6 列存的都是**记录 / 快照性质**的数据（非业务主数据）；
 --      若想稳妥可先备份，例：`CREATE TABLE prompt_query_result_bak_20260927 AS SELECT * FROM prompt_query_result;`
 --
@@ -103,24 +110,24 @@ ALTER TABLE app_report_warning_advice_batch DROP COLUMN sourceSnapshot;
 -- ---------------------------------------------------------------------
 -- ⑤ 报告 AI 全文分析（提示词快照 —— 含 6 万字符素材，必然超 64KB）
 -- ---------------------------------------------------------------------
-ALTER TABLE app_report_ai_analysis ALTER COLUMN promptsnapshot TYPE MEDIUMTEXT;
+ALTER TABLE app_report_ai_analysis          MODIFY COLUMN promptsnapshot MEDIUMTEXT;
 
 -- ---------------------------------------------------------------------
 -- ⑥ 报告预警建议批次（同上，由 ReportWarningAdviceTask 写入）
 -- ---------------------------------------------------------------------
-ALTER TABLE app_report_warning_advice_batch ALTER COLUMN promptsnapshot TYPE MEDIUMTEXT;
+ALTER TABLE app_report_warning_advice_batch MODIFY COLUMN promptsnapshot MEDIUMTEXT;
 
 -- ---------------------------------------------------------------------
 -- ③ prompt 请求结果记录（query_result 已实际报过 Data too long）
 -- ---------------------------------------------------------------------
-ALTER TABLE prompt_query_result ALTER COLUMN query_result TYPE MEDIUMTEXT;
-ALTER TABLE prompt_query_result ALTER COLUMN query_param  TYPE MEDIUMTEXT;
+ALTER TABLE prompt_query_result             MODIFY COLUMN query_result   MEDIUMTEXT;
+ALTER TABLE prompt_query_result             MODIFY COLUMN query_param    MEDIUMTEXT;
 
 -- ---------------------------------------------------------------------
 -- ④ 大模型调用记录（request_body = 完整请求体，content = 模型完整输出）
 -- ---------------------------------------------------------------------
-ALTER TABLE call_llm_record ALTER COLUMN request_body TYPE MEDIUMTEXT;
-ALTER TABLE call_llm_record ALTER COLUMN content      TYPE MEDIUMTEXT;
+ALTER TABLE call_llm_record                 MODIFY COLUMN request_body   MEDIUMTEXT;
+ALTER TABLE call_llm_record                 MODIFY COLUMN content        MEDIUMTEXT;
 
 
 -- =====================================================================
@@ -173,26 +180,66 @@ ORDER BY max_bytes DESC NULLS LAST;
 -- UPDATE app_report_warning_advice_batch t SET sourceSnapshot = b.sourceSnapshot
 --     FROM app_report_warning_advice_batch_bak_ss_20260927 b WHERE b.id = t.id;
 --
--- 【第二部分 · 改类型】改回 TEXT。
+-- 【第二部分 · 改类型】改回 TEXT（行内同样用 `MODIFY COLUMN`）。
 -- 🔴 回滚前**必须**确认该列最大字节数 ≤ 65535，否则回滚本身会报 Data too long。
 --    用上面那条 max(octet_length(...)) 查询确认。
 --
--- ALTER TABLE app_report_ai_analysis          ALTER COLUMN promptsnapshot TYPE TEXT;
--- ALTER TABLE app_report_warning_advice_batch ALTER COLUMN promptsnapshot TYPE TEXT;
--- ALTER TABLE prompt_query_result             ALTER COLUMN query_result   TYPE TEXT;
--- ALTER TABLE prompt_query_result             ALTER COLUMN query_param    TYPE TEXT;
--- ALTER TABLE call_llm_record                 ALTER COLUMN request_body   TYPE TEXT;
--- ALTER TABLE call_llm_record                 ALTER COLUMN content        TYPE TEXT;
+-- ALTER TABLE app_report_ai_analysis          MODIFY COLUMN promptsnapshot TEXT;
+-- ALTER TABLE app_report_warning_advice_batch MODIFY COLUMN promptsnapshot TEXT;
+-- ALTER TABLE prompt_query_result             MODIFY COLUMN query_result   TEXT;
+-- ALTER TABLE prompt_query_result             MODIFY COLUMN query_param    TEXT;
+-- ALTER TABLE call_llm_record                 MODIFY COLUMN request_body   TEXT;
+-- ALTER TABLE call_llm_record                 MODIFY COLUMN content        TEXT;
 
 
 -- =====================================================================
--- 备选写法（仅当上面 `ALTER COLUMN ... TYPE` 报语法错时使用）
---   M 兼容模式下 MySQL 风格语法同样可用：
---   ⚠️ MODIFY COLUMN 只用于「改类型」（第二部分）；DROP COLUMN 两种模式语法一致，无需备选。
+-- 【附 A】补回列注释（**仅当** MODIFY COLUMN 之后发现注释丢了才跑）
+--   ⚠️ 本脚本的 6 列注释是独立 `COMMENT ON COLUMN`（建表脚本里就有）——
+--      MySQL 语义的 MODIFY 只重置「内联 COMMENT」，正常不会动独立 COMMENT ON 的元数据；
+--      但个别版本会清掉 ⇒ 改完核一下（见下），丢了再跑这几条。
 -- =====================================================================
--- ALTER TABLE app_report_ai_analysis          MODIFY COLUMN promptsnapshot MEDIUMTEXT;
--- ALTER TABLE app_report_warning_advice_batch MODIFY COLUMN promptsnapshot MEDIUMTEXT;
--- ALTER TABLE prompt_query_result             MODIFY COLUMN query_result   MEDIUMTEXT;
--- ALTER TABLE prompt_query_result             MODIFY COLUMN query_param    MEDIUMTEXT;
--- ALTER TABLE call_llm_record                 MODIFY COLUMN request_body   MEDIUMTEXT;
--- ALTER TABLE call_llm_record                 MODIFY COLUMN content        MEDIUMTEXT;
+-- 核对（期望 6 行都带 comment，不为空）：
+--   SELECT table_name, column_name, data_type, character_maximum_length, column_comment
+--     FROM information_schema.columns
+--    WHERE (table_name, column_name) IN (
+--            ('app_report_ai_analysis','promptsnapshot'),
+--            ('app_report_warning_advice_batch','promptsnapshot'),
+--            ('prompt_query_result','query_result'),
+--            ('prompt_query_result','query_param'),
+--            ('call_llm_record','request_body'),
+--            ('call_llm_record','content')
+--          )
+--    ORDER BY table_name, column_name;
+--
+-- 若 column_comment 为空 ⇒ 按【原建表脚本里的原文】补：
+-- COMMENT ON COLUMN app_report_ai_analysis.promptsnapshot IS '实际使用的提示词快照（systemPrompt + userPrompt，userPrompt 里已含送模型的素材）';
+-- COMMENT ON COLUMN app_report_warning_advice_batch.promptsnapshot IS '实际使用的提示词快照（systemPrompt + userPrompt，userPrompt 里已含送模型的素材）';
+-- COMMENT ON COLUMN prompt_query_result.query_result IS '查询结果';
+-- COMMENT ON COLUMN prompt_query_result.query_param  IS '查询参数';
+-- COMMENT ON COLUMN call_llm_record.request_body     IS '请求体';
+-- COMMENT ON COLUMN call_llm_record.content          IS '模型返回内容';
+
+-- =====================================================================
+-- 【附 B】PG 风格写法（**仅外网 openGauss 用；行内实测报「不支持 TYPE」**）
+--   ⛔ 不要再把这段拿到行内跑。
+-- =====================================================================
+-- ALTER TABLE app_report_ai_analysis          ALTER COLUMN promptsnapshot TYPE MEDIUMTEXT;
+-- ALTER TABLE app_report_warning_advice_batch ALTER COLUMN promptsnapshot TYPE MEDIUMTEXT;
+-- ALTER TABLE prompt_query_result             ALTER COLUMN query_result   TYPE MEDIUMTEXT;
+-- ALTER TABLE prompt_query_result             ALTER COLUMN query_param    TYPE MEDIUMTEXT;
+-- ALTER TABLE call_llm_record                 ALTER COLUMN request_body   TYPE MEDIUMTEXT;
+-- ALTER TABLE call_llm_record                 ALTER COLUMN content        TYPE MEDIUMTEXT;
+
+-- =====================================================================
+-- 【附 C】若 `MODIFY COLUMN` 在行内**也**报错时的退路（按顺序试，哪条通用哪条）
+--   注意：这三种都是 MySQL 家族的等价写法，列定义同样只写类型。
+-- =====================================================================
+-- ① 省略 COLUMN 关键字：
+-- ALTER TABLE app_report_ai_analysis MODIFY promptsnapshot MEDIUMTEXT;
+-- ② SET DATA TYPE（部分 M 模式实现认这个）：
+-- ALTER TABLE app_report_ai_analysis ALTER COLUMN promptsnapshot SET DATA TYPE MEDIUMTEXT;
+-- ③ 终极退路 —— 重建列（数据量大，务必低峰；先备份）：
+-- ALTER TABLE app_report_ai_analysis ADD COLUMN promptsnapshot_new MEDIUMTEXT;
+-- UPDATE app_report_ai_analysis SET promptsnapshot_new = promptsnapshot;
+-- ALTER TABLE app_report_ai_analysis DROP COLUMN promptsnapshot;
+-- ALTER TABLE app_report_ai_analysis RENAME COLUMN promptsnapshot_new TO promptsnapshot;
