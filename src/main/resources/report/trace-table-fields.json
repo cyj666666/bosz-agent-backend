@@ -230,11 +230,11 @@
       "fields": [
         {
           "field": "subjectType",
-          "label": "主体类型（码值：借款人/股东）"
+          "label": "主体类型"
         },
         {
           "field": "subjectName",
-          "label": "主体名称（借款人名称/股东名称）"
+          "label": "主体名称"
         },
         {
           "field": "eventTime",
@@ -242,7 +242,7 @@
         },
         {
           "field": "eventType",
-          "label": "舆情类型（码值：证券市场违规/股票戴帽/退市风险/评级下调/高管无法履职/财务造假/其他，待确认）"
+          "label": "舆情类型"
         },
         {
           "field": "eventTypeCode",
@@ -290,7 +290,7 @@
         },
         {
           "field": "isGroup",
-          "label": "是否集团客户（码值：是/否）"
+          "label": "是否集团客户"
         },
         {
           "field": "groupName",
@@ -1649,11 +1649,11 @@
       "fields": [
         {
           "field": "subjectType",
-          "label": "主体类型（码值：借款人/股东）"
+          "label": "主体类型"
         },
         {
           "field": "subjectName",
-          "label": "主体名称（借款人名称/股东名称）"
+          "label": "主体名称"
         },
         {
           "field": "eventTime",
@@ -1661,7 +1661,7 @@
         },
         {
           "field": "eventType",
-          "label": "舆情类型（码值：证券市场违规/股票戴帽/退市风险/评级下调/高管无法履职/财务造假/其他，待确认）"
+          "label": "舆情类型"
         },
         {
           "field": "eventTypeCode",
@@ -1709,7 +1709,7 @@
         },
         {
           "field": "isGroup",
-          "label": "是否集团客户（码值：是/否）"
+          "label": "是否集团客户"
         },
         {
           "field": "groupName",
