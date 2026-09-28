@@ -915,7 +915,7 @@
         },
         {
           "field": "guarantorName",
-          "label": "担保人"
+          "label": "主体名称"
         }
       ]
     },
