@@ -1576,8 +1576,64 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
             knowledgeBaseParamsEntity.setInputParam(JSONObject.toJSONString(reqMsg.getInputParam()));
         }
         knowledgeBaseParamsService.save(knowledgeBaseParamsEntity);
+        // 🔴 新建后自动把「输出要求」权限授给当前用户所属角色。
+        //    不补这一步，新库在 sys_role_knowledge_output 里没有任何行 ⇒ queryKnowledgeBaseParamsInfo
+        //    回 hasAuth=false ⇒ 前端「配置」弹窗里「输出要求」的核心提示词与「分段与检索策略」整块不渲染。
+        grantKnowledgeOutputAuthToCurrentRoles(knowledgeBaseParamsEntity);
         executor.execute(() -> handleIndexParamConfig(knowledgeBaseParamsEntity, knowledgeBaseParamsEntity.getRelateIndexSet()));
         return AgentResult.OK();
+    }
+
+    /**
+     * 新建知识库时，把「输出要求」权限自动授予当前用户所属的全部角色。
+     *
+     * <p>背景：{@link #queryKnowledgeBaseParamsInfo} 用
+     * {@code sys_role_knowledge_output(role_id, knowledge_id = paramId)} 命中与否来算 hasAuth，
+     * 而新建的库必然没有对应记录 ⇒ hasAuth=false ⇒ 前端「配置」弹窗里
+     * 「输出要求」区块的核心提示词、以及底部「分段与检索策略」整块都不会渲染，
+     * 表现为「新增知识库后核心提示词不见了」。
+     * 源工程 {@code KnownConfigModalV2.showOutputSection} 靠 {@code hasPermission('index:output')}
+     * 兜底规避了这一点，Vue3 宿主没有该权限项，故在落库侧补齐 —— 谁建的库，谁的角色就有权配它的输出要求。
+     *
+     * <p>⚠️ 授权失败只记日志，<b>绝不能影响新建主流程</b>。
+     */
+    private void grantKnowledgeOutputAuthToCurrentRoles(KnowledgeBaseParamsEntity entity) {
+        try {
+            if (Objects.isNull(entity) || StringUtils.isEmpty(entity.getParamId())) {
+                return;
+            }
+            ApiContextModel apiContextModel = ApiContext.getApiContextModel();
+            // role 是「角色主键(sys_role.id)的 JSON 数组串」；取不到当前用户角色时直接跳过
+            String role = Objects.isNull(apiContextModel) ? null : apiContextModel.getRole();
+            if (StringUtils.isEmpty(role)) {
+                log.warn("新建知识库后未能取到当前用户角色，跳过输出要求权限自动授予，paramId={}", entity.getParamId());
+                return;
+            }
+            List<String> roleIdList = JSON.parseArray(role, String.class);
+            if (CollectionUtils.isEmpty(roleIdList)) {
+                return;
+            }
+            Date now = new Date();
+            List<SysRoleKnowledgeOutputEntity> list = new ArrayList<>();
+            for (String roleId : roleIdList) {
+                if (StringUtils.isEmpty(roleId)) {
+                    continue;
+                }
+                SysRoleKnowledgeOutputEntity outputEntity = new SysRoleKnowledgeOutputEntity();
+                outputEntity.setRoleId(roleId);
+                outputEntity.setGroupId(entity.getGroupId());
+                outputEntity.setKnowledgeId(entity.getParamId());
+                outputEntity.setOperateDate(now);
+                list.add(outputEntity);
+            }
+            if (CollectionUtils.isNotEmpty(list)) {
+                sysRoleKnowledgeOutputService.saveBatch(list);
+                log.info("新建知识库自动授予输出要求权限完成，paramId={}，角色数={}", entity.getParamId(), list.size());
+            }
+        } catch (Exception e) {
+            log.error("新建知识库自动授予输出要求权限失败，不影响新建结果，paramId={}，异常：{}",
+                    Objects.isNull(entity) ? null : entity.getParamId(), ExceptionUtils.getStackTrace(e));
+        }
     }
 
     @Override
@@ -2076,6 +2132,9 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
         knowledgeBaseParamsEntity.setUpdateUserId(apiContextModel.getUserName());
         knowledgeBaseParamsEntity.setUpdateTime(DateUtil.now());
         knowledgeBaseParamsService.save(knowledgeBaseParamsEntity);
+        // 🔴 与「新建」同理：复制出来的库同样是全新的 paramId，sys_role_knowledge_output 里
+        //    不会有它的记录，不补授权则 hasAuth=false ⇒ 核心提示词 / 分段与检索策略看不到。
+        grantKnowledgeOutputAuthToCurrentRoles(knowledgeBaseParamsEntity);
     }
 
     @Override
@@ -2231,8 +2290,15 @@ public class KnowledgeBaseConfigServiceImpl implements IknowledgeBaseConfigServi
             knowledgeBaseParamsDTO.setInputParam(new JSONArray());
         }
         // 判断输出要求权限
+        // ⚠️ 先说明白：`KnowledgeBaseParamsDTO.hasAuth` 是**原始 boolean**，未命中时天然就是 false，
+        //    且全项目没有配 @JsonInclude、Jackson 默认 Include.ALWAYS 一定会把它序列化出去，
+        //    所以这一行不是"修 bug"，而是把「默认不授权(fail-closed)」的意图显式写出来：
+        //    一旦以后有人把它改成 Boolean 包装类型，漏 set 就会让字段从响应里整个消失，
+        //    前端 `hasAuth === true` 恒为 false 且无从排查。
+        knowledgeBaseParamsDTO.setHasAuth(false);
         ApiContextModel apiContextModel = ApiContext.getApiContextModel();
-        String role = apiContextModel.getRole();
+        // 判空兜底：取不到上下文时不能让整个接口 500，退化为"无输出要求权限"
+        String role = Objects.isNull(apiContextModel) ? null : apiContextModel.getRole();
         if (StringUtils.isNotEmpty(role)) {
             List<String> roleIdList = JSON.parseArray(role, String.class);
             boolean hasAuth = sysRoleKnowledgeOutputService.checkKnowledgeOutputAuth(roleIdList, reqMsg.getParamId());
