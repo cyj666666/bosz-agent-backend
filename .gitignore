@@ -4,6 +4,7 @@ target/
 *.jar
 *.war
 *.log
+_tmp_*
 .idea/
 *.iml
 .vscode/
@@ -11,4 +12,3 @@ target/
 .workbuddy
 logs/
 _tools/
-doc/

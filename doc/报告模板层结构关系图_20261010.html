@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>贷后报告 · 模板层结构关系图（V2）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    background: #F4F7FB;
+    color: #333;
+    padding: 28px 16px 48px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1180px; margin: 0 auto; }
+
+  /* ---------- 页头 ---------- */
+  .head {
+    background: linear-gradient(135deg, #0C447C 0%, #185FA5 100%);
+    color: #fff; border-radius: 16px; padding: 26px 32px; margin-bottom: 22px;
+  }
+  .head h1 { font-size: 23px; font-weight: 700; letter-spacing: .5px; }
+  .head .sub { font-size: 13.5px; opacity: .92; margin-top: 8px; line-height: 1.7; }
+  .head .tag {
+    display: inline-block; font-size: 12px; background: rgba(255,255,255,.18);
+    padding: 3px 10px; border-radius: 20px; margin-right: 8px; margin-top: 10px;
+  }
+
+  /* ---------- 通用卡片 / 分区 ---------- */
+  .card {
+    background: #fff; border-radius: 14px; padding: 22px 26px; margin-bottom: 18px;
+    border: 1px solid #E3EAF3;
+  }
+  .sec-title {
+    font-size: 15px; font-weight: 700; color: #0C447C; margin-bottom: 16px;
+    padding-left: 12px; border-left: 4px solid #185FA5; line-height: 1.2;
+  }
+  .sec-title small { font-weight: 400; color: #7A8798; font-size: 12px; margin-left: 8px; }
+
+  /* ---------- 全景三层 ---------- */
+  .flow { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+  .layer {
+    flex: 1 1 220px; border-radius: 12px; padding: 16px 18px; position: relative;
+  }
+  .layer h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .layer p { font-size: 12.5px; line-height: 1.65; }
+  .l-tpl  { background: #E6F1FB; border: 1px solid #B5D4F4; }
+  .l-tpl h3  { color: #0C447C; }
+  .l-inst { background: #E1F5EE; border: 1px solid #9FE1CB; }
+  .l-inst h3 { color: #085041; }
+  .l-out  { background: #F1EFE8; border: 1px solid #D3D1C7; }
+  .l-out h3  { color: #444441; }
+  .flow .arrow { align-self: center; color: #9AA7B8; font-size: 22px; font-weight: 700; }
+
+  /* ---------- 两表并列 ---------- */
+  .tables { display: grid; grid-template-columns: 1fr 92px 1fr; gap: 0; align-items: stretch; }
+  .tbl { border-radius: 12px; overflow: hidden; border: 1px solid #DCE5F0; }
+  .tbl .th { padding: 12px 16px; color: #fff; }
+  .tbl .th .name { font-size: 14px; font-weight: 700; font-family: "Consolas", monospace; }
+  .tbl .th .cn { font-size: 12px; opacity: .9; margin-top: 3px; }
+  .tbl-cat .th { background: #185FA5; }
+  .tbl-blk .th { background: #0F6E56; }
+  .tbl .body { padding: 8px 0; background: #FBFCFE; }
+  .fld {
+    display: grid; grid-template-columns: 148px 1fr; gap: 10px;
+    padding: 6px 16px; font-size: 12.5px; line-height: 1.55;
+    border-bottom: 1px dashed #EDF1F6;
+  }
+  .fld:last-child { border-bottom: none; }
+  .fld .k { font-family: "Consolas", monospace; color: #2C3E50; font-weight: 600; }
+  .fld .v { color: #64748B; }
+  .fld.key { background: #FFF8E8; }
+  .fld.key .k { color: #B37400; }
+  .fld .v b { color: #C0392B; }
+  .badge {
+    display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 8px;
+    margin-left: 6px; vertical-align: middle; font-family: inherit;
+  }
+  .b-key  { background: #FFE9B8; color: #8A5A00; }
+  .b-old  { background: #EFEDE8; color: #8A8578; }
+
+  /* 中间关联列 */
+  .join-col {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; padding: 0 6px;
+  }
+  .join-line { width: 100%; height: 2px; background: #B9C6D6; position: relative; }
+  .join-line::after {
+    content: ""; position: absolute; left: -1px; top: -5px;
+    border: 6px solid transparent; border-right-color: #B9C6D6;
+  }
+  .join-label {
+    font-size: 12px; color: #475569; text-align: center; line-height: 1.5;
+    background: #EEF3F9; border-radius: 8px; padding: 8px 10px; width: 100%;
+  }
+  .join-label b { color: #0C447C; font-family: "Consolas", monospace; }
+
+  /* ---------- 三条关联线 ---------- */
+  table.rel { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.rel th {
+    text-align: left; padding: 10px 12px; background: #EEF3F9; color: #0C447C;
+    font-weight: 700; border-bottom: 1px solid #DCE5F0;
+  }
+  table.rel td { padding: 10px 12px; border-bottom: 1px solid #EEF1F6; color: #475569; line-height: 1.6; }
+  table.rel tr:last-child td { border-bottom: none; }
+  code {
+    font-family: "Consolas", monospace; background: #EEF3F9; color: #185FA5;
+    padding: 1px 6px; border-radius: 5px; font-size: 12px;
+  }
+  .rel-badge {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px;
+    border-radius: 6px; white-space: nowrap;
+  }
+  .rb-tree { background: #E6F1FB; color: #0C447C; }
+  .rb-n1   { background: #E1F5EE; color: #085041; }
+  .rb-jump { background: #FAEEDA; color: #854F0B; }
+
+  /* ---------- 标题归属 重点框 ---------- */
+  .hl {
+    background: #FFFDF5; border: 1px solid #F0DCA8; border-left: 5px solid #E0A020;
+    border-radius: 10px; padding: 18px 22px; font-size: 13px; line-height: 1.85; color: #5A4A1E;
+  }
+  .hl .big { font-size: 14.5px; font-weight: 700; color: #8A5A00; display: block; margin-bottom: 6px; }
+  .hl .vs { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+  .hl .vs > div { flex: 1 1 300px; background: #fff; border: 1px solid #EFE3C6; border-radius: 8px; padding: 12px 14px; }
+  .hl .vs h4 { font-size: 12.5px; color: #8A5A00; margin-bottom: 6px; }
+  .hl .vs p { font-size: 12.5px; color: #6B6B5A; line-height: 1.7; }
+
+  /* ---------- 分布条 ---------- */
+  .dist { display: flex; flex-direction: column; gap: 10px; }
+  .dist-row { display: grid; grid-template-columns: 130px 1fr 128px; gap: 12px; align-items: center; font-size: 12.5px; }
+  .dist-row .nm { font-family: "Consolas", monospace; font-weight: 600; color: #2C3E50; }
+  .dist-row .bar-wrap { background: #F0F4F9; border-radius: 6px; height: 20px; overflow: hidden; }
+  .dist-row .bar { height: 100%; border-radius: 6px; }
+  .dist-row .num { color: #64748B; text-align: right; }
+  .bar-blue { background: #378ADD; }
+  .bar-teal { background: #1D9E75; }
+  .bar-amber{ background: #E0A020; }
+  .bar-gray { background: #C3C8D0; }
+  .bar-red  { background: #E24B4A; }
+  .bar-purple{background: #7F77DD; }
+
+  /* ---------- 口径红线 ---------- */
+  .rules { font-size: 12.5px; line-height: 1.9; color: #475569; }
+  .rules li { margin-left: 18px; margin-bottom: 5px; }
+  .rules .r { color: #C0392B; font-weight: 700; }
+
+  .foot { text-align: center; color: #94A3B8; font-size: 11.5px; margin-top: 26px; line-height: 1.7; }
+
+  @media (max-width: 860px) {
+    .tables { grid-template-columns: 1fr; }
+    .join-col { padding: 14px 0; }
+    .join-line { display: none; }
+    .fld { grid-template-columns: 120px 1fr; }
+    .dist-row { grid-template-columns: 96px 1fr 90px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head">
+    <h1>贷后报告 · 模板层结构关系图</h1>
+    <div class="sub">
+      两张表：<b>目录表</b> × <b>内容块表</b> —— 报告"结构"与"内容"的承载方式。<br>
+      版本：<b>V2</b>（当前线上模板） ｜ 规模：目录 <b>58</b> 条、内容块 <b>188</b> 条 ｜ 全部 code 带 <code style="background:rgba(255,255,255,.2);color:#fff">V2_</code> 前缀
+    </div>
+    <span class="tag">无物理外键 · code 逻辑关联</span>
+    <span class="tag">标题归目录 · 内容归块</span>
+    <span class="tag">实例层快照</span>
+  </div>
+
+  <!-- 1. 全景 -->
+  <div class="card">
+    <div class="sec-title">一、全景：两层结构 <small>模板层定义"长什么样"，实例层存"这一份报告长什么样"</small></div>
+    <div class="flow">
+      <div class="layer l-tpl">
+        <h3>模板层（配置）</h3>
+        <p>目录表 + 内容块表<br>定义整份报告的<b>目录树</b>与<b>每个块的类型/来源</b>。全报告共用一份。</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="layer l-inst">
+        <h3>实例层（数据）</h3>
+        <p>内容实例 + AI 风险实例<br>生成报告时<b>按 blockCode 快照</b>模板结构，再填入本次生成的正文内容。</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="layer l-out">
+        <h3>详情页渲染</h3>
+        <p>前端按 <b>目录树 → 块</b> 顺序渲染。<br>目录名当标题，块按类型渲染为文本 / 表格 / 溯源按钮。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 两张表 -->
+  <div class="card">
+    <div class="sec-title">二、两张表的结构与关联 <small>核心关联键：<code>catalogCode</code></small></div>
+    <div class="tables">
+
+      <!-- 目录表 -->
+      <div class="tbl tbl-cat">
+        <div class="th">
+          <div class="name">app_report_catalog</div>
+          <div class="cn">目录表 · 58 条 · 报告目录树</div>
+        </div>
+        <div class="body">
+          <div class="fld"><span class="k">catalogCode</span><span class="v">目录编号（唯一）<span class="badge b-key">关联键</span></span></div>
+          <div class="fld key"><span class="k">catalogName</span><span class="v">目录名称 ← <b>标题文案就在这</b></span></div>
+          <div class="fld"><span class="k">catalogLevel</span><span class="v">目录级别：1 / 2 / 3</span></div>
+          <div class="fld"><span class="k">parentCode</span><span class="v">上级目录（自关联；一级为 NULL）</span></div>
+          <div class="fld"><span class="k">sortNo</span><span class="v">同级排序</span></div>
+          <div class="fld"><span class="k">isEnabled</span><span class="v">是否可用 1 / 0</span></div>
+        </div>
+      </div>
+
+      <!-- 中间关联 -->
+      <div class="join-col">
+        <div class="join-label"><b>N : 1</b><br>catalogCode</div>
+        <div class="join-line"></div>
+        <div class="join-label">一块<br>属一目录</div>
+      </div>
+
+      <!-- 内容块表 -->
+      <div class="tbl tbl-blk">
+        <div class="th">
+          <div class="name">app_report_content_block</div>
+          <div class="cn">内容块表 · 188 条 · 正文内容块</div>
+        </div>
+        <div class="body">
+          <div class="fld"><span class="k">blockCode</span><span class="v">块编号（唯一）</span></div>
+          <div class="fld key"><span class="k">catalogCode</span><span class="v">所属目录 → catalog.catalogCode <span class="badge b-key">关联键</span></span></div>
+          <div class="fld"><span class="k">fillType</span><span class="v">填充类型：TEXT / TABLE / TITLE</span></div>
+          <div class="fld"><span class="k">analysisType</span><span class="v">分析类型：内容从哪来（见下）</span></div>
+          <div class="fld"><span class="k">agentCode</span><span class="v">智能体编码（取数/规则标识）</span></div>
+          <div class="fld"><span class="k">agentParams</span><span class="v">调参 / 链接溯源令牌</span></div>
+          <div class="fld"><span class="k">blockName</span><span class="v">块名称</span></div>
+          <div class="fld"><span class="k">titleLevel</span><span class="v">标题级别 <span class="badge b-old">已基本废弃</span></span></div>
+          <div class="fld"><span class="k">emptyStrategy</span><span class="v">空数据策略：占位 / 隐藏</span></div>
+          <div class="fld"><span class="k">jumpAnchorCode</span><span class="v">跳转目标块（自关联）</span></div>
+          <div class="fld"><span class="k">sortNo</span><span class="v">同目录内排序</span></div>
+          <div class="fld"><span class="k">isEnabled</span><span class="v">是否可用 1 / 0</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 3. 三条关联 -->
+  <div class="card">
+    <div class="sec-title">三、关联关系共三条 <small>全部靠 code 值，无数据库外键</small></div>
+    <table class="rel">
+      <thead>
+        <tr><th style="width:150px">关系</th><th style="width:210px">字段</th><th style="width:110px">基数</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="rel-badge rb-tree">目录 ↔ 目录</span></td>
+          <td><code>parentCode</code> → <code>catalogCode</code></td>
+          <td>树</td>
+          <td>目录表<b>自关联</b>成一棵树；一级目录 <code>parentCode = NULL</code>，靠 <code>catalogLevel</code> 分 1/2/3 级。</td>
+        </tr>
+        <tr>
+          <td><span class="rel-badge rb-n1">内容块 → 目录</span></td>
+          <td><code>block.catalogCode</code> → <code>catalog.catalogCode</code></td>
+          <td><b>N : 1</b></td>
+          <td><b>核心关联</b>。一个目录挂 N 个块，按同目录内 <code>sortNo</code> 渲染。<br><b>⚠️ catalogCode 可为 NULL</b> = 报告级块（报告头），不进目录树。</td>
+        </tr>
+        <tr>
+          <td><span class="rel-badge rb-jump">内容块 ↔ 内容块</span></td>
+          <td><code>jumpAnchorCode</code> → 目标块 <code>blockCode</code></td>
+          <td>自关联</td>
+          <td>单向跳转（点本块滚动到目标块）。与类型无关，无跳转则 NULL。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 4. 标题归属 -->
+  <div class="card">
+    <div class="sec-title">四、最关键的一点：一级 / 二级 / 三级标题住在哪？</div>
+    <div class="hl">
+      <span class="big">标题不是"块"，是"目录"。块表里没有章节标题块。</span>
+      报告的各级标题，是<b>目录表里的记录</b>（catalogLevel = 1 / 2 / 3），标题文案存在 <code>catalogName</code>；
+      内容块表里<b>不存在</b>一级 / 二级 / 三级标题块 —— 块只负责"标题下面那坨内容"。
+      <div class="vs">
+        <div>
+          <h4>✅ 标题 → 目录表 app_report_catalog</h4>
+          <p>58 条目录里，按 catalogLevel 分 1/2/3 级；<br>文案 = catalogName；顺序 = 同级 sortNo。</p>
+        </div>
+        <div>
+          <h4>📦 内容 → 内容块表 app_report_content_block</h4>
+          <p>188 个块挂在目录下，N:1；<br>块表里唯一的 TITLE 是"报告主标题"（catalogCode = NULL）。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 & 6. 分布 -->
+  <div class="card">
+    <div class="sec-title">五、当前实际分布 <small>fillType = 长什么样 ｜ analysisType = 内容从哪来（两个独立维度）</small></div>
+
+    <div style="font-size:12.5px;font-weight:700;color:#475569;margin:4px 0 12px;">① fillType（填充类型）· 188 块</div>
+    <div class="dist">
+      <div class="dist-row">
+        <span class="nm">TEXT</span>
+        <span class="bar-wrap"><span class="bar bar-teal" style="width:86.2%"></span></span>
+        <span class="num">162 个（86%）· 正文 / 知识库</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">TABLE</span>
+        <span class="bar-wrap"><span class="bar bar-blue" style="width:13.3%"></span></span>
+        <span class="num">25 个（13%）· 表格</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">TITLE</span>
+        <span class="bar-wrap"><span class="bar bar-amber" style="width:1.5%"></span></span>
+        <span class="num">1 个 · 仅"报告主标题"</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">SOURCE_LINK</span>
+        <span class="bar-wrap"><span class="bar bar-gray" style="width:0.8%"></span></span>
+        <span class="num">0 个 · 已不再使用</span>
+      </div>
+    </div>
+
+    <div style="font-size:12.5px;font-weight:700;color:#475569;margin:22px 0 12px;">② analysisType（内容来源）· 188 块</div>
+    <div class="dist">
+      <div class="dist-row">
+        <span class="nm">ANALYSIS</span>
+        <span class="bar-wrap"><span class="bar bar-teal" style="width:50%"></span></span>
+        <span class="num">94 · 知识库文本分析</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">RULE</span>
+        <span class="bar-wrap"><span class="bar bar-purple" style="width:25.5%"></span></span>
+        <span class="num">48 · 经验规则</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">TRACE_TABLE</span>
+        <span class="bar-wrap"><span class="bar bar-blue" style="width:13.3%"></span></span>
+        <span class="num">25 · 表格溯源（查表）</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">TRACE_LINK</span>
+        <span class="bar-wrap"><span class="bar bar-blue" style="width:8.5%"></span></span>
+        <span class="num">16 · 链接溯源（实时换链）</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">EXTERNAL</span>
+        <span class="bar-wrap"><span class="bar bar-gray" style="width:1.1%"></span></span>
+        <span class="num">2 · 外部灌入（未接入）</span>
+      </div>
+      <div class="dist-row">
+        <span class="nm">NULL</span>
+        <span class="bar-wrap"><span class="bar bar-gray" style="width:1.6%"></span></span>
+        <span class="num">3 · 报告头三块（主/副标题+说明）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. 实例层 -->
+  <div class="card">
+    <div class="sec-title">六、往下游：实例层怎么接</div>
+    <table class="rel">
+      <tbody>
+        <tr>
+          <td style="width:230px"><b>快照机制</b></td>
+          <td>生成报告时按 <code>blockCode</code> 把模板配置快照进内容实例 / AI 风险实例，<b>不建指向模板表的物理外键</b> ⇒ 模板改版不影响历史报告。</td>
+        </tr>
+        <tr>
+          <td><b>agentParams 特例</b></td>
+          <td>实例表<b>不存</b> <code>agentParams</code>；详情接口按 <code>blockCode</code> 从<b>模板表内存补</b>（同一 agentCode 在借款人/担保人章节入参不同）。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 8. 红线 -->
+  <div class="card">
+    <div class="sec-title">七、使用口径 · 红线</div>
+    <ul class="rules">
+      <li><span class="r">无物理外键</span> —— 关联全靠 code 值；唯一性靠 <code>uk_report_catalog_code</code> / <code>uk_report_block_code</code> 两个唯一索引保证。</li>
+      <li><span class="r">catalogCode 可为 NULL</span> —— 只有"报告头三兄弟"（主标题 / 副标题 / 说明）是报告级块，不进目录树；join 时别 inner join 把它们丢了。</li>
+      <li><span class="r">加 V2_ 前缀是硬要求</span> —— 旧模板行是置 <code>isEnabled=0</code> 保留而非删除，不加前缀会撞唯一键。</li>
+      <li><span class="r">溯源不看 fillType 了</span> —— 走 analysisType：表格溯源 = <code>TABLE + TRACE_TABLE</code>，链接溯源 = <code>TEXT + TRACE_LINK</code>；SOURCE_LINK 是僵尸枚举。</li>
+      <li><span class="r">标题别想做成块</span> —— 章节标题一律进目录表（catalogName），块表里再配 TITLE 块是重复渲染。</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    贷后管理智能体 · 报告详情模块 ｜ 模板层结构关系图 ｜ 数据来源：报告模板_新模板_dml.sql（V2）· 生成于 2026-10-10
+  </div>
+
+</div>
+</body>
+</html>
